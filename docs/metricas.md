@@ -74,3 +74,32 @@ Flujo completo en la aplicación instalada, con gemma4:12b:
    - Comprobación visual: datos sustituidos; antigüedad, periodo de liquidación, categoría e importes intactos.
 
 Aparente incidencia cosmética, ya explicada: en la nómina sintética, «N.º afili-» aparece tapado. No es un fallo del motor. El tachón del número de afiliación empieza después de la etiqueta (x = 382,6 frente a 380,0). Lo que tapa ese trozo es el tachón del domicilio de la empresa: en el documento generado, esa dirección es tan larga que invade la columna derecha en la misma línea. Es un defecto del generador del corpus, no de la seudonimización.
+
+## 26/11/2026 · versión 0.1.1 · perfiles estándar e intensivo
+
+Mismo corpus y mismo equipo. Hubo compilaciones en paralelo durante parte de las mediciones, así que los tiempos son orientativos.
+
+| | Estándar 0.1.0 | Estándar 0.1.1 | Intensivo 0.1.0 | Intensivo 0.1.1 |
+|---|---|---|---|---|
+| Recall crítico | 100 % | **100 %** | 100 % | **100 %** |
+| Conservación | 100 % | **100 %** | 100 % | **100 %** |
+| Precisión de las detecciones | 92,8 % | **96,8 %** | 90,7 % | **96,9 %** |
+| Estado final correcto | 12/12 | **12/12** | 10/12 | 11/12 → **12/12** tras la corrección final (*) |
+| Duración | 578 s | 577 s | 848 s | 869 s |
+
+(*) Qué se corrigió en el perfil intensivo. El modelo auditor del intensivo verifica también sobre el OCR de las páginas ya tachadas. Ese OCR leía:
+
+- los marcadores dibujados: `[TELEFONO_008]` como «TELEO0 008»;
+- tratamientos deformados: «Dña.» como «Diña».
+
+En la 0.1.0 eso devolvía a revisión documentos que estaban limpios: falsas alarmas conservadoras, nunca fugas. La 0.1.1 añade tres cosas:
+
+1. Validación estructural por tipo al registrar.
+2. Un criterio más estricto para lo que solo aparece en la copia: se admite si se parece a un tramo de la lectura del original o si viene de una regla con forma válida.
+3. Los tratamientos deformados por el OCR no cuentan como nombres.
+
+La nueva medición de los dos documentos afectados (sentencia escaneada y captura 3) da «sin hallazgos» con recall del 100 %. El contrato va a «Para revisar» por el control de cambios, como se espera.
+
+Lectura: con este corpus el perfil intensivo no encuentra datos que el estándar no encuentre. Cuesta un 50 % más de tiempo y aporta una segunda mirada que se justifica en documentos escaneados, fotos y expedientes de alto riesgo. La comparación con documentos reales más difíciles está pendiente.
+
+Limitación conocida: un nombre de pila suelto que coincida con un tratamiento deformado por el OCR («Dina») no se registra como persona. Es un dato parcial, no crítico.

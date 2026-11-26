@@ -72,6 +72,10 @@ def test_validacion_estructural_y_variantes_ocr():
     assert not motor.valido("TELEO0 008", "TELEFONO")
     assert motor.valido("12.345.678-Z", "DNI") and motor.valido("X1234567L", "DNI") and not motor.valido("1234", "DNI")
     assert not motor.valido("Dña.", "PERSONA") and motor.valido("Lucía Ferrer", "PERSONA")
+    for ruido in ("Diña", "Dna", "Dofia", "D./Diña", "D1ña", "Doña"):
+        assert not motor.valido(ruido, "PERSONA"), ruido
+    for nombre in ("Ana", "Eva", "Dina Ruiz", "Doménico"):
+        assert motor.valido(nombre, "PERSONA"), nombre
     original = "Datos: DNI 5886S754Z y vive en Arrecife. D./Dña. Lucía Ferrer Gil"
     assert motor.variante_en("58865754Z", original) == "5886S754Z"     # el OCR del original leyó una S
     assert motor.variante_en("Diña", original) is None                  # ruido: no se parece a nada

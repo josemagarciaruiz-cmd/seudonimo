@@ -1,5 +1,16 @@
 # Cambios
 
+## 0.1.1 · 26 de noviembre de 2026
+
+- **Verificación intensiva más fiable.** El ruido del OCR sobre los propios tachones (marcadores mal leídos, tratamientos deformados como «Diña») ya no se reincorpora como dato. Lo que solo aparece en la copia se admite si se parece a la lectura del original o si viene de una regla con forma válida.
+- **Validación estructural por tipo** al registrar datos (teléfono, DNI/NIE, NIF, IBAN, NAF, CCC, correo, nombres): la precisión pasa del 92,8 % al 96,8 % sin perder recall.
+- La ventana de Mac, probada de punta a punta con Gemma: conversación, plan, ejecución, revisión, descarte y regeneración.
+- Correcciones:
+  - comprobación previa CORS de la ventana;
+  - estilos de los botones de opción en WebKit;
+  - «Regenerar copias» respeta la verificación intensiva;
+  - el SBOM se genera antes de firmar.
+
 ## 0.1.0 · 26 de noviembre de 2026 · primera versión de desarrollo
 
 Implementa los correos «Plan técnico detallado: asistente jurídico documental local» y «Anexo al plan técnico: seudonimización autónoma multipasada y verificación iterativa» (25/11/2026).

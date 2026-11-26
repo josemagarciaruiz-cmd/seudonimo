@@ -241,6 +241,8 @@ def detectar_gemma(texto, progreso=None, costura=True, prompt=PROMPT, modelo=Non
 # ---------------------------------------------------------------- validación estructural
 
 _DIGITOS = {"TELEFONO": (9, 12), "IBAN": (20, 24), "NAF": (10, 12), "CCC": (9, 11)}
+# Tratamientos como los deforma el OCR («Dña.» leído «Diña», «Dna», «Dofia»; «D./Dña.» leído «D/Diña»)
+_TRATAMIENTO_OCR = re.compile(r"(?i)(?:d\.?\s?/\s?)?d[\W_]?[il1íf|]?[nñ][a@]\.?|d[o0óa][ñnf][il]?[a@]\.?|sr[ae]?\.?|srta\.?")
 
 
 def valido(texto, tipo):
@@ -259,6 +261,8 @@ def valido(texto, tipo):
     if tipo == "EMAIL":
         return "@" in t and "." in t.split("@")[-1]
     if tipo in ("PERSONA", "EMPRESA", "DOMICILIO", "DEPARTAMENTO"):
+        if tipo == "PERSONA" and _TRATAMIENTO_OCR.fullmatch(t):
+            return False
         letras = re.sub(r"[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]", "", TRATAMIENTO.sub("", t))
         return len(letras) >= 3
     return True
