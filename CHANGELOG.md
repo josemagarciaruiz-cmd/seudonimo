@@ -1,5 +1,12 @@
 # Cambios
 
+## 0.3.1 · 26 de noviembre de 2026
+
+- **Cola de trabajos a la vista:** abajo a la izquierda se ve qué se está seudonimizando, en qué proyecto, con qué avance y cuántos trabajos esperan. Un clic lleva a su pestaña Progreso.
+- La barra lateral se actualiza sola cuando aparece un proyecto nuevo.
+- El razonamiento interno del modelo («thought … <channel|>») ya no se cuela en las respuestas del chat.
+- Correcciones: el plan remite a la pestaña «Progreso»; al cambiar de proyecto ya no queda el título de la conversación anterior.
+
 ## 0.3.0 · 26 de noviembre de 2026
 
 - **Mesa de revisión** a pantalla completa: cada copia seudonimizada entera, con los marcadores resaltados y en rojo los datos conocidos que siguen a la vista. Se selecciona con el ratón lo que se ha escapado y se pulsa «Tapar»; un clic en un marcador muestra qué tapa y permite dejarlo a la vista. «Rehacer esta copia» o «Rehacer todas» aplican los cambios.

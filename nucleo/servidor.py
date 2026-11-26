@@ -421,6 +421,20 @@ def lanzar_trabajo(pid):
     return jsonify(id=tid, estado=GESTOR.estado(tid))
 
 
+@app.get("/api/trabajos/activos")
+def trabajos_activos():
+    """Lo que está en marcha y en cola en TODOS los proyectos (la cola es única: un trabajo cada vez)."""
+    nombres = {p["id"]: p["nombre"] for p in ALM.proyectos()}
+    res = []
+    for t in GESTOR.activos():
+        m = GESTOR.meta.get(t["id"], {})
+        res.append({"id": t["id"], "proyecto": m.get("proyecto"), "nombre_proyecto": nombres.get(m.get("proyecto"), ""),
+                    "estado": t["estado"], "progreso": t["progreso"], "documentos": len(t["docs"]),
+                    "creado": m.get("creado", 0)})
+    res.sort(key=lambda x: (x["estado"] != "procesando", x["creado"]))
+    return jsonify(res)
+
+
 @app.get("/api/trabajos/<tid>")
 def estado_trabajo(tid):
     e = GESTOR.estado(tid)

@@ -121,3 +121,16 @@ def test_reidentificar_marcadores():
     sal = marca.sub(lambda m: max(r.por_marcador("[%s]" % (m.group(1) or m.group(2)))["formas"], key=len),
                     "Según [PERSONA_001] y PERSONA_001.")
     assert sal == "Según Lucía Ferrer Gil y Lucía Ferrer Gil."
+
+
+def test_sin_pensamiento_del_modelo():
+    from proveedores.ollama import _sin_pensamiento, limpiar_pensamiento
+
+    def flujo(trozos):
+        for x in trozos:
+            yield {"contenido": x}
+        yield {"fin": True, "llamadas": []}
+    salida = "".join(t.get("contenido", "") for t in _sin_pensamiento(flujo(["thou", "ght\nRazono…<chan", "nel|>El plan ", "está listo."])))
+    assert salida == "El plan está listo."
+    assert "".join(t.get("contenido", "") for t in _sin_pensamiento(flujo(["Hola, ", "qué tal"]))) == "Hola, qué tal"
+    assert limpiar_pensamiento("thought\n<channel|>Texto") == "Texto"

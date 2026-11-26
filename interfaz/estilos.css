@@ -327,3 +327,13 @@ details.conservar summary { cursor: pointer; font-weight: 600; }
 .dos-columnas .fila-campo input { flex: 1 1 100%; min-width: 0; }
 .dos-columnas .fila-campo select { flex: 1; min-width: 0; }
 .cabecera-titulo { min-width: 140px; }
+
+/* ---------- cola de trabajos ---------- */
+.cola { display: grid; gap: 3px; text-align: left; border: 1px solid var(--linea); background: var(--papel); color: var(--tinta); border-radius: var(--r-medio); padding: 8px 10px; cursor: pointer; font-size: 12.5px; }
+.cola:hover { border-color: var(--oro); }
+.cola-titulo { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.cola-detalle { color: var(--tinta-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cola .progreso { display: block; margin: 2px 0 0; height: 3px; background: var(--linea-suave); border-radius: 2px; overflow: hidden; }
+.cola .progreso i { display: block; height: 100%; background: var(--oro); }
+.punto-vivo { width: 7px; height: 7px; border-radius: 50%; background: var(--oro); animation: latido 1.6s ease-in-out infinite; }
+@keyframes latido { 50% { opacity: .35; } }

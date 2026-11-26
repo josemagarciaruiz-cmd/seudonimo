@@ -3,6 +3,7 @@
 
 Solo se conecta a 127.0.0.1: los documentos nunca salen del ordenador."""
 import json
+import re
 import os
 import threading
 
@@ -101,10 +102,13 @@ class Ollama(ProveedorModelos):
         if not flujo:
             with self._cerrojo:
                 msg = self._post(cuerpo).json().get("message", {})
-            return {"contenido": msg.get("content", ""), "llamadas": _llamadas(msg)}
+            return {"contenido": limpiar_pensamiento(msg.get("content", "")), "llamadas": _llamadas(msg)}
         return self._flujo(cuerpo)
 
     def _flujo(self, cuerpo):
+        return _sin_pensamiento(self._flujo_bruto(cuerpo))
+
+    def _flujo_bruto(self, cuerpo):
         with self._cerrojo:
             r = self._post(cuerpo, flujo=True)
             llamadas = []
@@ -175,3 +179,44 @@ def _llamadas(msg):
             args = json_de_texto(args)
         res.append({"nombre": f.get("name"), "argumentos": args})
     return res
+
+
+# Algunos modelos (Gemma 4) a veces devuelven su razonamiento interno al principio de la respuesta,
+# con la forma «thought … <channel|>texto». Eso no es para el usuario: se quita.
+_PENSAMIENTO = re.compile(r"(?s)^\s*(?:thought|thinking|<\|?channel\|?>\s*thought)\b.*?<\|?channel\|?>")
+_MARCAS_CANAL = re.compile(r"<\|?(?:channel|message|start|end|turn)\|?>")
+
+
+def limpiar_pensamiento(texto):
+    return _MARCAS_CANAL.sub("", _PENSAMIENTO.sub("", texto or ""))
+
+
+def _sin_pensamiento(trozos, limite=6000):
+    """Filtro para el flujo: retiene el principio hasta saber si es razonamiento interno."""
+    retenido, decidido = "", False
+    for t in trozos:
+        if decidido or not t.get("contenido"):
+            if t.get("contenido"):
+                t = dict(t, contenido=_MARCAS_CANAL.sub("", t["contenido"]))
+                if not t["contenido"]:
+                    continue
+            if t.get("fin") and retenido:
+                yield {"contenido": limpiar_pensamiento(retenido)}
+                retenido = ""
+            yield t
+            continue
+        retenido += t["contenido"]
+        inicio = retenido.lstrip().lower()
+        posible = ("thought".startswith(inicio[:7]) or inicio.startswith("<")) if inicio else True
+        if not posible:
+            decidido = True
+            yield {"contenido": _MARCAS_CANAL.sub("", retenido)}
+            retenido = ""
+        elif _PENSAMIENTO.search(retenido) or len(retenido) > limite:
+            decidido = True
+            limpio = limpiar_pensamiento(retenido).lstrip()
+            retenido = ""
+            if limpio:
+                yield {"contenido": limpio}
+    if retenido:
+        yield {"contenido": limpiar_pensamiento(retenido)}

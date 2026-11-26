@@ -83,6 +83,7 @@ async function iniciar() {
   if (E.proyectos.length) await abrirProyecto(E.proyectos[0].id);
   else pintarBienvenida();
   setInterval(refrescarSalud, 15000);
+  refrescarCola();
   setTimeout(buscarActualizacion, 4000);
   if (T && T.webview) {
     // arrastrar archivos o carpetas sobre la ventana los añade al proyecto
@@ -271,6 +272,7 @@ async function eliminarProyecto(pid) {
 
 async function abrirProyecto(pid, conv) {
   E.proyecto = await api("GET", `/api/proyectos/${pid}`);
+  $("#titulo-conversacion").textContent = "";
   E.conversaciones[pid] = await api("GET", `/api/proyectos/${pid}/conversaciones`);
   $("#titulo-proyecto").textContent = E.proyecto.nombre;
   $("#ajustes-proyecto").hidden = false;
@@ -375,7 +377,7 @@ function nodoPlan(plan, mid, datos) {
   if (estado) {
     d.classList.add("cerrado");
     d.innerHTML = `<h4>Seudonimización de ${n} archivo${n === 1 ? "" : "s"}</h4>
-      <p class="resultado">${estado === "confirmado" ? `Confirmada (${plan.perfil === "intensivo" ? "verificación intensiva" : "verificación estándar"}). El avance está en la pestaña Operaciones.` : estado === "otro_proyecto" ? "Este plan era del proyecto de origen de la conversación. Si lo necesitas aquí, vuelve a pedirlo." : "Descartada."}</p>`;
+      <p class="resultado">${estado === "confirmado" ? `Confirmada (${plan.perfil === "intensivo" ? "verificación intensiva" : "verificación estándar"}). El avance está en la pestaña Progreso.` : estado === "otro_proyecto" ? "Este plan era del proyecto de origen de la conversación. Si lo necesitas aquí, vuelve a pedirlo." : "Descartada."}</p>`;
     return d;
   }
   const intensivo = plan.perfil === "intensivo";
@@ -1283,6 +1285,33 @@ function enlazarTirador() {
   t.addEventListener("dblclick", () => fijar($("#panel").offsetWidth < 500 ? 560 : 400));
 }
 
+// ------------------------------------------------------------------ cola de trabajos (todos los proyectos)
+
+async function refrescarCola() {
+  clearTimeout(E.colaReloj);
+  let activos = [];
+  try {
+    activos = await api("GET", "/api/trabajos/activos");
+    // la lista de proyectos puede cambiar desde fuera (carpeta vigilada, otro proceso): se refresca
+    const lista = await api("GET", "/api/proyectos");
+    const firma = (l) => l.map((p) => p.id + ":" + p.nombre).sort().join("|");
+    if (firma(lista) !== firma(E.proyectos)) { E.proyectos = lista; pintarLateral(); }
+  } catch (e) { /* servicio ocupado: se reintenta */ }
+  const el = $("#cola");
+  if (!activos.length) { el.hidden = true; }
+  else {
+    const curso = activos.find((t) => t.estado === "procesando") || activos[0];
+    const enCola = activos.length - 1;
+    el.hidden = false;
+    el.dataset.colaProyecto = curso.proyecto;
+    el.innerHTML = `<span class="cola-titulo"><i class="punto-vivo"></i>Seudonimizando · ${Math.round(curso.progreso * 100)} %</span>
+      <span class="cola-detalle">${esc(curso.nombre_proyecto)}${enCola ? ` · ${enCola} más en cola` : ""}</span>
+      <span class="progreso"><i style="width:${Math.round(curso.progreso * 100)}%"></i></span>`;
+    el.title = activos.map((t, i) => `${i ? "En cola" : "En curso"}: ${t.nombre_proyecto} (${t.documentos} documento${t.documentos === 1 ? "" : "s"})`).join("\n");
+  }
+  E.colaReloj = setTimeout(refrescarCola, activos.length ? 4000 : 12000);
+}
+
 // ------------------------------------------------------------------ actualizaciones
 
 async function buscarActualizacion() {
@@ -1306,6 +1335,11 @@ function enlazar() {
   $("#nuevo-proyecto").onclick = () => abrirDialogoProyecto(false);
   $("#ajustes-proyecto").onclick = () => abrirDialogoProyecto(true);
   $("#abrir-modelos").onclick = abrirModelos;
+  $("#cola").onclick = async () => {
+    const pid = +$("#cola").dataset.colaProyecto;
+    if (pid && (!E.proyecto || E.proyecto.id !== pid)) await abrirProyecto(pid);
+    mostrarPestana("operaciones");
+  };
   $("#abrir-listas").onclick = () => abrirListas().catch((e) => alerta(e.message));
   $("#otra-ia").onclick = (ev) => {
     ev.stopPropagation();
