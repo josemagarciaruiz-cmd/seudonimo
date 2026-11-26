@@ -11,7 +11,7 @@ D="$(cd "$(dirname "$0")/../.." && pwd)"
 V="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' "$D/nucleo/version.py")"
 [ -d "$D/escritorio/src-tauri/recursos/python" ] || { echo "Faltan los recursos: ejecuta preparar_recursos.sh"; exit 1; }
 cd "$D/escritorio"
-[ -d node_modules ] || npm ci --silent
+[ -d node_modules/@tauri-apps/cli ] || npm install --include=dev --silent   # NODE_ENV=production omitiría la CLI
 sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$V\"/" src-tauri/tauri.conf.json package.json
 npx tauri build --target x86_64-pc-windows-gnu --bundles nsis \
   --config '{"bundle":{"resources":["recursos/**/*"]}}'

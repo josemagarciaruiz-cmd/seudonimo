@@ -66,6 +66,8 @@ def _proteger():
         origen = request.headers.get("Origin")
         if origen and origen not in ORIGENES and origen != "http://%s" % request.host:
             abort(403)
+        if request.method == "OPTIONS":
+            return None    # comprobación previa CORS de la ventana: no lleva el token (lo lleva la petición real)
         if not secrets.compare_digest(request.headers.get("X-Aurea-Token", ""), TOKEN):
             abort(401)
 
@@ -77,6 +79,7 @@ def _cabeceras(r):
         r.headers["Access-Control-Allow-Origin"] = origen
         r.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Aurea-Token"
         r.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, DELETE, OPTIONS"
+        r.headers["Access-Control-Max-Age"] = "600"
     r.headers["X-Content-Type-Options"] = "nosniff"
     r.headers["Cache-Control"] = "no-store"
     return r

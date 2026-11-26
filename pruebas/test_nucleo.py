@@ -42,6 +42,10 @@ def test_marcadores_no_son_datos():
     assert motor.detectar_regex("Código [CSV_001] y [PERSONA_002]") == []
     assert motor.MARCADOR_OCR.sub("#", "CSV: tcsv_001") == "CSV: #"
     assert motor.MARCADOR_OCR.sub("#", "persona 12 años") == "persona 12 años"
+    # lecturas reales del OCR de Vision sobre marcadores tachados (regresión del 26/11/2026)
+    for leido in ("ICCC.0011", "C.C.C.: ICCC.0011", "(PERSONA_002)", "[DNI.003]", "lIBAN_0011", "[CSV_001]"):
+        assert "CCC" not in motor.MARCADOR_OCR.sub("#", leido).replace("C.C.C.", "")
+        assert not motor.detectar_regex(motor.MARCADOR_OCR.sub(lambda m: " " * len(m.group(0)), leido))
 
 
 def test_fragmentar_con_desfase_cambia_los_cortes():

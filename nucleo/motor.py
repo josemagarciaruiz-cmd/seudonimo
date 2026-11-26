@@ -19,7 +19,7 @@ TIPOS = ["PERSONA", "EMPRESA", "DOMICILIO", "DNI", "NIF", "NAF", "CCC", "IBAN",
          "DEPARTAMENTO", "OTRO"]
 
 MARCADOR_OCR = re.compile(
-    r"(?i)[\[\(\{|lt1I]?\s?(?:%s)\s?_\s?\d{1,4}\s?[\]\)\}|lj1I]?|\[?\s?logo\s+o\s+sello\s?\]?" % "|".join(
+    r"(?i)[\[\(\{|lt1I]?\s?(?:%s)\s?(?:_\s?\d{1,4}|[.,:]\s?\d{3,4})\s?[\]\)\}|lj1I]?|\[?\s?logo\s+o\s+sello\s?\]?" % "|".join(
         sorted((t for t in TIPOS), key=len, reverse=True)))
 
 ETIQUETAS = {
@@ -230,7 +230,7 @@ def detectar_gemma(texto, progreso=None, costura=True, prompt=PROMPT, modelo=Non
             tipo = d.get("tipo") if d.get("tipo") in TIPOS else "OTRO"
             if len(t) < 3 or clave(t) not in clave_frag:
                 continue  # el modelo se lo ha inventado o lo ha reescrito: fuera
-            if MARCADOR.search(t) or MARCADOR.fullmatch("[" + t.strip("[]") + "]"):
+            if MARCADOR.search(t) or MARCADOR.fullmatch("[" + t.strip("[]") + "]") or MARCADOR_OCR.fullmatch(t.strip()):
                 continue  # un marcador ya insertado no es un dato nuevo
             if tipo in ("EMPRESA", "OTRO", "PERSONA", "EXPEDIENTE") and PUBLICO.search(t):
                 continue

@@ -113,7 +113,8 @@ class Registro:
                 texto = str(d.get("texto", "")).strip()
                 tipo = d.get("tipo") if d.get("tipo") in motor.TIPOS else "OTRO"
                 k = motor.clave_dato(texto)
-                if not k or len(texto) < 2 or k in self.descartados or motor.MARCADOR.search(texto):
+                if (not k or len(texto) < 2 or k in self.descartados or motor.MARCADOR.search(texto)
+                        or motor.MARCADOR_OCR.fullmatch(texto)):
                     continue
                 ya = self._indice.get(k)
                 if ya:

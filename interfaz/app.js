@@ -733,9 +733,10 @@ async function accion(a) {
   else if (a === "regenerar") {
     const ultimos = (E.proyecto.archivos || []).filter((x) => ["sin_hallazgos", "revision"].includes(x.estado));
     if (!ultimos.length) { alerta("Todavía no hay copias generadas en este proyecto.", "Nada que regenerar"); return; }
-    const ok = await confirmar("Regenerar copias", `Se vuelven a generar y verificar ${ultimos.length} copia${ultimos.length === 1 ? "" : "s"} con los datos revisados, en una carpeta de resultados nueva. No se repite la detección.`, "Regenerar");
+    const ok = await confirmar("Regenerar copias", `Se vuelven a generar y verificar ${ultimos.length} copia${ultimos.length === 1 ? "" : "s"} con los datos revisados, en una carpeta de resultados nueva, con verificación ${$("#intensiva").checked ? "intensiva" : "estándar"}. No se repite la detección.`, "Regenerar");
     if (!ok) return;
-    await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, { archivos: ultimos.map((x) => x.id), solo_ciclos: true, conversacion: E.conversacion });
+    await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, { archivos: ultimos.map((x) => x.id), solo_ciclos: true,
+      perfil: $("#intensiva").checked ? "intensivo" : "estandar", conversacion: E.conversacion });
     mostrarPestana("operaciones");
   }
   else if (a === "exportar-tabla") {

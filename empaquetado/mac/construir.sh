@@ -29,7 +29,7 @@ rsync -a --exclude "__pycache__" "$D/nucleo/" "$REC/nucleo/"
 
 # 3. La ventana de escritorio (Tauri)
 cd "$D/escritorio"
-[ -d node_modules ] || npm ci --silent
+[ -d node_modules/@tauri-apps/cli ] || npm install --include=dev --silent   # NODE_ENV=production omitiría la CLI
 sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$V\"/" src-tauri/tauri.conf.json package.json
 npx tauri build --bundles app
 APP="$D/escritorio/src-tauri/target/release/bundle/macos/$NOMBRE.app"

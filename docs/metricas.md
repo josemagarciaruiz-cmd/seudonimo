@@ -56,3 +56,21 @@ OCR, transformación y verificación determinista: menos de 2 s por documento. L
 - La combinación de reglas y modelo cubre el corpus completo en modo estándar. El cuello de botella son las tablas densas: muchos datos por fragmento.
 - El corpus es sintético y conocido. **Estos resultados no prometen cero errores con documentos reales.** Cada fallo que aparezca en un uso real debe añadirse al corpus como prueba de regresión permanente.
 - Pendiente: medir el perfil intensivo y comparar 1, 2, 3 y 5 pasadas con documentos más difíciles (manuscritos, fotos torcidas, nombres poco frecuentes o partidos).
+
+## 26/11/2026 · prueba de la aplicación de escritorio (Mac, ventana Tauri)
+
+Flujo completo en la aplicación instalada, con gemma4:12b:
+
+1. Crear el proyecto y añadir la carpeta. El inventario rechaza `etiquetas.json` y explica el motivo.
+2. Pedir en lenguaje natural «Seudonimiza la nómina, el contrato y las notas de la reunión con verificación intensiva». El modelo llama a la herramienta, identifica los tres archivos y el perfil, y la aplicación muestra el plan para confirmarlo.
+3. Ejecutar con la pista de pasadas en directo. Resultado:
+   - Las notas, sin hallazgos.
+   - El contrato, a revisión por el control de cambios (correcto).
+   - La nómina, a revisión por un resto `[CCC_002]`.
+4. Diagnóstico del caso de la nómina. El OCR de verificación leyó el marcador `[CCC_001]` como «ICCC.0011» y el auditor lo tomó por una cuenta de cotización. Era una falsa alarma conservadora, no una fuga. **Corregido**: el patrón de marcadores deformados admite «.» y «,» como separador. El caso queda como prueba de regresión en `pruebas/test_nucleo.py`.
+5. Revisión humana:
+   - Descartar `[CCC_002]` y el falso positivo `[EMPRESA_003]`.
+   - Regenerar las copias, sin repetir la detección. La nómina queda sin hallazgos.
+   - Comprobación visual: datos sustituidos; antigüedad, periodo de liquidación, categoría e importes intactos.
+
+Incidencia conocida (cosmética, no es una fuga): en la nómina sintética, el tachón del número de afiliación cubre también parte de su etiqueta («N.º afili-»). Pendiente de ajustar la localización por palabras en PDF nativo.
