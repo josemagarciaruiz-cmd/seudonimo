@@ -61,6 +61,6 @@ curl -fsSL -o "$REC/licencias/LICENSE-whisper.cpp.txt" https://raw.githubusercon
 # 4. Núcleo
 cp -R "$D/nucleo/." "$REC/nucleo/"
 find "$REC/nucleo" -name "__pycache__" -type d -prune -exec rm -rf {} +
-cp "$D/THIRD_PARTY_NOTICES.md" "$REC/licencias/"
+cp "$D/THIRD_PARTY_NOTICES.md" "$D/LICENSE.md" "$REC/licencias/"
 cp "$REC/python/LICENSE.txt" "$REC/licencias/Python-LICENSE.txt" 2>/dev/null || true
 du -sh "$REC"

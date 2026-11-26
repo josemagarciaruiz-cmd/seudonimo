@@ -3,6 +3,7 @@ name = "seudonimo"
 version = "0.2.0"
 description = "Seudónimo"
 authors = ["José María García Ruiz"]
+license-file = "../../LICENSE.md"
 edition = "2021"
 
 [lib]

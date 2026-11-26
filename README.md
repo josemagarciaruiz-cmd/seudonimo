@@ -64,6 +64,14 @@ Documentación: `docs/00-auditoria-motor.md`, `docs/multipasada.md`, `docs/matri
 - La base de datos no guarda el texto de los documentos. Los temporales con datos originales se borran al terminar cada lote. Los proyectos temporales se borran al cerrar.
 - **No subas nunca a este repositorio documentos de clientes ni resultados con datos reales.**
 
-© José María García Ruiz · josemaria.ai. Todos los derechos reservados. Licencias de terceros en `THIRD_PARTY_NOTICES.md`.
+## Licencia
+
+© 2026 José María García Ruiz · josemaria.ai. Se distribuye con la **PolyForm Shield License 1.0.0** (texto completo en inglés en `LICENSE.md`; el texto en inglés es el que vale).
+
+En resumen y sin valor legal:
+- **Puedes** usar Seudónimo gratis para cualquier fin, también en tu despacho o empresa, modificarlo para tu propio uso y compartirlo.
+- **No puedes** usarlo, ni una versión modificada, para ofrecer un producto o servicio que compita con Seudónimo, aunque sea gratis. Por ejemplo, no puedes cambiarle el nombre y venderlo, ni montar con él un servicio de seudonimización para terceros.
+
+Licencias de terceros en `THIRD_PARTY_NOTICES.md`.
 
 Hasta la versión 0.1.1 la aplicación se llamaba «Áurea Asistente Local». La 0.2.0 traslada sola sus datos, resultados y claves al nombre nuevo la primera vez que se abre.

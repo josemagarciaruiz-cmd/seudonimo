@@ -34,7 +34,7 @@ rsync -a --exclude "__pycache__" "$D/nucleo/" "$REC/nucleo/"
 mkdir -p "$REC/whisper" "$REC/licencias"
 cp "$D/descargas/whisper-mac/whisper-cli" "$REC/whisper/"
 cp "$D/descargas/whisper-mac/LICENSE-whisper.cpp.txt" "$REC/licencias/"
-cp "$D/THIRD_PARTY_NOTICES.md" "$REC/licencias/"
+cp "$D/THIRD_PARTY_NOTICES.md" "$D/LICENSE.md" "$REC/licencias/"
 
 # 3. La ventana de escritorio (Tauri)
 cd "$D/escritorio"
