@@ -83,6 +83,11 @@ def _localizable(texto, original):
     return motor.patron(texto).search(original) is not None
 
 
+def _casi_igual(a, b):
+    inter = a & b
+    return (not inter.is_empty) and inter.get_area() >= 0.8 * max(min(a.get_area(), b.get_area()), 0.01)
+
+
 def nombre_salida(nombre, mapa):
     base, ext = os.path.splitext(nombre)
     base = motor.reemplazar_texto(base, mapa)
@@ -109,6 +114,7 @@ class TrabajoDocumento:
         self.ext_original = os.path.splitext(doc["nombre"])[1].lower()
         self.texto_original = None  # solo en memoria; nunca se guarda en disco
         self.paginas_texto = None   # texto por página (PDF), para repasar solo unas páginas
+        self.zonas_extra = {}       # {página: [(Rect, marcador)]}: restos localizados en la copia por la verificación
         self.version_registro = -1
         self.aplicado = set()       # (forma, marcador) aplicados en el último ciclo
         self.aviso = None
@@ -226,7 +232,8 @@ class TrabajoDocumento:
             salida = os.path.join(dest, "salida" + self.ext)
             self.avisar(0.72, "ciclo %d: generando la copia seudonimizada desde el original…" % (ciclo + 1))
             with self.crono.medir("transformacion"):
-                info = formatos.aplicar(self.ruta, salida, self.ext, mapa, {"logos": lim.get("logos", True)})
+                info = formatos.aplicar(self.ruta, salida, self.ext, mapa, {"logos": lim.get("logos", True),
+                                                                           "extra": self.zonas_extra})
             self.salida = salida
             self.version_registro = version
             self.aplicado = {(e["texto"], e["marcador"]) for e in mapa}
@@ -267,6 +274,11 @@ class TrabajoDocumento:
                                  "incidencias_graves": len(graves), "tiempo": round(time.time() - self.t0, 1)})
             if nuevas:
                 limpias = 0
+                if restos and self.ext == ".pdf":
+                    self._localizar_restos(salida, v, restos)
+            elif restos and self.ext == ".pdf" and self._localizar_restos(salida, v, restos):
+                # la edición no supo dónde estaban, pero la verificación sí: se tapan en el siguiente ciclo
+                limpias = 0
             elif restos:
                 # mismo registro aplicado y el dato sigue ahí: repetir no cambia nada (bucle sin progreso)
                 self.estado = "revision"
@@ -287,6 +299,25 @@ class TrabajoDocumento:
         self.motivos.append("Se ha alcanzado el máximo de %d ciclos sin dos verificaciones limpias seguidas."
                             % lim["max_ciclos"] if lim["limpias"] > 1 else
                             "Se ha alcanzado el máximo de %d ciclos sin una verificación limpia." % lim["max_ciclos"])
+
+    def _localizar_restos(self, salida, v, restos):
+        """Busca en la copia dónde siguen los datos conocidos y guarda esas zonas para taparlas.
+        True si ha encontrado alguna zona nueva (merece la pena otro ciclo)."""
+        mapa = [e for e in self.registro.mapa() if e["marcador"] in set(restos)]
+        dpi = next((m["dpi"] for m in verificacion.METODOS if m["nombre"] == v["metodo"]), None)
+        try:
+            zonas = formatos.localizar_restos(salida, mapa, dpi)
+        except Exception:  # noqa
+            traceback.print_exc()
+            return False
+        nuevas = 0
+        for pagina, lista in zonas.items():
+            ya = self.zonas_extra.setdefault(pagina, [])
+            for r, m in lista:
+                if not any(_casi_igual(r, x) for x, _ in ya):
+                    ya.append((r, m))
+                    nuevas += 1
+        return nuevas > 0
 
     def revisar_de_nuevo(self):
         """Coherencia de lote: el registro ha crecido después de cerrar este documento."""

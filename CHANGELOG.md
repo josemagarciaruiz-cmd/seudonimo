@@ -2,6 +2,7 @@
 
 ## 0.3.2 · 26 de noviembre de 2026
 
+- **Escaneados: datos conocidos que no se dejaban tapar.** Cuando la verificación encuentra en la copia un dato ya conocido que la edición no supo localizar (partido entre líneas o leído de otra forma por el OCR), ahora marca dónde está y el siguiente ciclo lo tapa en el original. Antes el documento se quedaba en «Requiere revisión».
 - **Versión a la vista**, bajo el nombre de la aplicación: un clic dice si hay otra más reciente y abre su descarga o la lista de versiones en GitHub.
 - Si se cierra la aplicación con un trabajo en marcha, al volver a abrirla ese trabajo queda como «Interrumpido» y los archivos recuperan su última copia (antes se quedaban «En cola» para siempre).
 - **Repasar páginas concretas.** En la mesa de revisión, los PDF se ven por páginas, con su número; las que conservan datos conocidos sin tapar se marcan en rojo. Marca «Repasar esta página» en una o varias y pulsa «Repasar»: el modelo vuelve a buscar datos solo en esas páginas, y la copia se regenera y se verifica entera. También se puede pedir por el chat: «Repasa las páginas 6 y 7 del informe».

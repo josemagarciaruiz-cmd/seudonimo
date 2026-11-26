@@ -314,7 +314,7 @@ def aplicar(origen, destino, ext, mapa, opciones=None):
             f.write(motor.reemplazar_texto(texto, mapa))
         return {}
     if ext == ".pdf":
-        return _aplicar_pdf(origen, destino, mapa, logos=bool(opciones.get("logos", True)))
+        return _aplicar_pdf(origen, destino, mapa, logos=bool(opciones.get("logos", True)), extra=opciones.get("extra"))
     _aplicar_zip(origen, destino, ZIP[ext], mapa)
     return {}
 
@@ -616,12 +616,15 @@ def _manchas_de_color(page, ya_tapado, dpi=100):
     return res
 
 
-def _aplicar_pdf(origen, destino, mapa, logos=True):
+def _aplicar_pdf(origen, destino, mapa, logos=True, extra=None):
+    """extra: {página: [(Rect, marcador)]} con zonas que la verificación encontró aún visibles y
+    que se tapan además de lo que localiza la edición (ver localizar_restos)."""
     no_localizados = []
     tachones, visibles, escaneadas = {}, {}, set()
+    extra = extra or {}
     with _abrir_pdf(origen) as doc:
         for page in doc:
-            previos = _logos_incrustados(page) if logos else []
+            previos = (_logos_incrustados(page) if logos else []) + list(extra.get(page.number, []))
             if necesita_ocr(page):
                 escaneadas.add(page.number)
                 t, q = _tachar_ocr(page, mapa, origen, previos)
@@ -635,6 +638,45 @@ def _aplicar_pdf(origen, destino, mapa, logos=True):
                 tachones[page.number], visibles[page.number] = t, q
     pdfdoc.guardar_tachado(origen, destino, tachones, visibles, escaneadas)
     return {"no_localizados": sorted(set(no_localizados))}
+
+
+def localizar_restos(ruta, restos, dpi=None):
+    """Dónde siguen a la vista, en una copia ya tapada, los datos conocidos que la verificación ha
+    encontrado («restos»). Mira la capa de texto y vuelve a leer con OCR cada página con imagen, a
+    la resolución de la verificación. Devuelve {página: [(Rect, marcador)]}: el siguiente ciclo los
+    tapa sobre el original aunque la edición no haya sabido localizarlos (un dato partido entre
+    líneas, leído de otra forma por el OCR…)."""
+    res = {}
+    if not restos:
+        return res
+    with _abrir_pdf(ruta) as doc:
+        for page in doc:
+            zonas = []
+            texto = page.get_text()
+            if texto.strip():
+                palabras = page.palabras()
+                for ini, fin, marc in motor.coincidencias(texto, restos):
+                    frase = texto[ini:fin]
+                    grupos = _rects_por_palabras(palabras, frase) or page.buscar(frase)
+                    for grupo in grupos:
+                        zonas += [(r.ampliar(0.3, 0.3), "") for r in grupo]
+            if necesita_ocr(page, verificar=True) and ocr.DISPONIBLE:
+                lineas = ocr.leer_pagina(page, None, dpi=dpi)
+                offs, acc = [], 0
+                for l in lineas:
+                    offs.append(acc)
+                    acc += len(l["texto"]) + 1
+                completo = "\n".join(l["texto"] for l in lineas)
+                for ini, fin, marc in motor.coincidencias(completo, restos):
+                    if re.fullmatch(r"\[[A-Z_]+_\d+\]", completo[ini:fin]):
+                        continue
+                    for l, o in zip(lineas, offs):
+                        a, b = max(ini, o), min(fin, o + len(l["texto"]))
+                        if a < b:
+                            zonas.append((ocr.rect_fragmento(l, a - o, b - o), ""))
+            if zonas:
+                res[page.number] = zonas
+    return res
 
 
 def pdf_a_imagenes(pdf, base):
