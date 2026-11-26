@@ -41,7 +41,7 @@ def generar(informe, destino, documentos, proyecto=""):
     h2 = ParagraphStyle("h2", parent=base, fontName="Helvetica-Bold", fontSize=11, leading=14, spaceBefore=10, spaceAfter=4)
     peq = ParagraphStyle("p", parent=base, fontSize=7.5, leading=9.5, textColor=gris)
     celda = ParagraphStyle("c", parent=base, fontSize=8.5, leading=10.5)
-    mono = ParagraphStyle("m", parent=celda, fontName="Courier", fontSize=6.1, leading=8.4, textColor=gris)
+    mono = ParagraphStyle("m", parent=celda, fontName="Courier", fontSize=5.8, leading=8.2, textColor=gris)
 
     ruta = os.path.join(destino, NOMBRE)
     doc = SimpleDocTemplate(ruta, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=16 * mm,
@@ -60,7 +60,7 @@ def generar(informe, destino, documentos, proyecto=""):
              ["Sin hallazgos en las comprobaciones configuradas", str(rec.get("sin_hallazgos", 0))],
              ["Requieren revisión", str(rec.get("revision", 0))],
              ["Con error de procesamiento", str(rec.get("error", 0))],
-             ["Datos distintos sustituidos por marcadores", str(reg.get("entidades", 0))]]
+             ["Datos distintos del proyecto sustituidos por marcadores", str(reg.get("entidades", 0))]]
     t = Table(filas, colWidths=[120 * mm, 50 * mm])
     t.setStyle(TableStyle([("FONT", (0, 0), (-1, -1), "Helvetica", 9.5), ("TEXTCOLOR", (0, 0), (-1, -1), noche),
                            ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#D8D2C6")),
@@ -69,7 +69,7 @@ def generar(informe, destino, documentos, proyecto=""):
 
     por_tipo = reg.get("por_tipo") or {}
     if por_tipo:
-        h.append(Paragraph("Categorías de datos sustituidas", h2))
+        h.append(Paragraph("Categorías de datos sustituidas en el proyecto", h2))
         h.append(Paragraph(" · ".join("%s: %d" % (e(motor.ETIQUETAS.get(k, k)), v) for k, v in sorted(por_tipo.items())), base))
 
     h.append(Paragraph("Método", h2))
@@ -89,7 +89,7 @@ def generar(informe, destino, documentos, proyecto=""):
     for d in documentos:
         filas.append([Paragraph(e(d["copia"]), celda), Paragraph("%s<br/>%d ciclo(s)" % (e(d["estado_texto"]), d.get("ciclos", 0)), celda),
                       Paragraph("%s<br/>%s" % (d.get("sha_original", "—"), d.get("sha_copia", "—")), mono)])
-    t = Table(filas, colWidths=[57 * mm, 32 * mm, 85 * mm], repeatRows=1)
+    t = Table(filas, colWidths=[55 * mm, 31 * mm, 88 * mm], repeatRows=1)
     t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#D8D2C6")),
                            ("LINEBELOW", (0, 0), (-1, 0), 0.8, oro), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]))
     h.append(t)
