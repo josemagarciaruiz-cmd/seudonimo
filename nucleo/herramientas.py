@@ -45,6 +45,13 @@ ESQUEMAS = [
                        "description": "«intensivo» = verificación intensiva: más ciclos y un modelo auditor en cada verificación"}},
             "required": ["archivos"]}}},
     {"type": "function", "function": {
+        "name": "verificar_documento",
+        "description": "Audita un archivo del proyecto que YA está seudonimizado (por esta aplicación o por otra vía): busca los datos originales conocidos del proyecto, aplica las reglas fijas e inspecciona metadatos, comentarios, cambios controlados y objetos ocultos. No modifica nada.",
+        "parameters": {"type": "object", "properties": {
+            "archivo": {"type": "string"},
+            "con_modelo": {"type": "boolean", "description": "Añadir un modelo auditor (más lento)"}},
+            "required": ["archivo"]}}},
+    {"type": "function", "function": {
         "name": "estado_trabajos",
         "description": "Estado de las seudonimizaciones en curso o terminadas del proyecto: documentos aprobados, pendientes de revisión o con error, y dónde están las copias.",
         "parameters": {"type": "object", "properties": {}, "required": []}}},
@@ -137,6 +144,22 @@ def ejecutar(nombre, args, ctx):
         return {"plan": True, "accion": "seudonimizar", "perfil": perfil, "archivos": [a["id"] for a in elegidos],
                 "nombres": [a["rel"] for a in elegidos], "parametros": multipasada.PERFILES[perfil],
                 "mensaje": "Plan preparado: el usuario debe confirmarlo en la aplicación antes de ejecutarse."}
+
+    if nombre == "verificar_documento":
+        import tempfile
+        import trabajos
+        import verificacion
+        a = _resolver(admitidos, args.get("archivo"))
+        reg = trabajos.registro(pr["id"], pr["tabla"])
+        with tempfile.TemporaryDirectory(dir=ctx.get("trabajo")) as tmp:
+            ruta, ext, _ = formatos.preparar(_copia(a["ruta"], tmp), tmp)
+            v = verificacion.verificar(ruta, ext, reg, {"ciclo": 0, "modelo_auditor": bool(args.get("con_modelo")),
+                                                        "modelo": pr.get("modelo")})
+        return {"archivo": a["rel"], "datos_conocidos_presentes": sorted({r["marcador"] for r in v["restos"]}),
+                "posibles_datos_nuevos": len(v["nuevos"]),
+                "tipos_posibles_datos_nuevos": sorted({d["tipo"] for d in v["nuevos"]}),
+                "incidencias": [{"tipo": i["tipo"], "grave": i["grave"], "detalle": i["detalle"]} for i in v["incidencias"]],
+                "nota": "Sin hallazgos no equivale a garantía de anonimización."}
 
     if nombre == "estado_trabajos":
         g = ctx["gestor"]

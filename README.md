@@ -38,7 +38,23 @@ python nucleo/servidor.py --navegador      # interfaz en el navegador, sin Tauri
 
 Ventana de escritorio: `cd escritorio && npm install && npm run tauri dev` (necesita Rust y Node).
 
-Pruebas: `python -m pytest pruebas` (unitarias) y `python pruebas/evaluar.py` (métricas sobre el corpus sintético).
+Pruebas:
+
+```bash
+python -m pytest pruebas                                                    # unitarias
+python pruebas/corpus/generar_corpus.py /tmp/corpus                         # corpus sintético etiquetado
+python pruebas/medir.py estandar /tmp/corpus /tmp/lote                      # con el modelo real
+python pruebas/evaluar.py /tmp/corpus /tmp/lote                             # recall, conservación y precisión
+```
+
+## Instaladores
+
+- **Mac** (en un Mac con chip Apple): `zsh empaquetado/mac/construir.sh` → `salida/AureaAsistenteLocal-<versión>-Mac.dmg` y el SBOM.
+- **Windows** (desde un Mac, con MinGW-w64): `bash empaquetado/windows/preparar_recursos.sh` y después `zsh empaquetado/windows/construir_desde_mac.sh` → `salida/AureaAsistenteLocal-<versión>-Windows.exe`. Instalación por usuario, sin permisos de administrador.
+
+Los instaladores no están firmados con certificado de Apple ni de Microsoft (firmar y notarizar tiene coste y requisitos de cuenta), así que el sistema avisa la primera vez. Ver `docs/manual.md`.
+
+Documentación: `docs/00-auditoria-motor.md`, `docs/multipasada.md`, `docs/matriz-formatos.md`, `docs/proteccion-datos.md`, `docs/manual.md` y `docs/metricas.md`.
 
 ## Privacidad
 

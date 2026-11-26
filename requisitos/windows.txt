@@ -1,9 +1,27 @@
-# Servicio local · Windows 10/11 x64 (Python 3.13). OCR con Tesseract incluido en el instalador.
+# Servicio local · Windows 10/11 x64 (Python 3.13 embebido). Lista cerrada: se instala con --no-deps
+# para que las dependencias sean las de Windows aunque el instalador se prepare en Linux o Mac.
 flask==3.1.3
+werkzeug==3.1.9
+jinja2==3.1.6
+markupsafe==3.0.4
+itsdangerous==2.2.0
+click==8.5.1
+colorama==0.4.6
+blinker==1.9.0
 requests==2.34.2
+urllib3==2.8.0
+idna==3.20
+charset-normalizer==3.5.3
+certifi==2026.11.20
 lxml==6.1.3
 pillow==13.0.0
 pypdfium2==5.15.2
 cryptography==50.0.2
+cffi==2.1.1
+pycparser==3.12
 keyring==25.7.0
+jaraco.classes==3.4.0
+jaraco.functools==4.6.0
+jaraco.context==6.1.2
+more-itertools==11.2.1
 pywin32-ctypes==0.2.3

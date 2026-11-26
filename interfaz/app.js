@@ -251,7 +251,7 @@ function nodoAsistente(m) {
 
 function nombreHerramienta(n) {
   return { inspeccionar_carpeta: "Inventario del proyecto", inspeccionar_documento: "Ficha del documento", extraer_texto: "Lectura del documento",
-    seudonimizar: "Plan de seudonimización", estado_trabajos: "Estado de los trabajos" }[n] || n;
+    seudonimizar: "Plan de seudonimización", estado_trabajos: "Estado de los trabajos", verificar_documento: "Auditoría del documento" }[n] || n;
 }
 
 function nodoPlan(plan, mid, datos) {

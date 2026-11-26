@@ -38,7 +38,7 @@ Puedes usar herramientas para inspeccionar los archivos del proyecto, leer su te
 INTENCION = {
     "type": "object",
     "properties": {
-        "intencion": {"type": "string", "enum": ["seudonimizar", "inventario", "ficha", "leer", "estado", "conversar"]},
+        "intencion": {"type": "string", "enum": ["seudonimizar", "verificar", "inventario", "ficha", "leer", "estado", "conversar"]},
         "archivos": {"type": "array", "items": {"type": "string"}},
         "perfil": {"type": "string", "enum": ["estandar", "intensivo"]},
     },
@@ -50,6 +50,7 @@ PROMPT_INTENCION = """Clasifica la petición del usuario de una aplicación de d
 - inventario: pregunta qué archivos hay, cuántos, de qué tipo.
 - ficha: pregunta datos técnicos de un archivo concreto (páginas, si está escaneado).
 - leer: pregunta por el CONTENIDO de un archivo (resumir, qué dice, buscar algo).
+- verificar: quiere comprobar si un archivo que ya está seudonimizado conserva datos personales.
 - estado: pregunta cómo va o cómo ha ido una seudonimización.
 - conversar: cualquier otra cosa.
 Devuelve solo el JSON."""
@@ -76,6 +77,9 @@ def _resumen_resultado(nombre, r):
         return "%s · %d caracteres%s" % (r["archivo"], r["caracteres"], " (recortado)" if r["recortado"] else "")
     if nombre == "inspeccionar_documento":
         return r["archivo"]
+    if nombre == "verificar_documento":
+        return "%s · %d dato(s) conocido(s) presentes, %d posible(s) nuevo(s), %d incidencia(s)" % (
+            r["archivo"], len(r["datos_conocidos_presentes"]), r["posibles_datos_nuevos"], len(r["incidencias"]))
     if nombre == "seudonimizar":
         return "%d archivo(s), verificación %s" % (len(r["archivos"]), "intensiva" if r["perfil"] == "intensivo" else "estándar")
     return ""
@@ -174,6 +178,7 @@ def _con_clasificador(ctx, prov, modelo, mensajes, texto_usuario, usados, planes
             "inventario": ("inspeccionar_carpeta", {}),
             "ficha": ("inspeccionar_documento", {"archivo": archivos[0] if archivos else ""}),
             "leer": ("extraer_texto", {"archivo": archivos[0] if archivos else ""}),
+            "verificar": ("verificar_documento", {"archivo": archivos[0] if archivos else ""}),
             "estado": ("estado_trabajos", {})}
     if intencion in mapa:
         nombre, args = mapa[intencion]

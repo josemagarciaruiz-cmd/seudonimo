@@ -232,7 +232,8 @@ class TrabajoDocumento:
             # resoluciones y lo tapa; si aun así sigue en la siguiente copia, pasa a «restos» y el
             # documento queda para revisión humana.
             localizables = [d for d in v["nuevos"] if _localizable(d["texto"], self.texto_original)]
-            ajenos = [d for d in v["nuevos"] if d not in localizables]
+            # una fecha que no está en la lectura del original es un artefacto del OCR, no un dato
+            ajenos = [d for d in v["nuevos"] if d not in localizables and d["tipo"] != "F_NACIMIENTO"]
             nuevas = self.registro.incorporar(motor.filtrar_fechas(localizables, self.texto_original) + ajenos,
                                               self.doc["id"])
             graves = [i for i in v["incidencias"] if i.get("grave")]
