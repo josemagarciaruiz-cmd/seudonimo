@@ -58,8 +58,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .lateral { display: flex; flex-direction: column; gap: 12px; padding: 16px 12px 12px; border-right: 1px solid var(--linea); min-height: 0; }
 .marca { display: flex; align-items: center; gap: 10px; padding: 4px 6px 8px; }
-.sello { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--oro); color: var(--sobre-oro);
-  font: 600 18px/1 var(--serif); box-shadow: inset 0 0 0 2px rgba(255,255,255,.35); }
+.sello { width: 36px; height: 36px; display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.25)); }
 .marca-nombre { font: 600 16px/1.1 var(--serif); }
 .marca-nombre small { font: 12px var(--sans); color: var(--tinta-3); }
 .lista-proyectos { flex: 1; overflow: auto; margin: 0 -4px; padding: 0 4px; }
