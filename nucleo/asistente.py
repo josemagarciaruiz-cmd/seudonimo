@@ -77,7 +77,7 @@ def _resumen_resultado(nombre, r):
     if nombre == "inspeccionar_documento":
         return r["archivo"]
     if nombre == "seudonimizar":
-        return "plan de %d archivo(s), perfil %s" % (len(r["archivos"]), r["perfil"])
+        return "%d archivo(s), verificación %s" % (len(r["archivos"]), "intensiva" if r["perfil"] == "intensivo" else "estándar")
     return ""
 
 

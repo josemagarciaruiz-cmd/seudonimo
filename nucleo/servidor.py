@@ -531,7 +531,10 @@ def main():
     ap.add_argument("--navegador", action="store_true", help="abrir la interfaz en el navegador (modo de desarrollo)")
     a = ap.parse_args()
     _limpiar_temporales()
-    PUERTO = _puerto_libre(a.puerto) if a.puerto else _puerto_libre(0)
+    if os.environ.get("AUREA_PUERTO"):
+        PUERTO = int(os.environ["AUREA_PUERTO"])     # lo elige la ventana de escritorio
+    else:
+        PUERTO = _puerto_libre(a.puerto) if a.puerto else _puerto_libre(0)
     threading.Thread(target=_al_arrancar, daemon=True).start()
     print("AUREA_LISTO %d" % PUERTO, flush=True)
     if a.navegador:

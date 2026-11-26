@@ -1,1 +1,160 @@
-<!doctype html><html><head><title>x</title></head><body>ok</body></html>
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Áurea Asistente Local</title>
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<div id="app" class="app">
+
+  <!-- Barra lateral: proyectos y conversaciones -->
+  <nav class="lateral" aria-label="Proyectos">
+    <div class="marca">
+      <span class="sello" aria-hidden="true">Á</span>
+      <span class="marca-nombre">Áurea<br><small>Asistente local</small></span>
+    </div>
+    <button class="boton boton-principal ancho" id="nuevo-proyecto">Nuevo proyecto</button>
+    <div class="lista-proyectos" id="lista-proyectos"></div>
+    <div class="lateral-pie">
+      <button class="boton-texto" id="abrir-modelos">Modelos</button>
+      <span class="estado-motor" id="estado-motor" title="Estado del modelo local">Comprobando…</span>
+    </div>
+  </nav>
+
+  <!-- Conversación -->
+  <main class="centro">
+    <header class="cabecera" id="cabecera">
+      <div class="cabecera-titulo">
+        <h1 id="titulo-proyecto">Áurea Asistente Local</h1>
+        <span id="titulo-conversacion" class="subtitulo"></span>
+      </div>
+      <div class="cabecera-acciones">
+        <label class="selector-modelo" title="Modelo de esta conversación">
+          <span class="visualmente-oculto">Modelo</span>
+          <select id="selector-modelo"></select>
+        </label>
+        <button class="boton-texto" id="ajustes-proyecto" hidden>Ajustes del proyecto</button>
+        <button class="boton-texto" id="alternar-panel" aria-controls="panel" aria-expanded="true">Panel</button>
+      </div>
+    </header>
+
+    <div class="aviso-banda" id="aviso-banda" hidden></div>
+
+    <section class="hilo" id="hilo" aria-live="polite"></section>
+
+    <form class="redactor" id="redactor" hidden>
+      <div class="redactor-caja">
+        <textarea id="entrada" rows="1" placeholder="Pide algo sobre los documentos del proyecto…"></textarea>
+        <div class="redactor-barra">
+          <div class="redactor-adjuntos">
+            <button type="button" class="boton-texto" id="adjuntar-archivos">Añadir archivos</button>
+            <button type="button" class="boton-texto" id="adjuntar-carpeta">Añadir carpeta</button>
+          </div>
+          <label class="interruptor" title="Más ciclos de verificación y un modelo auditor en cada uno">
+            <input type="checkbox" id="intensiva"> <span>Verificación intensiva</span>
+          </label>
+          <button type="submit" class="boton boton-principal" id="enviar">Enviar</button>
+        </div>
+      </div>
+      <p class="redactor-nota">Todo se procesa en este ordenador. Revisa los resultados antes de compartirlos.</p>
+    </form>
+  </main>
+
+  <!-- Panel: archivos, operaciones y revisión -->
+  <aside class="panel" id="panel" aria-label="Panel del proyecto">
+    <div class="pestanas" role="tablist">
+      <button role="tab" class="pestana" aria-selected="true" data-pestana="archivos">Archivos</button>
+      <button role="tab" class="pestana" aria-selected="false" data-pestana="operaciones">Operaciones</button>
+      <button role="tab" class="pestana" aria-selected="false" data-pestana="revision">Revisión</button>
+    </div>
+    <div class="panel-cuerpo" id="panel-archivos" role="tabpanel"></div>
+    <div class="panel-cuerpo" id="panel-operaciones" role="tabpanel" hidden></div>
+    <div class="panel-cuerpo" id="panel-revision" role="tabpanel" hidden></div>
+  </aside>
+</div>
+
+<!-- Diálogos -->
+<dialog id="dlg-proyecto" class="dialogo">
+  <form method="dialog" id="form-proyecto">
+    <h2 id="dlg-proyecto-titulo">Nuevo proyecto</h2>
+    <label class="campo">Nombre
+      <input name="nombre" required maxlength="120" placeholder="Por ejemplo: Despido Ferrer — TSJ Canarias">
+    </label>
+    <label class="campo">Modelo
+      <select name="modelo" id="proyecto-modelo"></select>
+    </label>
+    <fieldset class="campo">
+      <legend>Verificación por defecto</legend>
+      <label class="opcion"><input type="radio" name="perfil" value="estandar" checked>
+        <span><b>Estándar.</b> Dos pasadas de detección y verificación determinista (relectura, OCR, reglas y datos conocidos) hasta una comprobación limpia.</span></label>
+      <label class="opcion"><input type="radio" name="perfil" value="intensivo">
+        <span><b>Intensiva.</b> Además, un modelo auditor con otro enfoque en cada ciclo; exige dos verificaciones limpias seguidas, hasta cinco ciclos. Más lenta.</span></label>
+    </fieldset>
+    <fieldset class="campo">
+      <legend>Tabla de correspondencias</legend>
+      <label class="opcion"><input type="radio" name="tabla" value="cifrada" checked>
+        <span><b>Guardar cifrada.</b> Permite deshacer la seudonimización. La clave queda en el almacén de credenciales del sistema.</span></label>
+      <label class="opcion"><input type="radio" name="tabla" value="sin_tabla">
+        <span><b>No guardar.</b> Las etiquetas solo existen durante cada lote. Ojo: la persona puede seguir siendo identificable por el contexto.</span></label>
+    </fieldset>
+    <div class="solo-edicion">
+      <label class="campo">Carpeta de resultados
+        <span class="fila-campo"><input name="salida" readonly placeholder="~/Áurea Asistente/<proyecto>"><button type="button" class="boton-texto" id="elegir-salida">Cambiar</button></span>
+      </label>
+      <p class="aviso-campo" id="aviso-salida" hidden>Esa carpeta parece sincronizada con la nube. Los resultados contienen información del asunto: mejor una carpeta local.</p>
+      <label class="campo">Instrucciones para el asistente en este proyecto
+        <textarea name="instrucciones" rows="3" placeholder="Por ejemplo: conserva los nombres de los magistrados; el cliente es la parte actora."></textarea>
+      </label>
+      <label class="opcion"><input type="checkbox" name="logos"> <span>Tapar logotipos, sellos y firmas en los PDF</span></label>
+    </div>
+    <label class="opcion solo-alta"><input type="checkbox" name="temporal"> <span>Proyecto temporal: se borra entero al cerrar la aplicación</span></label>
+    <div class="dialogo-pie">
+      <button type="button" class="boton-texto peligro solo-edicion" id="borrar-proyecto">Borrar proyecto</button>
+      <span class="hueco"></span>
+      <button value="cancelar" class="boton">Cancelar</button>
+      <button value="aceptar" class="boton boton-principal" id="guardar-proyecto">Crear proyecto</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-modelos" class="dialogo dialogo-ancho">
+  <form method="dialog">
+    <h2>Modelos locales</h2>
+    <p class="nota">Los modelos se ejecutan en este ordenador con Ollama. Solo se descargan cuando tú lo pides; después funcionan sin conexión.</p>
+    <div id="ollama-estado"></div>
+    <h3>Instalados</h3>
+    <div id="modelos-instalados" class="tabla-modelos"></div>
+    <h3>Disponibles para descargar</h3>
+    <div id="modelos-catalogo" class="tabla-modelos"></div>
+    <div class="fila-campo">
+      <input id="modelo-libre" placeholder="Otra etiqueta de ollama.com, por ejemplo qwen3.5:9b">
+      <button type="button" class="boton" id="descargar-libre">Descargar</button>
+    </div>
+    <div class="dialogo-pie"><span class="hueco"></span><button value="cerrar" class="boton">Cerrar</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-licencia" class="dialogo dialogo-ancho">
+  <form method="dialog">
+    <h2 id="licencia-titulo">Licencia</h2>
+    <pre id="licencia-texto" class="licencia"></pre>
+    <div class="dialogo-pie"><span class="hueco"></span><button value="cerrar" class="boton">Cerrar</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-confirmar" class="dialogo">
+  <form method="dialog">
+    <h2 id="confirmar-titulo"></h2>
+    <p id="confirmar-texto"></p>
+    <div class="dialogo-pie"><span class="hueco"></span>
+      <button value="no" class="boton">Cancelar</button>
+      <button value="si" class="boton boton-principal" id="confirmar-si">Aceptar</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

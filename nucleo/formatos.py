@@ -36,7 +36,8 @@ PARTES = {
     "docx": [(re.compile(r"^word/(document|header\d*|footer\d*|footnotes|endnotes|comments)\.xml$"), "docx")],
     "pptx": [(re.compile(r"^ppt/(slides/slide\d+|notesSlides/notesSlide\d+)\.xml$"), "pptx")],
     "xlsx": [(re.compile(r"^xl/sharedStrings\.xml$"), "sst"),
-             (re.compile(r"^xl/comments\d*\.xml$"), "xlcom"),
+             (re.compile(r"^xl/comments(/comment)?\d*\.xml$"), "xlcom"),
+             (re.compile(r"^xl/threadedComments/threadedComment\d*\.xml$"), "xlhilo"),
              (re.compile(r"^xl/worksheets/sheet\d+\.xml$"), "hoja")],
 }
 
@@ -175,6 +176,11 @@ def _unidades(root, kind):
                 yield ts
     else:
         T, RPH = "{%s}t" % S, "{%s}rPh" % S
+        if kind == "xlhilo":   # comentarios encadenados de Excel 365: <text> sin espacio de nombres de hoja
+            for t in root.iter():
+                if isinstance(t.tag, str) and etree.QName(t).localname == "text" and t.text:
+                    yield [t]
+            return
         unidad = {"sst": "si", "xlcom": "comment", "hoja": "is"}[kind]
         for u in root.iter("{%s}%s" % (S, unidad)):
             ts = [t for t in u.iter(T) if _ancestro(t, {RPH}) is None]
@@ -329,10 +335,43 @@ def _aplicar_zip(origen, destino, familia, mapa):
                 data = _limpiar_propiedades(data, mapa, borrar={"Company", "Manager"})
             elif item.filename.endswith(".rels"):
                 data = _limpiar_rels(data, mapa)
+            elif item.filename == "docProps/custom.xml":
+                data = _limpiar_propiedades(data, mapa, borrar=set(), todas=True)
+            if item.filename.endswith(".xml"):
+                data = _limpiar_autoria(data)
             zout.writestr(item, data)
 
 
-def _limpiar_propiedades(data, mapa, borrar):
+_AUTORIA = {"author", "initials", "userId", "providerId", "lastModifiedBy", "creator"}
+
+
+def _limpiar_autoria(data):
+    """Autores de comentarios, de cambios controlados y de personas (word/people.xml,
+    xl/persons): son nombres reales y no forman parte del texto del documento."""
+    if not any(x in data for x in (b"author", b"initials", b"userId", b"displayName")):
+        return data
+    try:
+        root = etree.fromstring(data, PARSER)
+    except Exception:
+        return data
+    cambiado = False
+    for el in root.iter():
+        if not isinstance(el.tag, str):
+            continue
+        for a in list(el.attrib):
+            local = etree.QName(a).localname
+            if local in _AUTORIA or local == "displayName":
+                el.set(a, "R" if local == "initials" else ("" if local in ("userId", "providerId") else "Revisor"))
+                cambiado = True
+        if etree.QName(el).localname == "author" and el.text and el.text.strip():
+            el.text = "Revisor"          # <authors><author>…</author> de los comentarios de Excel
+            cambiado = True
+    if not cambiado:
+        return data
+    return etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
+
+
+def _limpiar_propiedades(data, mapa, borrar, todas=False):
     try:
         root = etree.fromstring(data, PARSER)
     except Exception:
@@ -343,7 +382,7 @@ def _limpiar_propiedades(data, mapa, borrar):
         local = etree.QName(el).localname
         if local in borrar:
             el.text = ""
-        elif el.text and local in {"title", "subject", "description", "keywords"}:
+        elif el.text and (todas or local in {"title", "subject", "description", "keywords", "category"}):
             el.text = motor.reemplazar_texto(el.text, mapa)
     return etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
 
