@@ -83,6 +83,7 @@ async function iniciar() {
   if (E.proyectos.length) await abrirProyecto(E.proyectos[0].id);
   else pintarBienvenida();
   setInterval(refrescarSalud, 15000);
+  setTimeout(buscarActualizacion, 4000);
   if (T && T.webview) {
     // arrastrar archivos o carpetas sobre la ventana los añade al proyecto
     try {
@@ -273,6 +274,7 @@ async function abrirProyecto(pid, conv) {
   E.conversaciones[pid] = await api("GET", `/api/proyectos/${pid}/conversaciones`);
   $("#titulo-proyecto").textContent = E.proyecto.nombre;
   $("#ajustes-proyecto").hidden = false;
+  $("#otra-ia").hidden = false;
   $("#redactor").hidden = false;
   $("#intensiva").checked = E.proyecto.perfil === "intensivo";
   await refrescarModelos();
@@ -317,6 +319,7 @@ function pintarBienvenida() {
   $("#titulo-conversacion").textContent = "";
   $("#redactor").hidden = true;
   $("#ajustes-proyecto").hidden = true;
+  $("#otra-ia").hidden = true;
   $("#hilo").innerHTML = `<div class="vacio">
     <h2>Tus expedientes, sin salir de este ordenador</h2>
     <p>Un proyecto reúne las carpetas de un asunto y sus conversaciones. Añade la carpeta del expediente y pídele a Seudónimo que la seudonimice: el modelo local hace varias pasadas y se comprueba a sí mismo antes de dar nada por bueno.</p>
@@ -521,7 +524,9 @@ function pintarArchivos() {
     </div>
     ${p.carpetas.length ? `<h3>Carpetas y archivos autorizados</h3>${p.carpetas.map((c) => `<div class="carpeta"><span>${esc(c.ruta)}</span><button class="boton-texto" data-quitar-carpeta="${c.id}" title="Quitar del proyecto (no borra nada del disco)">Quitar</button></div>`).join("")}` : `<p class="nota">Los archivos que añadas se leen desde su sitio; nunca se modifican ni se mueven. También puedes arrastrarlos a la ventana.</p>`}
     ${p.archivos.length ? `<h3>${adm.length} de ${p.archivos.length} archivo${p.archivos.length === 1 ? "" : "s"} admitido${adm.length === 1 ? "" : "s"}</h3>
-      ${p.archivos.map((a) => `<div class="archivo"><span class="nombre">${esc(a.rel)}</span><span class="chip ${esc(a.estado)}">${esc(ESTADOS[a.estado] || a.estado)}</span>${a.motivo ? `<span class="motivo">${esc(a.motivo)}</span>` : ""}</div>`).join("")}` : ""}
+      ${p.archivos.some((a) => ["sin_hallazgos", "revision"].includes(a.estado)) ? `<button class="boton boton-principal ancho" data-accion="abrir-mesa">Abrir la mesa de revisión</button>` : ""}
+      ${p.archivos.map((a) => `<div class="archivo"><span class="nombre">${esc(a.rel)}</span><span class="chip ${esc(a.estado)}">${esc(ESTADOS[a.estado] || a.estado)}</span>${a.motivo ? `<span class="motivo">${esc(a.motivo)}</span>` : ""}${["sin_hallazgos", "revision"].includes(a.estado) ? `<button class="boton-texto revisar" data-revisar="${a.id}">Revisar la copia</button>` : ""}</div>`).join("")}` : ""}
+    ${p.vigilar ? `<p class="nota vigilada">Carpeta vigilada: lo que llegue a las carpetas del proyecto se seudonimiza solo.</p>` : ""}
     ${p.salida_efectiva ? `<h3>Resultados</h3><div class="carpeta"><span>${esc(p.salida_efectiva)}</span></div>${p.salida_sincronizada ? `<p class="aviso-campo" style="margin:4px 0">Esta carpeta parece sincronizada con la nube.</p>` : ""}` : ""}`;
 }
 
@@ -563,6 +568,10 @@ async function refrescarOperaciones() {
   }, 2000);
 }
 
+function certificadoDe(tid) {
+  return ((E.historial || []).find((h) => h.id === tid) || {}).certificado || null;
+}
+
 function pistaDoc(d) {
   return (d.pasadas || []).map((p) => {
     if (p.tipo === "deteccion") return `<span class="paso${p.nuevos ? " nuevos" : ""}" title="Detección ${p.n}: ${p.nuevos} dato(s) nuevo(s)">D${p.n}</span>`;
@@ -584,7 +593,7 @@ function pintarOperaciones() {
     const cuenta = (k) => t.docs.filter((d) => d.estado === k).length;
     return `<div class="trabajo">
       <div class="trabajo-cab"><b>${activo ? "En curso" : t.estado === "terminado" ? "Terminado" : esc(t.estado)} · ${t.perfil === "intensivo" ? "verificación intensiva" : "verificación estándar"}</b>
-        ${activo ? `<button class="boton-texto peligro" data-cancelar="${t.id}">Cancelar</button>` : t.destino ? `<button class="boton-texto" data-abrir="${esc(t.destino)}">Abrir carpeta</button>` : ""}</div>
+        ${activo ? `<button class="boton-texto peligro" data-cancelar="${t.id}">Cancelar</button>` : t.destino ? `<span>${certificadoDe(t.id) ? `<button class="boton-texto" data-abrir="${esc(certificadoDe(t.id))}">Certificado</button>` : ""}<button class="boton-texto" data-abrir="${esc(t.destino)}">Abrir carpeta</button></span>` : ""}</div>
       ${activo ? `<div class="progreso"><i style="width:${Math.round(t.progreso * 100)}%"></i></div><div class="trabajo-msg">${esc(t.mensaje)}</div>` :
         `<p class="nota">${cuenta("sin_hallazgos")} sin hallazgos · ${cuenta("revision")} para revisar · ${cuenta("error")} con error${cuenta("cancelado") ? ` · ${cuenta("cancelado")} cancelados` : ""}</p>`}
       ${t.docs.map((d) => `<div class="doc">
@@ -594,42 +603,57 @@ function pintarOperaciones() {
       </div>`).join("")}
       ${!activo ? `<p class="leyenda">D = detección · V = verificación. Dorado: encontró datos nuevos; verde: limpia; ámbar: quedan restos o incidencias.</p>` : ""}
     </div>`;
-  }).join("") + (terminados.length ? `<h3>Anteriores</h3>` + terminados.map((h) => `<div class="archivo"><span class="nombre">${esc(new Date(h.creado * 1000).toLocaleString("es-ES"))} · ${h.perfil === "intensivo" ? "intensiva" : "estándar"}${h.resumen ? ` · ${h.resumen.recuento.sin_hallazgos} sin hallazgos, ${h.resumen.recuento.revision} para revisar, ${h.resumen.recuento.error} con error` : ""}</span>${h.destino ? `<button class="boton-texto" data-abrir="${esc(h.destino)}">Abrir</button>` : `<span class="chip">${esc(h.estado)}</span>`}</div>`).join("") : "");
+  }).join("") + (terminados.length ? `<h3>Anteriores</h3>` + terminados.map((h) => `<div class="archivo"><span class="nombre">${esc(new Date(h.creado * 1000).toLocaleString("es-ES"))} · ${h.perfil === "intensivo" ? "intensiva" : "estándar"}${h.resumen ? ` · ${h.resumen.recuento.sin_hallazgos} sin hallazgos, ${h.resumen.recuento.revision} para revisar, ${h.resumen.recuento.error} con error` : ""}</span>${h.destino ? `<span class="botones-fila">${h.certificado ? `<button class="boton-texto" data-abrir="${esc(h.certificado)}">Certificado</button>` : ""}<button class="boton-texto" data-abrir="${esc(h.destino)}">Abrir</button></span>` : `<span class="chip">${esc(h.estado)}</span>`}</div>`).join("") : "");
 }
 
 // ------------------------------------------------------------------ panel: revisión
 
-async function pintarRevision() {
-  const el = $("#panel-revision");
+async function pintarRevision(el = $("#panel-revision"), enMesa = false) {
   if (!E.proyecto) return;
   let r;
-  try { r = await api("GET", `/api/proyectos/${E.proyecto.id}/registro`); } catch (e) { el.innerHTML = `<p class="nota">${esc(e.message)}</p>`; return; }
+  try { r = enMesa && MESA.registro ? MESA.registro : await api("GET", `/api/proyectos/${E.proyecto.id}/registro`); }
+  catch (e) { el.innerHTML = `<p class="nota">${esc(e.message)}</p>`; return; }
   const grupos = {};
   for (const e of r.entidades) (grupos[e.tipo] = grupos[e.tipo] || []).push(e);
   const tipos = Object.keys(r.etiquetas);
+  const hayCopias = (E.proyecto.archivos || []).some((a) => ["sin_hallazgos", "revision"].includes(a.estado));
   el.innerHTML = `
-    <p class="nota">Datos que el proyecto seudonimiza, con su marcador. Si algo no es un dato personal, descártalo: no volverá a proponerse. Si falta algo, añádelo. Después, regenera las copias.</p>
-    <form class="form-anadir" id="form-anadir">
+    ${enMesa ? `<h3>Datos tapados</h3>` : `${hayCopias ? `<button class="boton boton-principal ancho" data-accion="abrir-mesa">Abrir la mesa de revisión</button>` : ""}
+    <p class="nota">Todos los datos que el proyecto tapa, con su marcador. En la mesa de revisión ves cada copia entera y puedes tapar lo que se haya escapado seleccionándolo con el ratón.</p>`}
+    <form class="form-anadir">
       <input name="texto" placeholder="Dato que se ha escapado" required>
       <button class="boton">Añadir</button>
-      <select name="tipo">${tipos.map((t) => `<option value="${t}">${esc(r.etiquetas[t])}</option>`).join("")}</select>
+      <select name="tipo">${tipos.map((t) => `<option value="${t}"${t === "PERSONA" ? " selected" : ""}>${esc(r.etiquetas[t])}</option>`).join("")}</select>
     </form>
-    <div class="acciones-panel">
-      <button class="boton boton-principal" data-accion="regenerar" ${r.entidades.length ? "" : "disabled"}>Regenerar copias</button>
+    ${enMesa ? `<input class="filtro-datos" type="search" placeholder="Buscar un dato o un marcador">` : `<div class="acciones-panel">
+      <button class="boton" data-accion="regenerar" ${r.entidades.length ? "" : "disabled"}>Rehacer copias</button>
       ${E.proyecto.tabla === "cifrada" && r.entidades.length ? `<button class="boton-texto" data-accion="exportar-tabla">Exportar tabla…</button>` : ""}
-    </div>
+    </div>`}
     ${r.entidades.length ? "" : `<p class="nota">Todavía no hay datos detectados en este proyecto.</p>`}
-    ${Object.entries(grupos).map(([tipo, ents]) => `<div class="grupo-tipo"><h3>${esc(r.etiquetas[tipo] || tipo)} · ${ents.filter((e) => e.activo).length}</h3>
-      ${ents.map((e) => `<div class="entidad${e.activo ? "" : " inactiva"}">
-        <span class="tachon${e.activo ? "" : " descartado"}">${esc(e.marcador)}</span>
+    <div class="grupos-datos">${Object.entries(grupos).map(([tipo, ents]) => `<div class="grupo-tipo"><h3>${esc(r.etiquetas[tipo] || tipo)} · ${ents.filter((e) => e.activo).length}</h3>
+      ${ents.map((e) => {
+        const visible = !e.activo || e.conservado || e.en_lista;
+        return `<div class="entidad${visible ? " inactiva" : ""}" data-buscar="${esc((e.marcador + " " + e.formas.join(" ")).toLowerCase())}">
+        <span class="tachon${visible ? " descartado" : ""}">${esc(e.marcador)}</span>
         <span class="formas">${e.formas.map(esc).join(" · ")}</span>
-        ${e.activo ? `<button class="boton-texto" data-descartar-ent="${e.id}" title="No es un dato personal">Descartar</button>` : `<button class="boton-texto" data-reactivar-ent="${e.id}">Recuperar</button>`}
-        <span class="meta">${e.docs.length} documento${e.docs.length === 1 ? "" : "s"} · ${esc(e.origenes.join(", "))}${e.ambigua ? " · ambigua: revisa si es la misma persona" : ""}</span>
-      </div>`).join("")}</div>`).join("")}`;
-  $("#form-anadir").onsubmit = async (ev) => {
+        ${!e.activo ? `<button class="boton-texto" data-reactivar-ent="${e.id}">Recuperar</button>` : (e.conservado || e.en_lista) ? `<span></span>` : `<button class="boton-texto" data-descartar-ent="${e.id}" title="No es un dato personal">Descartar</button>`}
+        <span class="meta">${e.conservado ? "se deja a la vista por el tipo de asunto · " : ""}${e.en_lista ? "en la lista «Nunca tapar» · " : ""}${e.docs.length} documento${e.docs.length === 1 ? "" : "s"} · ${esc(e.origenes.join(", "))}${e.ambigua ? " · ambigua: revisa si es la misma persona" : ""}</span>
+      </div>`; }).join("")}</div>`).join("")}</div>`;
+  $(".form-anadir", el).onsubmit = async (ev) => {
     ev.preventDefault();
     const f = new FormData(ev.target);
-    try { await api("POST", `/api/proyectos/${E.proyecto.id}/registro`, { texto: f.get("texto"), tipo: f.get("tipo") }); pintarRevision(); } catch (e) { alerta(e.message); }
+    try {
+      await api("POST", `/api/proyectos/${E.proyecto.id}/registro`, { texto: f.get("texto"), tipo: f.get("tipo") });
+      if (enMesa) {
+        MESA.pendientes++; pintarPendientes(); await cargarRegistroMesa();
+        MESA.datos = await api("GET", `/api/proyectos/${E.proyecto.id}/copias/${MESA.actual.id}`); pintarHoja();
+      } else pintarRevision();
+    } catch (e) { alerta(e.message); }
+  };
+  const filtro = $(".filtro-datos", el);
+  if (filtro) filtro.oninput = () => {
+    const q = filtro.value.trim().toLowerCase();
+    $$(".entidad", el).forEach((n) => (n.hidden = q && !n.dataset.buscar.includes(q)));
   };
 }
 
@@ -649,6 +673,29 @@ function confirmar(titulo, texto, si = "Aceptar", soloAceptar = false) {
   return new Promise((res) => d.addEventListener("close", () => res(d.returnValue === "si"), { once: true }));
 }
 
+let PLANTILLAS = null;
+
+async function prepararPlantillas(f, p) {
+  if (!PLANTILLAS) PLANTILLAS = await api("GET", "/api/plantillas");
+  const sel = f.plantilla;
+  sel.innerHTML = PLANTILLAS.plantillas.map((x) => `<option value="${x.id}">${esc(x.nombre)}</option>`).join("");
+  sel.value = p.plantilla || "general";
+  const marcar = (lista) => {
+    $("#conservar-tipos").innerHTML = Object.entries(PLANTILLAS.etiquetas).map(([k, v]) =>
+      `<label class="opcion"><input type="checkbox" value="${k}"${lista.includes(k) ? " checked" : ""}> <span>${esc(v)}</span></label>`).join("");
+    resumir();
+  };
+  const resumir = () => {
+    const n = $$("#conservar-tipos input:checked").map((x) => PLANTILLAS.etiquetas[x.value]);
+    $("#conservar-resumen").textContent = n.length ? `· a la vista: ${n.join(", ")}` : "· se tapa todo";
+  };
+  const desc = () => { $("#plantilla-desc").textContent = (PLANTILLAS.plantillas.find((x) => x.id === sel.value) || {}).descripcion || ""; };
+  sel.onchange = () => { marcar((PLANTILLAS.plantillas.find((x) => x.id === sel.value) || {}).conservar || []); desc(); };
+  $("#conservar-tipos").onchange = resumir;
+  marcar(Array.isArray(p.conservar) ? p.conservar : (() => { try { return JSON.parse(p.conservar || "[]"); } catch (e) { return []; } })());
+  desc();
+}
+
 function abrirDialogoProyecto(editar) {
   const d = $("#dlg-proyecto");
   const f = $("#form-proyecto");
@@ -660,7 +707,8 @@ function abrirDialogoProyecto(editar) {
   const actual = editar ? E.proyecto.modelo : E.modeloDefecto;
   if (actual && !nombres.includes(actual)) nombres.unshift(actual);
   sel.innerHTML = nombres.map((n) => `<option${n === actual ? " selected" : ""}>${esc(n)}</option>`).join("");
-  const p = editar ? E.proyecto : { nombre: "", perfil: "estandar", tabla: "cifrada", salida: "", instrucciones: "", logos: 1 };
+  const p = editar ? E.proyecto : { nombre: "", perfil: "estandar", tabla: "cifrada", salida: "", instrucciones: "", logos: 1, plantilla: "general", conservar: [] };
+  prepararPlantillas(f, p);
   f.nombre.value = p.nombre;
   f.perfil.value = p.perfil;
   f.tabla.value = p.tabla;
@@ -668,19 +716,22 @@ function abrirDialogoProyecto(editar) {
   f.salida.placeholder = editar ? p.salida_efectiva : "";
   f.instrucciones.value = p.instrucciones || "";
   f.logos.checked = !!p.logos;
+  f.vigilar.checked = !!p.vigilar;
   f.temporal.checked = false;
   $("#aviso-salida").hidden = !(editar && p.salida_sincronizada);
   d.showModal();
   d.onclose = async () => {
     if (d.returnValue !== "aceptar") return;
-    const datos = { nombre: f.nombre.value.trim(), modelo: sel.value, perfil: f.perfil.value, tabla: f.tabla.value };
+    const datos = { nombre: f.nombre.value.trim(), modelo: sel.value, perfil: f.perfil.value, tabla: f.tabla.value,
+      plantilla: f.plantilla.value, conservar: $$("#conservar-tipos input:checked").map((x) => x.value) };
     try {
       if (editar) {
         if (E.proyecto.tabla === "cifrada" && datos.tabla === "sin_tabla") {
           const ok = await confirmar("Dejar de guardar la tabla", "Se destruirá la tabla de correspondencias cifrada de este proyecto. No se podrá deshacer la seudonimización de las copias ya generadas.", "Destruir la tabla");
           if (!ok) return;
         }
-        Object.assign(datos, { salida: f.salida.value || null, instrucciones: f.instrucciones.value, logos: f.logos.checked ? 1 : 0 });
+        Object.assign(datos, { salida: f.salida.value || null, instrucciones: f.instrucciones.value, logos: f.logos.checked ? 1 : 0,
+          vigilar: f.vigilar.checked });
         await api("PATCH", `/api/proyectos/${E.proyecto.id}`, datos);
         await refrescarProyectos();
         await abrirProyecto(E.proyecto.id, E.conversacion);
@@ -922,12 +973,354 @@ function pintarVoz(v) {
   }).join("");
 }
 
+// ------------------------------------------------------------------ mesa de revisión
+// La copia seudonimizada a pantalla completa: se selecciona con el ratón lo que se ha escapado
+// («Tapar») y se hace clic en un marcador para descartarlo. Los cambios se aplican al rehacer.
+
+const MESA = { copias: [], actual: null, datos: null, registro: null, pendientes: 0, trabajo: null, sondeo: null };
+const RE_MARCA = /\[(?:[A-Z_]+_\d{1,4}|LOGO O SELLO)\]/g;
+
+async function abrirMesa(aid) {
+  if (!E.proyecto) return;
+  MESA.copias = await api("GET", `/api/proyectos/${E.proyecto.id}/copias`);
+  if (!MESA.copias.length) return alerta("Todavía no hay copias seudonimizadas en este proyecto. Pide primero que seudonimice los documentos.", "Nada que revisar");
+  $("#mesa").hidden = false;
+  document.body.classList.add("con-mesa");
+  await cargarRegistroMesa();
+  const elegido = MESA.copias.find((c) => c.id === aid) || MESA.copias.find((c) => c.estado === "revision") || MESA.copias[0];
+  await verCopia(elegido.id);
+  pintarPendientes();
+}
+
+function cerrarMesa() {
+  if (MESA.pendientes && !MESA.trabajo) {
+    return confirmar("Cambios sin aplicar", `Has hecho ${MESA.pendientes} cambio${MESA.pendientes === 1 ? "" : "s"} que aún no están en las copias. Se aplicarán cuando las rehagas, aquí o en «Datos tapados».`, "Cerrar de todas formas")
+      .then((ok) => { if (ok) { MESA.pendientes = 0; cerrarMesa(); } });
+  }
+  $("#mesa").hidden = true;
+  $("#mesa-pop").hidden = true;
+  document.body.classList.remove("con-mesa");
+  if (!$("#panel-revision").hidden) pintarRevision();
+}
+
+async function cargarRegistroMesa() {
+  MESA.registro = await api("GET", `/api/proyectos/${E.proyecto.id}/registro`);
+  pintarRevision($("#mesa-datos"), true);
+}
+
+function pintarDocsMesa() {
+  $("#mesa-docs").innerHTML = `<h3>Copias</h3>` + MESA.copias.map((c) => `<button class="mesa-doc${MESA.actual && c.id === MESA.actual.id ? " activo" : ""}" data-mesa-doc="${c.id}">
+      <span class="nombre">${esc(c.original)}</span><span class="chip ${esc(c.estado)}">${esc(ESTADOS[c.estado] || c.estado)}</span></button>`).join("");
+}
+
+async function verCopia(aid) {
+  $("#mesa-pop").hidden = true;
+  MESA.actual = MESA.copias.find((c) => c.id === aid);
+  pintarDocsMesa();
+  const hoja = $("#mesa-texto");
+  hoja.innerHTML = `<p class="nota">Leyendo la copia${/\.pdf$/i.test(MESA.actual.copia) ? " (las páginas escaneadas pasan por el OCR: puede tardar unos segundos)" : ""}…</p>`;
+  try {
+    MESA.datos = await api("GET", `/api/proyectos/${E.proyecto.id}/copias/${aid}`);
+  } catch (e) { hoja.innerHTML = `<p class="nota">${esc(e.message)}</p>`; return; }
+  pintarHoja();
+}
+
+function pintarHoja() {
+  const d = MESA.datos;
+  const t = d.texto || "";
+  // tramos: los datos conocidos que siguen a la vista (rojo) y los marcadores (tachón)
+  const tramos = d.escapados.map((x) => ({ ini: x.ini, fin: x.fin, tipo: "escapado", marca: x.marcador }));
+  for (const m of t.matchAll(RE_MARCA)) tramos.push({ ini: m.index, fin: m.index + m[0].length, tipo: "marca", marca: m[0] });
+  tramos.sort((a, b) => a.ini - b.ini || b.fin - a.fin);
+  let html = "", pos = 0;
+  for (const s of tramos) {
+    if (s.ini < pos) continue;
+    html += esc(t.slice(pos, s.ini));
+    const trozo = esc(t.slice(s.ini, s.fin));
+    html += s.tipo === "marca"
+      ? `<button type="button" class="tachon marca" data-marca="${esc(s.marca)}">${trozo}</button>`
+      : `<mark class="escapado" data-marca="${esc(s.marca)}" title="Este dato ya está en la lista de datos tapados (${esc(s.marca)}) pero sigue a la vista en esta copia. Rehaz la copia.">${trozo}</mark>`;
+    pos = s.fin;
+  }
+  html += esc(t.slice(pos));
+  const n = d.escapados.length;
+  $("#mesa-texto").innerHTML = (n ? `<p class="aviso-hoja">${n} dato${n === 1 ? "" : "s"} conocido${n === 1 ? "" : "s"} sigue${n === 1 ? "" : "n"} a la vista en esta copia (en rojo). Pulsa «Rehacer esta copia».</p>` : "")
+    + `<div class="texto-copia">${html || '<span class="nota">La copia no tiene texto legible.</span>'}</div>`;
+  $("#mesa-hoja").scrollTop = 0;
+  $("#mesa-rehacer-uno").disabled = !!MESA.trabajo;
+}
+
+function tipoProbable(s) {
+  const x = s.replace(/[\s.-]/g, "");
+  if (/^[XYZ]?\d{7,8}[A-Z]$/i.test(x)) return "DNI";
+  if (/^[A-HJ-NP-SUVW]\d{7}[0-9A-J]$/i.test(x)) return "NIF";
+  if (/^ES\d{22}$/i.test(x)) return "IBAN";
+  if (/@/.test(s)) return "EMAIL";
+  if (/^\+?\d{9,12}$/.test(x)) return "TELEFONO";
+  if (/^\d{12}$/.test(x) || /^\d{2}\/?\d{8}\/?\d{2}$/.test(x)) return "NAF";
+  if (/\b(calle|c\/|avda|avenida|plaza|camino|carretera|urb)/i.test(s)) return "DOMICILIO";
+  if (/\b(s\.?l\.?u?|s\.?a\.?|s\.?c\.?p|s\.?coop|sociedad)\b/i.test(s)) return "EMPRESA";
+  if (/^[A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñü'-]+(\s+(de|del|la|y)?\s*[A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñü'-]+){0,4}$/.test(s.trim())) return "PERSONA";
+  return "OTRO";
+}
+
+function situarPop(rect) {
+  const pop = $("#mesa-pop");
+  pop.hidden = false;
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  let x = rect.left + rect.width / 2 - w / 2, y = rect.bottom + 8;
+  if (y + h > innerHeight - 8) y = rect.top - h - 8;
+  pop.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + "px";
+  pop.style.top = Math.max(8, y) + "px";
+}
+
+function popTapar() {
+  const sel = getSelection();
+  const s = sel.toString().replace(/\s+/g, " ").trim();
+  if (!s || s.length < 2 || s.length > 150 || !sel.rangeCount) return;
+  if (!$("#mesa-texto").contains(sel.anchorNode)) return;
+  if (RE_MARCA.test(s)) { RE_MARCA.lastIndex = 0; return; }
+  const etiquetas = MESA.registro?.etiquetas || {};
+  const tipo = tipoProbable(s);
+  $("#mesa-pop").innerHTML = `<div class="pop-titulo">Tapar «${esc(s.length > 60 ? s.slice(0, 57) + "…" : s)}»</div>
+    <div class="fila-campo"><select id="pop-tipo">${Object.entries(etiquetas).map(([k, v]) => `<option value="${k}"${k === tipo ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>
+    <button type="button" class="boton boton-principal" id="pop-tapar">Tapar</button></div>
+    <p class="nota">Se tapará en todas las copias del proyecto al rehacerlas.</p>`;
+  situarPop(sel.getRangeAt(0).getBoundingClientRect());
+  $("#pop-tapar").onclick = async () => {
+    try {
+      const r = await api("POST", `/api/proyectos/${E.proyecto.id}/registro`, { texto: s, tipo: $("#pop-tipo").value, doc: MESA.actual.id });
+      $("#mesa-pop").hidden = true;
+      getSelection().removeAllRanges();
+      MESA.pendientes++;
+      await cargarRegistroMesa();
+      pintarPendientes();
+      // vuelve a marcar la copia: lo recién añadido aparece en rojo hasta que se rehaga
+      const y = $("#mesa-hoja").scrollTop;
+      MESA.datos = await api("GET", `/api/proyectos/${E.proyecto.id}/copias/${MESA.actual.id}`);
+      pintarHoja();
+      $("#mesa-hoja").scrollTop = y;
+      avisoFlotante(r.nuevas?.length ? `Añadido como ${r.nuevas[0].marcador}. Rehaz la copia para aplicarlo.` : "Ese dato ya estaba en la lista.");
+    } catch (e) { alerta(e.message); }
+  };
+}
+
+function popMarca(boton) {
+  const marca = boton.dataset.marca;
+  const e = (MESA.registro?.entidades || []).find((x) => x.marcador === marca);
+  const etq = MESA.registro?.etiquetas || {};
+  $("#mesa-pop").innerHTML = e ? `<div class="pop-titulo"><span class="tachon">${esc(marca)}</span> ${esc(etq[e.tipo] || e.tipo)}</div>
+      <p class="pop-formas">${e.formas.map(esc).join(" · ")}</p>
+      <p class="nota">Aparece en ${e.docs.length} documento${e.docs.length === 1 ? "" : "s"} · ${esc(e.origenes.join(", "))}</p>
+      ${e.activo ? `<button type="button" class="boton" data-descartar-ent="${e.id}">No es un dato personal: dejarlo a la vista</button>`
+        : `<p class="nota">Descartado: volverá a verse al rehacer la copia.</p><button type="button" class="boton-texto" data-reactivar-ent="${e.id}">Volver a taparlo</button>`}`
+    : `<div class="pop-titulo"><span class="tachon">${esc(marca)}</span></div><p class="nota">Marcador de una revisión anterior.</p>`;
+  situarPop(boton.getBoundingClientRect());
+}
+
+function pintarPendientes() {
+  const el = $("#mesa-pendientes");
+  el.hidden = !MESA.pendientes && !MESA.trabajo;
+  el.textContent = MESA.trabajo ? MESA.trabajo : `${MESA.pendientes} cambio${MESA.pendientes === 1 ? "" : "s"} sin aplicar`;
+  $("#mesa-rehacer-uno").disabled = !!MESA.trabajo;
+  $("#mesa-rehacer-todas").disabled = !!MESA.trabajo;
+}
+
+async function rehacer(ids) {
+  const perfil = $("#intensiva").checked ? "intensivo" : "estandar";
+  const r = await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, { archivos: ids, solo_ciclos: true, perfil, conversacion: E.conversacion });
+  MESA.trabajo = "Rehaciendo…";
+  pintarPendientes();
+  clearTimeout(MESA.sondeo);
+  const seguir = async () => {
+    let t;
+    try { t = await api("GET", `/api/trabajos/${r.id}`); } catch (e) { t = null; }
+    if (t && ["pendiente", "procesando"].includes(t.estado)) {
+      MESA.trabajo = `Rehaciendo ${ids.length === 1 ? "la copia" : ids.length + " copias"}… ${Math.round(t.progreso * 100)} %`;
+      pintarPendientes();
+      MESA.sondeo = setTimeout(seguir, 1500);
+      return;
+    }
+    MESA.trabajo = null;
+    MESA.pendientes = 0;
+    pintarPendientes();
+    E.proyecto = await api("GET", `/api/proyectos/${E.proyecto.id}`);
+    pintarArchivos();
+    if ($("#mesa").hidden) return;
+    const actual = MESA.actual?.id;
+    MESA.copias = await api("GET", `/api/proyectos/${E.proyecto.id}/copias`);
+    await cargarRegistroMesa();
+    await verCopia(MESA.copias.some((c) => c.id === actual) ? actual : MESA.copias[0].id);
+    avisoFlotante("Copias rehechas y verificadas.");
+  };
+  seguir();
+}
+
+function avisoFlotante(texto) {
+  const el = $("#aviso-flotante");
+  el.textContent = texto;
+  el.hidden = false;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => (el.hidden = true), 3500);
+}
+
+// ------------------------------------------------------------------ copiar para la IA y poner nombres
+
+function copiarAlPortapapeles(texto) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(texto).catch(() => copiarConArea(texto));
+  }
+  return Promise.resolve(copiarConArea(texto));
+}
+
+function copiarConArea(texto) {
+  const a = document.createElement("textarea");
+  a.value = texto;
+  a.style.position = "fixed"; a.style.opacity = "0";
+  document.body.appendChild(a);
+  a.select();
+  const ok = document.execCommand("copy");
+  a.remove();
+  if (!ok) throw new Error("No he podido copiar al portapapeles.");
+}
+
+async function copiarParaIA() {
+  const r = await api("POST", `/api/proyectos/${E.proyecto.id}/copias/texto`, {});
+  await copiarAlPortapapeles(r.texto);
+  const miles = Math.round(r.caracteres / 1000);
+  avisoFlotante(`Copiado: ${r.documentos} documento${r.documentos === 1 ? "" : "s"} seudonimizado${r.documentos === 1 ? "" : "s"} (${miles || 1} mil caracteres). Pégalo en el chat de la IA.`);
+}
+
+function abrirNombres() {
+  const d = $("#dlg-nombres");
+  if (E.proyecto.tabla !== "cifrada") return alerta("Este proyecto no guarda la tabla de correspondencias, así que no se pueden recuperar los datos. Actívala en «Ajustes del proyecto» para los próximos trabajos.", "Sin tabla");
+  $("#nombres-entrada").value = "";
+  $("#nombres-salida").value = "";
+  $("#nombres-resumen").textContent = "";
+  $("#nombres-copiar").disabled = true;
+  let t = null;
+  $("#nombres-entrada").oninput = () => {
+    clearTimeout(t);
+    t = setTimeout(async () => {
+      const texto = $("#nombres-entrada").value;
+      if (!texto.trim()) { $("#nombres-salida").value = ""; $("#nombres-resumen").textContent = ""; $("#nombres-copiar").disabled = true; return; }
+      try {
+        const r = await api("POST", `/api/proyectos/${E.proyecto.id}/reidentificar`, { texto });
+        $("#nombres-salida").value = r.texto;
+        $("#nombres-copiar").disabled = false;
+        $("#nombres-resumen").textContent = `${r.sustituidos} marcador${r.sustituidos === 1 ? "" : "es"} sustituido${r.sustituidos === 1 ? "" : "s"} (${r.distintos} dato${r.distintos === 1 ? "" : "s"} distinto${r.distintos === 1 ? "" : "s"}).`
+          + (r.desconocidos.length ? ` No son de este proyecto: ${r.desconocidos.join(", ")}.` : "");
+      } catch (e) { $("#nombres-resumen").textContent = e.message; }
+    }, 250);
+  };
+  $("#nombres-copiar").onclick = async () => { await copiarAlPortapapeles($("#nombres-salida").value); avisoFlotante("Copiado con los datos reales."); };
+  d.showModal();
+}
+
+// ------------------------------------------------------------------ listas del despacho
+
+const LISTAS = { nunca: [], siempre: [], etiquetas: {} };
+
+async function abrirListas() {
+  const [l, pl] = await Promise.all([api("GET", "/api/listas"), api("GET", "/api/plantillas")]);
+  LISTAS.nunca = l.nunca || []; LISTAS.siempre = l.siempre || []; LISTAS.etiquetas = pl.etiquetas;
+  $("#siempre-tipo").innerHTML = Object.entries(pl.etiquetas).map(([k, v]) => `<option value="${k}"${k === "PERSONA" ? " selected" : ""}>${esc(v)}</option>`).join("");
+  pintarListas();
+  const anadir = (cual) => {
+    const inp = $(`#${cual}-texto`);
+    const texto = inp.value.trim();
+    if (texto.length < 2) return;
+    if (LISTAS[cual].some((x) => x.texto.toLowerCase() === texto.toLowerCase())) { inp.value = ""; return; }
+    LISTAS[cual].unshift(cual === "siempre" ? { texto, tipo: $("#siempre-tipo").value } : { texto });
+    inp.value = "";
+    inp.focus();
+    pintarListas();
+  };
+  $("#nunca-anadir").onclick = () => anadir("nunca");
+  $("#siempre-anadir").onclick = () => anadir("siempre");
+  $("#nunca-texto").onkeydown = (ev) => { if (ev.key === "Enter") { ev.preventDefault(); anadir("nunca"); } };
+  $("#siempre-texto").onkeydown = (ev) => { if (ev.key === "Enter") { ev.preventDefault(); anadir("siempre"); } };
+  const d = $("#dlg-listas");
+  d.showModal();
+  d.onclose = async () => {
+    if (d.returnValue !== "guardar") return;
+    try { await api("PUT", "/api/listas", { nunca: LISTAS.nunca, siempre: LISTAS.siempre }); avisoFlotante("Listas guardadas."); }
+    catch (e) { alerta(e.message); }
+  };
+}
+
+function pintarListas() {
+  const fila = (cual, x, i) => `<li><span>${esc(x.texto)}</span>${x.tipo ? `<span class="chip">${esc(LISTAS.etiquetas[x.tipo] || x.tipo)}</span>` : ""}
+    <button type="button" class="boton-texto" data-quitar-lista="${cual}:${i}" title="Quitar de la lista">Quitar</button></li>`;
+  $("#nunca-lista").innerHTML = LISTAS.nunca.map((x, i) => fila("nunca", x, i)).join("") || `<li class="nota">Vacía.</li>`;
+  $("#siempre-lista").innerHTML = LISTAS.siempre.map((x, i) => fila("siempre", x, i)).join("") || `<li class="nota">Vacía.</li>`;
+}
+
+// ------------------------------------------------------------------ panel redimensionable
+
+function enlazarTirador() {
+  const t = $("#tirador");
+  const fijar = (w) => {
+    w = Math.max(300, Math.min(w, Math.round(innerWidth * 0.55), 760));
+    document.documentElement.style.setProperty("--ancho-panel", w + "px");
+    try { localStorage.setItem("seudonimo.anchoPanel", String(w)); } catch (e) { /* sin almacenamiento */ }
+  };
+  try { const w = +localStorage.getItem("seudonimo.anchoPanel"); if (w) fijar(w); } catch (e) { /* sin almacenamiento */ }
+  t.addEventListener("pointerdown", (ev) => {
+    ev.preventDefault();
+    t.setPointerCapture(ev.pointerId);
+    document.body.classList.add("arrastrando");
+    const mover = (e) => fijar(innerWidth - e.clientX);
+    const soltar = () => { t.removeEventListener("pointermove", mover); document.body.classList.remove("arrastrando"); };
+    t.addEventListener("pointermove", mover);
+    t.addEventListener("pointerup", soltar, { once: true });
+  });
+  t.addEventListener("keydown", (ev) => {
+    const w = $("#panel").offsetWidth;
+    if (ev.key === "ArrowLeft") fijar(w + 24);
+    if (ev.key === "ArrowRight") fijar(w - 24);
+  });
+  t.addEventListener("dblclick", () => fijar($("#panel").offsetWidth < 500 ? 560 : 400));
+}
+
+// ------------------------------------------------------------------ actualizaciones
+
+async function buscarActualizacion() {
+  try {
+    const r = await api("GET", "/api/actualizacion");
+    if (!r.nueva || !r.descarga) return;
+    const b = $("#actualizacion");
+    b.hidden = false;
+    b.innerHTML = `<b>Versión ${esc(r.version)} disponible</b><span>Tienes la ${esc(r.actual)}. Pulsa para descargarla.</span>`;
+    b.onclick = async () => {
+      const notas = (r.notas || "").replace(/[*#`]/g, "").trim();
+      const ok = await confirmar(`Seudónimo ${r.version}`, (notas ? notas.slice(0, 600) + "\n\n" : "") + "Se abrirá la descarga en el navegador. Después, instálala igual que la primera vez: tus proyectos y datos se conservan.", "Descargar");
+      if (ok) await api("POST", "/api/actualizacion/descargar", { url: r.descarga });
+    };
+  } catch (e) { /* sin conexión: nada que avisar */ }
+}
+
 // ------------------------------------------------------------------ eventos
 
 function enlazar() {
   $("#nuevo-proyecto").onclick = () => abrirDialogoProyecto(false);
   $("#ajustes-proyecto").onclick = () => abrirDialogoProyecto(true);
   $("#abrir-modelos").onclick = abrirModelos;
+  $("#abrir-listas").onclick = () => abrirListas().catch((e) => alerta(e.message));
+  $("#otra-ia").onclick = (ev) => {
+    ev.stopPropagation();
+    abrirMenu($("#otra-ia"), [
+      { texto: "Copiar las copias seudonimizadas", accion: copiarParaIA },
+      { texto: "Poner los nombres en una respuesta…", accion: abrirNombres },
+    ]);
+  };
+  $("#mesa-cerrar").onclick = cerrarMesa;
+  $("#mesa-rehacer-uno").onclick = () => MESA.actual && rehacer([MESA.actual.id]).catch((e) => alerta(e.message));
+  $("#mesa-rehacer-todas").onclick = () => rehacer(MESA.copias.map((c) => c.id)).catch((e) => alerta(e.message));
+  $("#mesa-abrir").onclick = () => MESA.actual && api("POST", "/api/abrir", { ruta: MESA.actual.ruta }).catch((e) => alerta(e.message));
+  $("#mesa-texto").addEventListener("mouseup", () => setTimeout(popTapar, 0));
+  $("#mesa-hoja").addEventListener("scroll", () => { $("#mesa-pop").hidden = true; });
+  enlazarTirador();
   $("#alternar-panel").onclick = () => {
     const app = $("#app");
     app.classList.toggle("sin-panel");
@@ -965,9 +1358,17 @@ function enlazar() {
     try { await api("POST", "/api/modelos/descargar", { nombre: n }); $("#modelo-libre").value = ""; await refrescarModelos(); pintarModelos(); } catch (e) { alerta(e.message); }
   };
 
-  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrarMenu(); });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape") return;
+    cerrarMenu();
+    if (!$("#mesa").hidden && !document.querySelector("dialog[open]")) {
+      ev.preventDefault();
+      if (!$("#mesa-pop").hidden) $("#mesa-pop").hidden = true; else setTimeout(cerrarMesa, 0);
+    }
+  });
   document.addEventListener("click", async (ev) => {
     if (!ev.target.closest("#menu")) cerrarMenu();
+    if (!ev.target.closest("#mesa-pop") && !ev.target.closest(".marca") && !getSelection().toString()) $("#mesa-pop").hidden = true;
     const b = ev.target.closest("button, [data-proyecto]");
     if (!b) return;
     const d = b.dataset;
@@ -981,8 +1382,15 @@ function enlazar() {
       else if (d.quitarCarpeta) { await api("DELETE", `/api/proyectos/${E.proyecto.id}/carpetas/${d.quitarCarpeta}`); E.proyecto = await api("GET", `/api/proyectos/${E.proyecto.id}`); pintarArchivos(); }
       else if (d.cancelar) { if (await confirmar("Cancelar la seudonimización", "Los documentos ya terminados se exportan; el resto queda cancelado.", "Cancelar el trabajo")) { await api("POST", `/api/trabajos/${d.cancelar}/cancelar`); refrescarOperaciones(); } }
       else if (d.abrir) await api("POST", "/api/abrir", { ruta: d.abrir });
-      else if (d.descartarEnt) { await api("POST", `/api/proyectos/${E.proyecto.id}/registro/${d.descartarEnt}/descartar`); pintarRevision(); }
-      else if (d.reactivarEnt) { await api("POST", `/api/proyectos/${E.proyecto.id}/registro/${d.reactivarEnt}/reactivar`); pintarRevision(); }
+      else if (d.descartarEnt || d.reactivarEnt) {
+        await api("POST", `/api/proyectos/${E.proyecto.id}/registro/${d.descartarEnt || d.reactivarEnt}/${d.descartarEnt ? "descartar" : "reactivar"}`);
+        if (!$("#mesa").hidden) { MESA.pendientes++; pintarPendientes(); $("#mesa-pop").hidden = true; await cargarRegistroMesa(); }
+        else pintarRevision();
+      }
+      else if (d.marca) popMarca(b);
+      else if (d.mesaDoc) await verCopia(+d.mesaDoc);
+      else if (d.revisar) await abrirMesa(+d.revisar);
+      else if (d.quitarLista) { const [cual, i] = d.quitarLista.split(":"); LISTAS[cual].splice(+i, 1); pintarListas(); }
       else if (d.descargar) { await api("POST", "/api/modelos/descargar", { nombre: d.descargar }); await refrescarModelos(); pintarModelos(); }
       else if (d.defecto) { await api("POST", "/api/modelos/defecto", { nombre: d.defecto }); await refrescarModelos(); pintarModelos(); }
       else if (d.vozDescargar) { await api("POST", "/api/voz/descargar", { nombre: d.vozDescargar }); seguirDescargaVoz(); }
@@ -1014,6 +1422,7 @@ async function accion(a) {
     };
     seguir();
   }
+  else if (a === "abrir-mesa") await abrirMesa();
   else if (a === "regenerar") {
     const ultimos = (E.proyecto.archivos || []).filter((x) => ["sin_hallazgos", "revision"].includes(x.estado));
     if (!ultimos.length) { alerta("Todavía no hay copias generadas en este proyecto.", "Nada que regenerar"); return; }

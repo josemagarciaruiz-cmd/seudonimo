@@ -11,6 +11,7 @@ import zipfile
 from lxml import etree
 from PIL import Image, ImageOps
 
+import correo
 import motor
 import ocr
 import pdfdoc
@@ -30,7 +31,8 @@ CONVERTIBLES = {".doc": ".docx", ".rtf": ".docx", ".odt": ".docx",
 IMAGENES = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".bmp"}
 if rutas.ES_MAC:
     IMAGENES |= {".heic", ".heif"}  # las fotos del iPhone: el Mac las convierte con «sips»
-ADMITIDOS = TEXTO | set(ZIP) | set(CONVERTIBLES) | IMAGENES | {".pdf"}
+CORREOS = correo.EXTENSIONES          # .eml, .msg y chats de WhatsApp (.zip): se entregan como .txt
+ADMITIDOS = TEXTO | set(ZIP) | set(CONVERTIBLES) | IMAGENES | CORREOS | {".pdf"}
 
 PARTES = {
     "docx": [(re.compile(r"^word/(document|header\d*|footer\d*|footnotes|endnotes|comments)\.xml$"), "docx")],
@@ -94,6 +96,12 @@ def preparar(ruta, carpeta):
     ext = os.path.splitext(ruta)[1].lower()
     if ext in IMAGENES:
         return _imagen_a_pdf(ruta, ext)
+    if ext in CORREOS:
+        try:
+            salida, aviso = correo.a_texto(ruta, carpeta)
+        except correo.ErrorCorreo as e:
+            raise ErrorFormato(str(e))
+        return salida, ".txt", aviso
     if ext not in CONVERTIBLES:
         return ruta, ext, None
     nuevo_ext = CONVERTIBLES[ext]

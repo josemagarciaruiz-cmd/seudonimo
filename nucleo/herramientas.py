@@ -12,6 +12,7 @@ un PLAN que la interfaz muestra con su alcance y que el usuario confirma.
 El texto de los documentos se entrega al modelo envuelto como DATOS NO CONFIABLES."""
 import os
 
+import correo
 import formatos
 import motor
 import multipasada
@@ -232,6 +233,8 @@ def inventariar(raiz, tipo="carpeta"):
             fila["motivo"] = "Demasiado grande (más de 300 MB)"
         elif ext in (".docm", ".xlsm", ".pptm"):
             fila["motivo"] = "Contiene macros: se rechaza por seguridad"
+        elif ext == ".zip" and not correo.es_chat_zip(p):
+            fila["motivo"] = "Archivo .zip que no es un chat exportado de WhatsApp"
         else:
             fila["admitido"] = True
         filas.append(fila)

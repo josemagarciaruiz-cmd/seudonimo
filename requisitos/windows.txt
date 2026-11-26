@@ -25,3 +25,5 @@ jaraco.functools==4.6.0
 jaraco.context==6.1.2
 more-itertools==11.2.1
 pywin32-ctypes==0.2.3
+reportlab==5.1.2
+olefile==0.47

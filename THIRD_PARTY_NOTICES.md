@@ -12,6 +12,8 @@ Inventario de lo que se redistribuye en los instaladores. Las versiones exactas 
 | requests, urllib3, idna, charset-normalizer, certifi | Conexión con Ollama en 127.0.0.1 y descargas | Apache-2.0, MIT, BSD-3-Clause, MIT y MPL-2.0 |
 | lxml (con libxml2 y libxslt) | Lectura y escritura de OOXML | BSD-3-Clause (libxml2: MIT) |
 | Pillow | Imágenes y rasterizado | MIT-CMU (HPND) |
+| ReportLab 5 | Certificado de seudonimización en PDF | BSD-3-Clause |
+| olefile | Lectura de correos de Outlook (.msg) | BSD-2-Clause |
 | pypdfium2 con PDFium | PDF | Apache-2.0 o BSD-3-Clause; PDFium: BSD-3-Clause y componentes propios |
 | cryptography (con cffi y pycparser) | Cifrado de las tablas de correspondencias | Apache-2.0 o BSD-3-Clause |
 | keyring y jaraco.* | Clave en el Llavero o el Administrador de credenciales | MIT |

@@ -9,6 +9,7 @@ Ningún documento sale del equipo: la lectura, el OCR, el modelo (por defecto Ge
 ## Qué hace
 
 - **Proyectos** con carpetas y archivos autorizados por el usuario (diálogo del sistema), **conversaciones** y **selector de modelo**. Proyectos y conversaciones se renombran y se eliminan desde su menú «⋯», y una conversación puede **moverse a otro proyecto**.
+- **Mesa de revisión** a pantalla completa para tapar a mano lo que se escape (seleccionándolo) y descartar falsos positivos; **listas del despacho**, **tipo de asunto**, **correos y chats de WhatsApp**, **carpeta vigilada**, **certificado de seudonimización** en PDF y **«Usar con otra IA»** (copiar las copias y volver a poner los nombres en la respuesta).
 - **Dictado por voz**: el botón «Dictar» (⌘⇧D) transcribe con Whisper (whisper.cpp) en el propio ordenador y deja el texto en la caja de mensaje para revisarlo antes de enviarlo. El modelo de voz se descarga una sola vez, cuando se pide.
 - El asistente entiende órdenes como «Seudonimiza toda esta carpeta, mantén la coherencia de las etiquetas y conserva el formato». Prepara un **plan** con su alcance y el usuario lo confirma.
 - **Motor multipasada** (anexo técnico): dos pasadas de detección y ciclos de transformación y verificación independiente desde el original inmutable. Termina por convergencia, por límites o por error, nunca porque el modelo diga que está limpio.

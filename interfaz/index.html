@@ -17,8 +17,10 @@
     </div>
     <button class="boton boton-principal ancho" id="nuevo-proyecto">Nuevo proyecto</button>
     <div class="lista-proyectos" id="lista-proyectos"></div>
+    <button class="actualizacion" id="actualizacion" hidden></button>
     <div class="lateral-pie">
       <button class="boton-texto" id="abrir-modelos">Modelos</button>
+      <button class="boton-texto" id="abrir-listas" title="Datos que nunca o siempre se tapan, en todos los proyectos">Listas</button>
       <span class="estado-motor" id="estado-motor" title="Estado del modelo local">Comprobando…</span>
     </div>
   </nav>
@@ -35,6 +37,7 @@
           <span class="visualmente-oculto">Modelo</span>
           <select id="selector-modelo"></select>
         </label>
+        <button class="boton-texto" id="otra-ia" hidden title="Copiar las copias seudonimizadas para otra IA y volver a poner los nombres en su respuesta">Usar con otra IA ▾</button>
         <button class="boton-texto" id="ajustes-proyecto" hidden>Ajustes del proyecto</button>
         <button class="boton-texto" id="alternar-panel" aria-controls="panel" aria-expanded="true">Panel</button>
       </div>
@@ -68,16 +71,40 @@
 
   <!-- Panel: archivos, operaciones y revisión -->
   <aside class="panel" id="panel" aria-label="Panel del proyecto">
+    <div class="tirador" id="tirador" role="separator" aria-orientation="vertical" aria-label="Ancho del panel" tabindex="0" title="Arrastra para cambiar el ancho"></div>
     <div class="pestanas" role="tablist">
-      <button role="tab" class="pestana" aria-selected="true" data-pestana="archivos">Archivos</button>
-      <button role="tab" class="pestana" aria-selected="false" data-pestana="operaciones">Operaciones</button>
-      <button role="tab" class="pestana" aria-selected="false" data-pestana="revision">Revisión</button>
+      <button role="tab" class="pestana" aria-selected="true" data-pestana="archivos">Documentos</button>
+      <button role="tab" class="pestana" aria-selected="false" data-pestana="operaciones">Progreso</button>
+      <button role="tab" class="pestana" aria-selected="false" data-pestana="revision">Datos tapados</button>
     </div>
     <div class="panel-cuerpo" id="panel-archivos" role="tabpanel"></div>
     <div class="panel-cuerpo" id="panel-operaciones" role="tabpanel" hidden></div>
     <div class="panel-cuerpo" id="panel-revision" role="tabpanel" hidden></div>
   </aside>
 </div>
+
+<!-- Mesa de revisión: la copia seudonimizada a pantalla completa -->
+<section class="mesa" id="mesa" hidden aria-label="Mesa de revisión">
+  <header class="mesa-cab">
+    <div class="mesa-titulo">
+      <h2>Mesa de revisión</h2>
+      <span class="subtitulo" id="mesa-estado">Selecciona con el ratón un dato que se haya escapado y pulsa «Tapar». Haz clic en un marcador para ver qué tapa.</span>
+    </div>
+    <div class="mesa-acciones">
+      <span class="pendientes" id="mesa-pendientes" hidden></span>
+      <button class="boton" id="mesa-rehacer-uno" disabled>Rehacer esta copia</button>
+      <button class="boton boton-principal" id="mesa-rehacer-todas" disabled>Rehacer todas</button>
+      <button class="boton-texto" id="mesa-abrir" title="Abrir la copia con su programa">Abrir la copia</button>
+      <button class="boton" id="mesa-cerrar">Cerrar</button>
+    </div>
+  </header>
+  <div class="mesa-cuerpo">
+    <nav class="mesa-docs" id="mesa-docs" aria-label="Copias"></nav>
+    <article class="mesa-hoja" id="mesa-hoja"><div class="mesa-texto" id="mesa-texto"></div></article>
+    <aside class="mesa-datos" id="mesa-datos" aria-label="Datos tapados"></aside>
+  </div>
+  <div class="mesa-pop" id="mesa-pop" hidden></div>
+</section>
 
 <!-- Diálogos -->
 <dialog id="dlg-proyecto" class="dialogo">
@@ -89,6 +116,14 @@
     <label class="campo">Modelo
       <select name="modelo" id="proyecto-modelo"></select>
     </label>
+    <label class="campo">Tipo de asunto
+      <select name="plantilla" id="proyecto-plantilla"></select>
+      <span class="nota" id="plantilla-desc"></span>
+    </label>
+    <details class="campo conservar">
+      <summary>Qué datos se dejan a la vista <span id="conservar-resumen" class="nota"></span></summary>
+      <div class="rejilla-tipos" id="conservar-tipos"></div>
+    </details>
     <fieldset class="campo">
       <legend>Verificación por defecto</legend>
       <label class="opcion"><input type="radio" name="perfil" value="estandar" checked>
@@ -112,6 +147,7 @@
         <textarea name="instrucciones" rows="3" placeholder="Por ejemplo: conserva los nombres de los magistrados; el cliente es la parte actora."></textarea>
       </label>
       <label class="opcion"><input type="checkbox" name="logos"> <span>Tapar logotipos, sellos y firmas en los PDF</span></label>
+      <label class="opcion"><input type="checkbox" name="vigilar"> <span><b>Carpeta vigilada.</b> Lo que llegue a partir de ahora a las carpetas del proyecto se seudonimiza solo, mientras Seudónimo esté abierto (aunque esté minimizado).</span></label>
     </div>
     <label class="opcion solo-alta"><input type="checkbox" name="temporal"> <span>Proyecto temporal: se borra entero al cerrar la aplicación</span></label>
     <div class="dialogo-pie">
@@ -174,6 +210,49 @@
     </div>
   </form>
 </dialog>
+
+<dialog id="dlg-nombres" class="dialogo dialogo-ancho">
+  <form method="dialog">
+    <h2>Poner los nombres</h2>
+    <p class="nota">Pega aquí la respuesta de la IA, con sus marcadores ([PERSONA_001]…). Seudónimo los cambia por los datos reales de este proyecto, sin conexión. El resultado contiene datos personales: no lo vuelvas a pegar en ninguna IA.</p>
+    <div class="dos-columnas">
+      <label class="campo">Texto con marcadores <textarea id="nombres-entrada" rows="14" placeholder="Pega aquí la respuesta…"></textarea></label>
+      <label class="campo">Con los datos reales <textarea id="nombres-salida" rows="14" readonly></textarea></label>
+    </div>
+    <p class="nota" id="nombres-resumen"></p>
+    <div class="dialogo-pie"><span class="hueco"></span>
+      <button type="button" class="boton" id="nombres-copiar" disabled>Copiar el resultado</button>
+      <button value="cerrar" class="boton boton-principal">Cerrar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-listas" class="dialogo dialogo-ancho dialogo-listas">
+  <form method="dialog">
+    <h2>Listas del despacho</h2>
+    <p class="nota">Valen para todos los proyectos y se aplican en las próximas seudonimizaciones (o al pulsar «Rehacer»).</p>
+    <div class="dos-columnas">
+      <section>
+        <h3>Nunca tapar</h3>
+        <p class="nota">Magistrados, tu despacho, organismos públicos… Aunque el modelo los detecte, se dejan a la vista.</p>
+        <div class="fila-campo"><input id="nunca-texto" placeholder="Por ejemplo: Tribunal Superior de Justicia de Canarias"><button type="button" class="boton" id="nunca-anadir">Añadir</button></div>
+        <ul class="lista-datos" id="nunca-lista"></ul>
+      </section>
+      <section>
+        <h3>Siempre tapar</h3>
+        <p class="nota">Clientes habituales, empresas que defiendes… Se tapan en cuanto aparecen, aunque el modelo no los vea.</p>
+        <div class="fila-campo"><input id="siempre-texto" placeholder="Nombre o dato"><select id="siempre-tipo"></select><button type="button" class="boton" id="siempre-anadir">Añadir</button></div>
+        <ul class="lista-datos" id="siempre-lista"></ul>
+      </section>
+    </div>
+    <div class="dialogo-pie"><span class="hueco"></span>
+      <button value="cancelar" class="boton">Cancelar</button>
+      <button value="guardar" class="boton boton-principal">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="aviso-flotante" id="aviso-flotante" role="status" hidden></div>
 
 <dialog id="dlg-confirmar" class="dialogo">
   <form method="dialog">

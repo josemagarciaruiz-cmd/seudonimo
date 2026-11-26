@@ -7,3 +7,5 @@ pypdfium2==5.15.2
 cryptography==50.0.2
 keyring==25.7.0
 pyobjc-framework-Vision
+reportlab==5.1.2
+olefile==0.47

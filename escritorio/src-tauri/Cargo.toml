@@ -1,6 +1,6 @@
 [package]
 name = "seudonimo"
-version = "0.2.0"
+version = "0.3.0"
 description = "Seudónimo"
 authors = ["José María García Ruiz"]
 license-file = "../../LICENSE.md"

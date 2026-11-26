@@ -1,5 +1,18 @@
 # Cambios
 
+## 0.3.0 · 26 de noviembre de 2026
+
+- **Mesa de revisión** a pantalla completa: cada copia seudonimizada entera, con los marcadores resaltados y en rojo los datos conocidos que siguen a la vista. Se selecciona con el ratón lo que se ha escapado y se pulsa «Tapar»; un clic en un marcador muestra qué tapa y permite dejarlo a la vista. «Rehacer esta copia» o «Rehacer todas» aplican los cambios.
+- **Panel más ancho y redimensionable** (arrastrando su borde) y pestañas con nombres claros: Documentos, Progreso y Datos tapados.
+- **Usar con otra IA:** «Copiar las copias seudonimizadas» deja el texto listo para pegarlo en Claude o ChatGPT, y «Poner los nombres» devuelve la respuesta con los datos reales, sin conexión.
+- **Listas del despacho**, comunes a todos los proyectos: «Nunca tapar» (magistrados, organismos, tu despacho) y «Siempre tapar» (clientes habituales).
+- **Tipo de asunto** al crear un proyecto (despido, cantidad, Seguridad Social, consulta sobre la empresa…), con los datos que se dejan a la vista.
+- **Correos y chats:** correos de Outlook (.eml y .msg) y chats exportados de WhatsApp (.zip); se entregan como texto.
+- **Carpeta vigilada:** lo que llega a las carpetas del proyecto se seudonimiza solo, mientras la aplicación está abierta.
+- **Certificado de seudonimización** en PDF en cada carpeta de resultados: método, resultado y huellas SHA-256, sin datos personales.
+- **Aviso de versiones nuevas**, consultando las versiones publicadas en GitHub.
+- **Licencia PolyForm Shield 1.0.0:** uso libre, también profesional; prohibido usarla para ofrecer un producto que compita.
+
 ## 0.2.0 · 26 de noviembre de 2026 · ahora se llama Seudónimo
 
 - **Nuevo nombre: Seudónimo.** Lo que hace la aplicación es seudonimizar, no anonimizar. Cambian la ventana, el icono (un detective con sombrero del que solo se ven los ojos), los instaladores (`Seudonimo-<versión>-…`), las carpetas (`~/Seudónimo` para los resultados) y el repositorio. La primera vez que se abre, traslada sola los datos, los resultados, las tablas cifradas y sus claves de «Áurea Asistente Local».

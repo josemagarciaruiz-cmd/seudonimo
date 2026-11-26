@@ -49,6 +49,11 @@ class Almacen:
         self._local = threading.local()
         with self._c() as c:
             c.executescript(ESQUEMA)
+            # columnas añadidas en la 0.3.0 (bases de datos creadas con versiones anteriores)
+            for tabla, col, defin in (("proyectos", "conservar", "TEXT DEFAULT '[]'"), ("proyectos", "plantilla", "TEXT"),
+                                      ("proyectos", "vigilar", "REAL DEFAULT 0"), ("archivos", "visto", "REAL")):
+                if col not in [r[1] for r in c.execute("PRAGMA table_info(%s)" % tabla)]:
+                    c.execute("ALTER TABLE %s ADD COLUMN %s %s" % (tabla, col, defin))
 
     def _c(self):
         c = getattr(self._local, "c", None)
@@ -82,7 +87,8 @@ class Almacen:
         return self._x("INSERT INTO proyectos(nombre, creado, actualizado, temporal, modelo, perfil, tabla) "
                        "VALUES (?,?,?,?,?,?,?)", (nombre, ahora, ahora, int(temporal), modelo, perfil, tabla))
 
-    CAMPOS_PROYECTO = ("nombre", "modelo", "perfil", "tabla", "salida", "instrucciones", "logos", "temporal")
+    CAMPOS_PROYECTO = ("nombre", "modelo", "perfil", "tabla", "salida", "instrucciones", "logos", "temporal",
+                       "conservar", "plantilla", "vigilar")
 
     def actualizar_proyecto(self, pid, **campos):
         campos = {k: v for k, v in campos.items() if k in self.CAMPOS_PROYECTO}
@@ -124,10 +130,12 @@ class Almacen:
             p = previos.get(f["ruta"])
             if p and p["tamano"] == f["tamano"] and p["modificado"] == f["modificado"]:
                 continue
+            # «visto»: cuándo apareció (o cambió) el archivo en la carpeta; lo usa la carpeta vigilada
             c.execute("INSERT OR REPLACE INTO archivos(id, proyecto, carpeta, ruta, rel, nombre, ext, tamano, modificado, "
-                      "admitido, motivo, estado) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                      "admitido, motivo, estado, visto) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                       (p["id"] if p else None, pid, cid, f["ruta"], f["rel"], f["nombre"], f["ext"], f["tamano"],
-                       f["modificado"], int(f["admitido"]), f.get("motivo"), "nuevo" if f["admitido"] else "no_admitido"))
+                       f["modificado"], int(f["admitido"]), f.get("motivo"), "nuevo" if f["admitido"] else "no_admitido",
+                       time.time()))
         for ruta in set(previos) - vistos:
             c.execute("DELETE FROM archivos WHERE id=?", (previos[ruta]["id"],))
         c.commit()

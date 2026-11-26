@@ -35,6 +35,7 @@ import traceback
 
 import formatos
 import motor
+import registro as registro_mod
 import rutas
 import verificacion
 
@@ -182,7 +183,7 @@ class TrabajoDocumento:
         texto = self.texto_original
         # Pasada de detección 1: reglas + modelo con el prompt de detección
         self.comprobar()
-        ents = motor.detectar_regex(texto)
+        ents = motor.detectar_regex(texto) + registro_mod.de_la_lista(texto)
         ents += self._modelo(texto, motor.PROMPT, 0.15, 0.45, "detección 1")
         self.comprobar()
         nuevas = self.registro.incorporar(motor.filtrar_fechas(ents, texto), self.doc["id"])
@@ -394,6 +395,7 @@ class TrabajoLote:
             nombre = nombre_salida(os.path.splitext(d.doc["nombre"])[0] + d.ext, mapa)
             final = _ruta_libre(os.path.join(carpeta, nombre))
             shutil.copyfile(d.salida, final)
+            d.final = final
             d.doc["rel_salida"] = os.path.relpath(final, self.destino)
             if d.ext_original in formatos.IMAGENES:
                 # llegó como foto: también la imagen, re-renderizada y sin metadatos EXIF
@@ -417,6 +419,18 @@ class TrabajoLote:
             json.dump(self.informe, f, ensure_ascii=False, indent=2)
         with open(os.path.join(self.destino, "Informe de verificación.html"), "w", encoding="utf-8") as f:
             f.write(informe_html(self.informe))
+        try:
+            import certificado
+            docs = []
+            for d in self.docs:
+                if getattr(d, "final", None):
+                    docs.append({"copia": d.doc["rel_salida"], "estado_texto": ESTADOS[d.estado],
+                                 "ciclos": sum(1 for p in d.pasadas if p["tipo"] == "verificacion"),
+                                 "sha_original": certificado.huella(d.doc["ruta"]) if os.path.isfile(d.doc["ruta"]) else "—",
+                                 "sha_copia": certificado.huella(d.final)})
+            self.certificado = certificado.generar(self.informe, self.destino, docs)
+        except Exception:
+            traceback.print_exc()        # el certificado no debe impedir la entrega de las copias
 
 
 def _ruta_libre(ruta):

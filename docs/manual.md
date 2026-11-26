@@ -33,6 +33,39 @@
    - **Añadir** a mano lo que se haya escapado.
    - **Regenerar copias** vuelve a generarlas y verificarlas sin repetir la detección.
 
+## Revisar las copias: la mesa de revisión
+
+Pulsa **«Abrir la mesa de revisión»** (en Documentos o en Datos tapados) o «Revisar la copia» junto a un archivo. Verás la copia seudonimizada entera:
+
+- Los **marcadores** ([PERSONA_001]…) aparecen como tachones. Haz clic en uno para ver qué dato tapa. Si no es un dato personal, pulsa «No es un dato personal: dejarlo a la vista».
+- Lo que aparece **en rojo** es un dato que ya está en la lista pero sigue a la vista en esa copia: rehazla.
+- Si ves un dato que **se ha escapado**, selecciónalo con el ratón, elige su tipo y pulsa **«Tapar»**. Se tapará en todas las copias del proyecto.
+- Los cambios se aplican al pulsar **«Rehacer esta copia»** o **«Rehacer todas»**. La copia se vuelve a generar desde el original y se verifica de nuevo, en una carpeta de resultados nueva.
+
+El panel de la derecha se ensancha arrastrando su borde izquierdo (doble clic para alternar entre estrecho y ancho).
+
+## Usar las copias con otra IA
+
+En **«Usar con otra IA»** (arriba):
+1. **Copiar las copias seudonimizadas** copia al portapapeles el texto de todas las copias del proyecto, listo para pegarlo en Claude o ChatGPT.
+2. Cuando la IA responda, **Poner los nombres en una respuesta…**: pega su respuesta y Seudónimo cambia los marcadores por los datos reales, en este ordenador. Necesita que el proyecto guarde la tabla de correspondencias.
+
+El resultado con los nombres ya contiene datos personales: no lo vuelvas a pegar en ninguna IA.
+
+## Listas del despacho y tipo de asunto
+
+- **Listas** (abajo a la izquierda): «Nunca tapar» para lo que debe quedar a la vista en todos los proyectos (magistrados, organismos, tu despacho) y «Siempre tapar» para lo que debe taparse siempre que aparezca (clientes habituales).
+- **Tipo de asunto** (al crear el proyecto o en sus ajustes): elige despido, reclamación de cantidad, Seguridad Social, consulta sobre la empresa o general. Cada uno propone qué datos dejar a la vista, y puedes cambiarlo en «Qué datos se dejan a la vista».
+
+## Correos, chats y carpeta vigilada
+
+- Puedes añadir **correos de Outlook** (.eml, .msg) y **chats exportados de WhatsApp** (el .zip de «Exportar chat»). Se entregan como texto; los adjuntos, fotos y audios no se tratan y se avisa.
+- **Carpeta vigilada** (en los ajustes del proyecto): lo que llegue a partir de ese momento a las carpetas del proyecto se seudonimiza solo, mientras Seudónimo esté abierto.
+
+## Certificado de seudonimización
+
+Cada carpeta de resultados lleva un **«Certificado de seudonimización.pdf»** para el expediente: método, resultado por documento y huellas SHA-256 del original y de la copia, sin datos personales. También se abre desde Progreso, botón «Certificado».
+
 ## Organizar proyectos y conversaciones
 
 Al pasar el ratón por un proyecto o una conversación de la barra lateral aparece el botón «⋯»:

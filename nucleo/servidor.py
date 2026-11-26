@@ -12,6 +12,7 @@ Imprime «SEUDONIMO_LISTO <puerto>» cuando está preparado (lo lee la ventana d
 import argparse
 import json
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -41,6 +42,7 @@ import motor  # noqa: E402
 import multipasada  # noqa: E402
 import ocr  # noqa: E402
 import proveedores  # noqa: E402
+import registro as registro_mod  # noqa: E402
 import trabajos  # noqa: E402
 import voz  # noqa: E402
 from version import VERSION  # noqa: E402
@@ -245,6 +247,9 @@ def crear_proyecto():
                              d.get("modelo") or ALM.ajuste("modelo_defecto", motor.MODELO),
                              d.get("perfil") if d.get("perfil") in multipasada.PERFILES else "estandar",
                              "sin_tabla" if d.get("tabla") == "sin_tabla" else "cifrada")
+    if d.get("plantilla") or d.get("conservar"):
+        ALM.actualizar_proyecto(pid, plantilla=d.get("plantilla"),
+                                conservar=json.dumps([t for t in (d.get("conservar") or []) if t in motor.TIPOS]))
     return jsonify(ALM.proyecto(pid))
 
 
@@ -256,6 +261,7 @@ def ver_proyecto(pid):
     p["trabajos_activos"] = GESTOR.activos(pid)
     p["salida_efectiva"] = p.get("salida") or os.path.join(rutas.SALIDAS, trabajos._nombre_carpeta(p["nombre"]))
     p["salida_sincronizada"] = rutas.sincronizada(p["salida_efectiva"])
+    p["conservar"] = sorted(trabajos.conservar(p))
     return jsonify(p)
 
 
@@ -269,6 +275,10 @@ def editar_proyecto(pid):
         d.pop("tabla")
     if d.get("tabla") == "sin_tabla":
         trabajos.olvidar_registro(pid, borrar=True)
+    if "conservar" in d:
+        d["conservar"] = json.dumps([t for t in (d["conservar"] or []) if t in motor.TIPOS])
+    if "vigilar" in d:          # se guarda desde cuándo: solo se trata lo que llegue después
+        d["vigilar"] = (_proyecto(pid).get("vigilar") or time.time()) if d["vigilar"] else 0
     ALM.actualizar_proyecto(pid, **d)
     return jsonify(ALM.proyecto(pid))
 
@@ -426,7 +436,12 @@ def cancelar_trabajo(tid):
 
 @app.get("/api/proyectos/<int:pid>/trabajos")
 def historial(pid):
-    return jsonify(activos=GESTOR.activos(pid), historial=ALM.trabajos(pid))
+    import certificado
+    hist = ALM.trabajos(pid)
+    for h in hist:
+        c = os.path.join(h["destino"], certificado.NOMBRE) if h.get("destino") else None
+        h["certificado"] = c if c and os.path.isfile(c) else None
+    return jsonify(activos=GESTOR.activos(pid), historial=hist)
 
 
 # ---------------------------------------------------------------- revisión de hallazgos
@@ -435,10 +450,12 @@ def historial(pid):
 def ver_registro(pid):
     p = _proyecto(pid)
     try:
-        r = trabajos.registro(pid, p["tabla"])
+        r = _registro(p)
     except cifrado.ErrorCifrado as e:
         return jsonify(error=str(e)), 400
-    return jsonify(entidades=[{k: e[k] for k in ("id", "marcador", "tipo", "formas", "origenes", "docs", "activo", "ambigua")}
+    return jsonify(entidades=[dict({k: e[k] for k in ("id", "marcador", "tipo", "formas", "origenes", "docs", "activo", "ambigua")},
+                                   conservado=e["tipo"] in r.conservar,
+                                   en_lista=any(motor.clave_dato(f) in registro_mod.NUNCA for f in e["formas"]))
                               for e in r.entidades],
                    etiquetas=motor.ETIQUETAS, resumen=r.resumen(), version=r.version)
 
@@ -466,7 +483,8 @@ def anadir_entidad(pid):
     texto = (d.get("texto") or "").strip()
     if len(texto) < 2:
         return jsonify(error="Escribe el dato que quieres seudonimizar."), 400
-    nuevas = trabajos.registro(pid, p["tabla"]).anadir_manual(texto, d.get("tipo") or "OTRO")
+    doc = d.get("doc") if isinstance(d.get("doc"), int) else None
+    nuevas = trabajos.registro(pid, p["tabla"]).anadir_manual(texto, d.get("tipo") or "OTRO", doc)
     trabajos.guardar_registro(pid, p["tabla"])
     return jsonify(nuevas=[{"marcador": n["marcador"], "tipo": n["tipo"]} for n in nuevas])
 
@@ -487,6 +505,259 @@ def exportar_tabla(pid):
             w.writerow([fila["marcador"], fila["tipo"], " | ".join(fila["formas"]), ", ".join(fila["detectado_por"]),
                         fila["documentos"], "sí" if fila["ambigua"] else ""])
     return jsonify(ok=True, ruta=ruta, sincronizada=rutas.sincronizada(ruta))
+
+
+# ---------------------------------------------------------------- copias y mesa de revisión
+
+_TEXTOS = {}          # (ruta, mtime) -> texto de la copia (en memoria; nunca se guarda en disco)
+
+
+def _registro(p):
+    r = trabajos.registro(p["id"], p["tabla"])
+    r.conservar = trabajos.conservar(p)
+    return r
+
+
+def _copias(pid):
+    """La copia más reciente de cada archivo tratado: {id_archivo: {...}}."""
+    res = {}
+    por_id = {t["id"]: t for t in ALM.trabajos(pid)}
+    informes = {}
+    for a in ALM.archivos(pid):
+        if a["estado"] not in ("sin_hallazgos", "revision") or not a.get("ultimo_trabajo"):
+            continue
+        t = por_id.get(a["ultimo_trabajo"])
+        if not t or not t.get("destino"):
+            continue
+        docs = (t.get("resumen") or {}).get("documentos")
+        if docs is None:
+            if t["id"] not in informes:
+                try:
+                    with open(os.path.join(t["destino"], "Informe de verificación.json"), encoding="utf-8") as f:
+                        informes[t["id"]] = json.load(f)["documentos"]
+                except (OSError, ValueError, KeyError):
+                    informes[t["id"]] = []
+            docs = informes[t["id"]]
+        d = next((x for x in docs if x.get("id") == a["id"]), None)
+        if not d:
+            continue
+        ruta = os.path.join(t["destino"], d["rel"])
+        if os.path.isfile(ruta):
+            res[a["id"]] = {"id": a["id"], "original": a["rel"], "copia": d["rel"], "ruta": ruta,
+                            "estado": a["estado"], "trabajo": t["id"], "fecha": t.get("terminado") or t.get("creado")}
+    return res
+
+
+def _texto_copia(c):
+    clave = (c["ruta"], os.path.getmtime(c["ruta"]))
+    if clave not in _TEXTOS:
+        if len(_TEXTOS) > 40:
+            _TEXTOS.clear()
+        ext = os.path.splitext(c["ruta"])[1].lower()
+        _TEXTOS[clave] = formatos.extraer_texto(c["ruta"], ext, comprobar=False)
+    return _TEXTOS[clave]
+
+
+@app.get("/api/proyectos/<int:pid>/copias")
+def ver_copias(pid):
+    _proyecto(pid)
+    return jsonify(sorted(_copias(pid).values(), key=lambda c: c["original"].lower()))
+
+
+@app.get("/api/proyectos/<int:pid>/copias/<int:aid>")
+def texto_copia(pid, aid):
+    """Texto de la copia seudonimizada, con los datos conocidos que siguen a la vista."""
+    p = _proyecto(pid)
+    c = _copias(pid).get(aid)
+    if not c:
+        return jsonify(error="Este archivo todavía no tiene una copia seudonimizada."), 404
+    try:
+        texto = _texto_copia(c)
+    except Exception as e:  # noqa
+        return jsonify(error="No he podido leer la copia: %s" % str(e)[:200]), 400
+    r = _registro(p)
+    escapados = []
+    for e in r.mapa():
+        for m in motor.patron(e["texto"], e["tipo"]).finditer(texto):
+            escapados.append({"ini": m.start(), "fin": m.end(), "marcador": e["marcador"]})
+            if len(escapados) > 500:
+                break
+    return jsonify(dict(c, texto=texto, escapados=escapados))
+
+
+def _texto_para_ia(pid, ids=None):
+    copias = _copias(pid)
+    partes = []
+    for aid, c in sorted(copias.items(), key=lambda x: x[1]["copia"].lower()):
+        if ids and aid not in ids:
+            continue
+        partes.append("### Documento: %s\n\n%s" % (os.path.basename(c["copia"]), _texto_copia(c).strip()))
+    return partes
+
+
+@app.post("/api/proyectos/<int:pid>/copias/texto")
+def copiar_para_ia(pid):
+    """Texto seudonimizado de las copias, listo para pegar en un chat de IA."""
+    _proyecto(pid)
+    ids = set(int(x) for x in (_json().get("archivos") or []))
+    try:
+        partes = _texto_para_ia(pid, ids or None)
+    except Exception as e:  # noqa
+        return jsonify(error="No he podido leer una de las copias: %s" % str(e)[:200]), 400
+    if not partes:
+        return jsonify(error="Todavía no hay copias seudonimizadas en este proyecto."), 400
+    texto = ("Los documentos siguientes están seudonimizados: los datos personales se han sustituido por marcadores "
+             "entre corchetes, como [PERSONA_001]. Conserva los marcadores tal cual en tu respuesta.\n\n" + "\n\n".join(partes))
+    return jsonify(texto=texto, documentos=len(partes), caracteres=len(texto))
+
+
+_MARCA_LIBRE = re.compile(r"\[\s*([A-Z][A-Z_]*_\d{1,4})\s*\]|(?<![\w\[])([A-Z][A-Z]+(?:_[A-Z]+)*_\d{3})(?![\w\]])")
+
+
+@app.post("/api/proyectos/<int:pid>/reidentificar")
+def reidentificar(pid):
+    """Vuelve a poner los datos reales en un texto con marcadores (la respuesta de una IA)."""
+    p = _proyecto(pid)
+    texto = _json().get("texto") or ""
+    if p["tabla"] != "cifrada":
+        return jsonify(error="Este proyecto no guarda la tabla de correspondencias, así que no se pueden recuperar los datos. "
+                             "Actívala en «Ajustes del proyecto» para los próximos trabajos."), 400
+    r = trabajos.registro(pid, p["tabla"])
+    hechos, desconocidos = [], set()
+
+    def poner(m):
+        marca = "[%s]" % (m.group(1) or m.group(2))
+        e = r.por_marcador(marca)
+        if not e or not e["formas"]:
+            desconocidos.add(marca)
+            return m.group(0)
+        hechos.append(marca)
+        return max(e["formas"], key=len)     # la forma más completa (el nombre con apellidos)
+    res = _MARCA_LIBRE.sub(poner, texto)
+    return jsonify(texto=res, sustituidos=len(hechos), distintos=len(set(hechos)), desconocidos=sorted(desconocidos))
+
+
+# ---------------------------------------------------------------- listas del despacho y plantillas
+
+PLANTILLAS = [
+    {"id": "general", "nombre": "General", "conservar": [],
+     "descripcion": "Tapa todos los datos identificativos."},
+    {"id": "despido", "nombre": "Despido o sanción", "conservar": ["DEPARTAMENTO"],
+     "descripcion": "Conserva el departamento o centro de trabajo, útil para valorar la causa. Las fechas, importes, "
+                    "categorías y el convenio no se tapan nunca."},
+    {"id": "cantidad", "nombre": "Reclamación de cantidad", "conservar": ["DEPARTAMENTO"],
+     "descripcion": "Conserva el departamento o centro de trabajo. Importes, periodos, categorías y convenio quedan a la vista."},
+    {"id": "seguridad_social", "nombre": "Incapacidad o Seguridad Social", "conservar": ["EXPEDIENTE"],
+     "descripcion": "Conserva el número de expediente administrativo para seguir el trámite. Los diagnósticos no se "
+                    "tapan: revisa si hace falta compartirlos."},
+    {"id": "empresa", "nombre": "Consulta sobre la empresa", "conservar": ["EMPRESA", "DEPARTAMENTO"],
+     "descripcion": "Para preguntar por la empresa y no por personas: conserva el nombre de la empresa y sus departamentos."},
+]
+
+
+def _cargar_listas():
+    listas = ALM.ajuste("listas", {"nunca": [], "siempre": []})
+    registro_mod.fijar_listas(listas.get("nunca", []), listas.get("siempre", []))
+    return listas
+
+
+@app.get("/api/listas")
+def ver_listas():
+    return jsonify(_cargar_listas())
+
+
+@app.put("/api/listas")
+def guardar_listas():
+    d = _json()
+    nunca = [{"texto": str(x.get("texto", "")).strip()[:200]} for x in d.get("nunca", []) if str(x.get("texto", "")).strip()]
+    siempre = [{"texto": str(x.get("texto", "")).strip()[:200], "tipo": x.get("tipo") if x.get("tipo") in motor.TIPOS else "OTRO"}
+               for x in d.get("siempre", []) if len(str(x.get("texto", "")).strip()) >= 2]
+    ALM.poner_ajuste("listas", {"nunca": nunca[:2000], "siempre": siempre[:2000]})
+    return jsonify(_cargar_listas())
+
+
+@app.get("/api/plantillas")
+def ver_plantillas():
+    return jsonify(plantillas=PLANTILLAS, etiquetas=motor.ETIQUETAS)
+
+
+_cargar_listas()
+
+
+# ---------------------------------------------------------------- carpeta vigilada
+
+def _vigilancia():
+    """Seudonimiza lo que entra en las carpetas de los proyectos vigilados, mientras la aplicación
+    está abierta. Solo trata archivos que han aparecido o cambiado después de activar la vigilancia."""
+    while True:
+        time.sleep(20)
+        try:
+            for p in ALM.proyectos():
+                desde = p.get("vigilar") or 0
+                if not desde:
+                    continue
+                for c in ALM.carpetas(p["id"]):
+                    if os.path.exists(c["ruta"]):
+                        ALM.guardar_inventario(p["id"], c["id"], herramientas.inventariar(c["ruta"], c["tipo"]))
+                salida = os.path.abspath(p.get("salida") or os.path.join(rutas.SALIDAS, trabajos._nombre_carpeta(p["nombre"])))
+                ocupados = {d["id"] for t in GESTOR.activos(p["id"]) for d in t["docs"]}
+                ahora = time.time()
+                nuevos = [a for a in ALM.archivos(p["id"])
+                          if a["admitido"] and a["estado"] == "nuevo" and (a.get("visto") or 0) > desde
+                          and ahora - (a.get("visto") or 0) > 15 and a["id"] not in ocupados
+                          and not os.path.abspath(a["ruta"]).startswith(salida + os.sep)
+                          and "(seudonimizado)" not in a["nombre"]]
+                if nuevos:
+                    modelo = p.get("modelo") or ALM.ajuste("modelo_defecto", motor.MODELO)
+                    GESTOR.lanzar(p, nuevos, p["perfil"], modelo, None)
+        except Exception:
+            traceback.print_exc()
+
+
+# ---------------------------------------------------------------- actualizaciones
+
+# repositorio público: las versiones (también las previas, «pre-release») se consultan sin cuenta
+URL_ACTUALIZACIONES = "https://api.github.com/repos/josemagarciaruiz-cmd/seudonimo/releases?per_page=5"
+
+
+def _version(v):
+    return tuple(int(x) for x in re.findall(r"\d+", str(v))[:3])
+
+
+@app.get("/api/actualizacion")
+def buscar_actualizacion():
+    url = ALM.ajuste("url_actualizaciones", URL_ACTUALIZACIONES)
+    try:
+        import requests
+        r = requests.get(url, timeout=6, headers={"Accept": "application/json"})
+        if r.status_code != 200:
+            return jsonify(nueva=False, motivo="no_disponible")
+        d = r.json()
+    except Exception:
+        return jsonify(nueva=False, motivo="sin_conexion")
+    if isinstance(d, list):      # lista de versiones de GitHub: la más reciente publicada
+        d = next((x for x in d if not x.get("draft")), {})
+    if "tag_name" in d:          # formato de las versiones de GitHub
+        enlaces = [a.get("browser_download_url", "") for a in d.get("assets", [])]
+        d = {"version": d["tag_name"], "notas": d.get("body") or "", "pagina": d.get("html_url"),
+             "mac": next((u for u in enlaces if u.endswith(".dmg")), None),
+             "windows": next((u for u in enlaces if u.endswith(".exe")), None)}
+    descarga = d.get("windows") if rutas.ES_WINDOWS else d.get("mac")
+    descarga = descarga or d.get("pagina")
+    if descarga and not str(descarga).startswith("https://"):
+        descarga = None
+    return jsonify(nueva=_version(d.get("version")) > _version(VERSION), version=str(d.get("version", "")).lstrip("v"),
+                   notas=str(d.get("notas", ""))[:2000], descarga=descarga, actual=VERSION)
+
+
+@app.post("/api/actualizacion/descargar")
+def descargar_actualizacion():
+    url = _json().get("url") or ""
+    if not url.startswith("https://"):
+        return jsonify(error="Dirección de descarga no válida."), 400
+    import webbrowser
+    webbrowser.open(url)
+    return jsonify(ok=True)
 
 
 # ---------------------------------------------------------------- sistema
@@ -586,6 +857,7 @@ def main():
     else:
         PUERTO = _puerto_libre(a.puerto) if a.puerto else _puerto_libre(0)
     threading.Thread(target=_al_arrancar, daemon=True).start()
+    threading.Thread(target=_vigilancia, daemon=True, name="vigilancia").start()
     print("SEUDONIMO_LISTO %d" % PUERTO, flush=True)
     if a.navegador:
         import webbrowser

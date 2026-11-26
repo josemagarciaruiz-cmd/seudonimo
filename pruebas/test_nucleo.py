@@ -84,3 +84,40 @@ def test_validacion_estructural_y_variantes_ocr():
 def test_registro_rechaza_formas_imposibles():
     r = registro.Registro(2)
     assert r.incorporar([{"texto": "008", "tipo": "TELEFONO"}, {"texto": "Dña.", "tipo": "PERSONA"}]) == []
+
+
+def test_listas_del_despacho_y_tipos_conservados():
+    registro.fijar_listas([{"texto": "Tribunal Superior de Justicia de Canarias"}],
+                          [{"texto": "Hoteles Volcán Azul S.L.", "tipo": "EMPRESA"}])
+    try:
+        texto = "Hoteles Volcán Azul S.L. recurre ante el Tribunal Superior de Justicia de Canarias."
+        r = registro.Registro(1)
+        r.incorporar(registro.de_la_lista(texto) + [{"texto": "Tribunal Superior de Justicia de Canarias", "tipo": "EMPRESA"},
+                                                     {"texto": "Oficina Técnica", "tipo": "DEPARTAMENTO"}])
+        assert [e["texto"] for e in r.mapa()] == ["Hoteles Volcán Azul S.L.", "Oficina Técnica"]
+        r.conservar = {"DEPARTAMENTO"}
+        assert [e["texto"] for e in r.mapa()] == ["Hoteles Volcán Azul S.L."]
+    finally:
+        registro.fijar_listas([], [])
+
+
+def test_correo_eml_a_texto():
+    import correo
+    d = tempfile.mkdtemp()
+    ruta = os.path.join(d, "c.eml")
+    with open(ruta, "w", encoding="utf-8") as f:
+        f.write("From: Ana Pérez <ana@ejemplo.es>\nSubject: Despido\nContent-Type: text/html; charset=utf-8\n\n"
+                "<p>Me han despedido.<br>DNI 12345678Z</p>")
+    salida, aviso = correo.a_texto(ruta, d)
+    texto = open(salida, encoding="utf-8").read()
+    assert salida.endswith(".txt") and "Ana Pérez" in texto and "12345678Z" in texto and "<p>" not in texto
+
+
+def test_reidentificar_marcadores():
+    import re
+    r = registro.Registro(1)
+    r.incorporar([{"texto": "Lucía Ferrer Gil", "tipo": "PERSONA"}, {"texto": "Ferrer Gil", "tipo": "PERSONA"}])
+    marca = re.compile(r"\[\s*([A-Z][A-Z_]*_\d{1,4})\s*\]|(?<![\w\[])([A-Z][A-Z]+(?:_[A-Z]+)*_\d{3})(?![\w\]])")
+    sal = marca.sub(lambda m: max(r.por_marcador("[%s]" % (m.group(1) or m.group(2)))["formas"], key=len),
+                    "Según [PERSONA_001] y PERSONA_001.")
+    assert sal == "Según Lucía Ferrer Gil y Lucía Ferrer Gil."

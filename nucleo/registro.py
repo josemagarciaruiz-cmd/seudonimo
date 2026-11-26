@@ -20,6 +20,25 @@ import time
 
 import motor
 
+# Listas del despacho, comunes a todos los proyectos (las fija el servicio desde los ajustes):
+#   NUNCA: claves de datos que no se tapan nunca (magistrados, el propio despacho, organismos…)
+#   SIEMPRE: [{"texto", "tipo"}] que se tapan siempre que aparezcan en un documento
+NUNCA = set()
+SIEMPRE = []
+
+
+def fijar_listas(nunca, siempre):
+    NUNCA.clear()
+    NUNCA.update(motor.clave_dato(x["texto"] if isinstance(x, dict) else x) for x in nunca if x)
+    SIEMPRE[:] = [{"texto": x["texto"].strip(), "tipo": x.get("tipo") if x.get("tipo") in motor.TIPOS else "OTRO"}
+                  for x in siempre if x.get("texto", "").strip()]
+
+
+def de_la_lista(texto):
+    """Formas de la lista «siempre» que aparecen en el texto, listas para incorporar."""
+    return [{"texto": x["texto"], "tipo": x["tipo"], "origen": "Lista del despacho"}
+            for x in SIEMPRE if len(x["texto"]) >= 2 and motor.patron(x["texto"]).search(texto)]
+
 
 def _orden_natural(m):
     import re
@@ -47,6 +66,7 @@ class Registro:
         self.version = 0           # sube cada vez que entra una entidad o forma nueva
         self._cerrojo = threading.RLock()
         self._indice = {}          # clave_dato(forma) -> entidad
+        self.conservar = set()     # tipos que este proyecto NO tapa (plantilla del asunto)
 
     # ------------------------------------------------------------ consulta
     def buscar(self, texto):
@@ -62,9 +82,11 @@ class Registro:
         """Lista plana de formas con su marcador, en el formato que usa el motor."""
         res = []
         for e in self.entidades:
-            if solo_activas and not e["activo"]:
+            if solo_activas and (not e["activo"] or e["tipo"] in self.conservar):
                 continue
             for f in e["formas"]:
+                if solo_activas and motor.clave_dato(f) in NUNCA:
+                    continue
                 res.append({"texto": f, "tipo": e["tipo"], "marcador": e["marcador"], "id": e["id"]})
         return res
 
@@ -113,7 +135,7 @@ class Registro:
                 texto = str(d.get("texto", "")).strip()
                 tipo = d.get("tipo") if d.get("tipo") in motor.TIPOS else "OTRO"
                 k = motor.clave_dato(texto)
-                if (not k or len(texto) < 2 or k in self.descartados or motor.MARCADOR.search(texto)
+                if (not k or len(texto) < 2 or k in self.descartados or k in NUNCA or motor.MARCADOR.search(texto)
                         or motor.MARCADOR_OCR.fullmatch(texto) or not motor.valido(texto, tipo)):
                     continue
                 ya = self._indice.get(k)

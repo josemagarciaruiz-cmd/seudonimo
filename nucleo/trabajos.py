@@ -28,6 +28,18 @@ def _ruta_registro(pid):
     return ruta
 
 
+def conservar(proyecto):
+    """Tipos de dato que el proyecto no tapa (según la plantilla del asunto)."""
+    import json
+    c = proyecto.get("conservar") or "[]"
+    if isinstance(c, (list, set, tuple)):
+        return set(c)
+    try:
+        return set(json.loads(c))
+    except (ValueError, TypeError):
+        return set()
+
+
 def registro(pid, tabla="cifrada"):
     """Registro de entidades del proyecto. En modo «sin_tabla» solo vive en memoria."""
     with _CERROJO:
@@ -77,6 +89,7 @@ class Gestor:
         """archivos: filas del inventario (con «ruta», «rel», «nombre», «id»)."""
         tid = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
         reg = registro(proyecto["id"], proyecto["tabla"])
+        reg.conservar = conservar(proyecto)
         base = proyecto.get("salida") or os.path.join(rutas.SALIDAS, _nombre_carpeta(proyecto["nombre"]))
         destino = os.path.join(base, time.strftime("%Y-%m-%d %H.%M.%S"))
         docs = [{"id": a["id"], "ruta": a["ruta"], "rel": a["rel"] or a["nombre"], "nombre": a["nombre"]} for a in archivos]
@@ -123,7 +136,10 @@ class Gestor:
                                       "modelo": lote.ajustes.get("modelo"), "destino": lote.destino,
                                       "resumen": lote.informe and {"recuento": lote.informe["recuento"],
                                                                    "registro": lote.informe["registro"],
-                                                                   "duracion_s": lote.informe["duracion_s"]},
+                                                                   "duracion_s": lote.informe["duracion_s"],
+                                                                   "documentos": [{"id": d["id"], "rel": d["rel"], "estado": d["estado"]}
+                                                                                  for d in lote.informe["documentos"]],
+                                                                   "certificado": bool(getattr(lote, "certificado", None))},
                                       "creado": m.get("creado"), "terminado": time.time()})
 
     def estado(self, tid):
