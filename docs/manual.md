@@ -100,6 +100,10 @@ En la carpeta de resultados del proyecto (por defecto `~/Seudónimo/<proyecto>/<
 
 Si el proyecto la guarda, va cifrada en este ordenador, con la clave en el Llavero (Mac) o en el Administrador de credenciales (Windows). «Exportar tabla…», en Revisión, la saca en claro para guardarla en el expediente: **no la subas nunca a ninguna IA**. Al borrar el proyecto se destruyen la tabla y su clave.
 
+## Actualizar
+
+Cuando hay una versión nueva, aparece un **aviso amarillo** con el botón **«Actualizar»**. Al pulsarlo, Seudónimo descarga la versión nueva, comprueba que el archivo es exactamente el publicado, se cierra y se vuelve a abrir actualizado en un minuto. Tus proyectos y datos se conservan. La versión instalada se ve bajo el nombre «Seudónimo», arriba a la izquierda; un clic ahí comprueba si hay otra más reciente.
+
 ## Si algo falla
 
 - **«Falta Ollama»** o **«Ollama detenido»**: abre Ollama, o pulsa «Instalar Ollama».

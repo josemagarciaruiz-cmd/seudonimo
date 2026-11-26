@@ -1376,24 +1376,68 @@ async function acercaDe() {
   const texto = r && r.nueva ? `Tienes instalada la versión ${actual}. Hay una más reciente: la ${r.version}.`
     : r && r.version ? `Tienes instalada la versión ${actual}, que es la última publicada.`
     : `Tienes instalada la versión ${actual}. No he podido consultar si hay otra más reciente (¿sin conexión?).`;
+  if (r && r.nueva) { ACTUALIZACION = r; pintarActualizacion(); }
   const ok = await confirmar(`Seudónimo ${actual}`, texto + "\n\nLas versiones publicadas, con sus novedades, están en GitHub.",
-    r && r.nueva ? "Descargar la nueva" : "Ver las versiones en GitHub");
-  if (ok) await api("POST", "/api/actualizacion/descargar", { url: r && r.nueva && r.descarga ? r.descarga : PAGINA_VERSIONES });
+    r && r.nueva ? "Actualizar ahora" : "Ver las versiones en GitHub");
+  if (!ok) return;
+  if (r && r.nueva) return actualizarAhora();
+  await api("POST", "/api/actualizacion/descargar", { url: PAGINA_VERSIONES });
 }
+
+let ACTUALIZACION = null;
 
 async function buscarActualizacion() {
   try {
     const r = await api("GET", "/api/actualizacion");
-    if (!r.nueva || !r.descarga) return;
-    const b = $("#actualizacion");
-    b.hidden = false;
-    b.innerHTML = `<b>Versión ${esc(r.version)} disponible</b><span>Tienes la ${esc(r.actual)}. Pulsa para descargarla.</span>`;
-    b.onclick = async () => {
-      const notas = (r.notas || "").replace(/[*#`]/g, "").trim();
-      const ok = await confirmar(`Seudónimo ${r.version}`, (notas ? notas.slice(0, 600) + "\n\n" : "") + "Se abrirá la descarga en el navegador. Después, instálala igual que la primera vez: tus proyectos y datos se conservan.", "Descargar");
-      if (ok) await api("POST", "/api/actualizacion/descargar", { url: r.descarga });
-    };
-  } catch (e) { /* sin conexión: nada que avisar */ }
+    ACTUALIZACION = r.nueva ? r : null;
+  } catch (e) { return; }   // sin conexión: nada que avisar
+  pintarActualizacion();
+  clearTimeout(E.relojAct);
+  E.relojAct = setTimeout(buscarActualizacion, 6 * 3600 * 1000);   // y cada seis horas
+}
+
+function pintarActualizacion() {
+  const r = ACTUALIZACION;
+  const banda = $("#banda-actualizacion"), lateral = $("#actualizacion");
+  banda.hidden = lateral.hidden = !r || E.actualizacionOculta === r?.version;
+  if (!r) return;
+  lateral.innerHTML = `<b>Actualización disponible</b><span>Versión ${esc(r.version)} · pulsa para actualizar</span>`;
+  lateral.onclick = actualizarAhora;
+  banda.innerHTML = `<span class="act-icono" aria-hidden="true">⬆</span>
+    <span class="act-texto"><b>Actualización disponible:</b> Seudónimo ${esc(r.version)} (tienes la ${esc(r.actual)}).</span>
+    <button class="boton boton-actualizar" data-act="instalar">Actualizar</button>
+    <button class="boton-texto" data-act="novedades">Novedades</button>
+    <button class="boton-texto cerrar-banda" data-act="ocultar" title="Ocultar hasta la próxima vez" aria-label="Ocultar">✕</button>`;
+  banda.onclick = (ev) => {
+    const a = ev.target.closest("[data-act]")?.dataset.act;
+    if (a === "instalar") actualizarAhora();
+    else if (a === "novedades") alerta((r.notas || "Sin notas.").replace(/[*#`]/g, "").trim(), `Novedades de la ${r.version}`);
+    else if (a === "ocultar") { E.actualizacionOculta = r.version; pintarActualizacion(); }
+  };
+}
+
+async function actualizarAhora() {
+  const r = ACTUALIZACION;
+  if (!r) return;
+  if (!r.instalable) {
+    const ok = await confirmar(`Actualizar a la ${r.version}`, "Se abrirá la descarga en el navegador. Después, instálala igual que la primera vez: tus proyectos y datos se conservan.", "Descargar");
+    if (ok) await api("POST", "/api/actualizacion/descargar", { url: r.descarga || PAGINA_VERSIONES });
+    return;
+  }
+  const ok = await confirmar(`Actualizar a la ${r.version}`,
+    "Seudónimo descargará la versión nueva desde GitHub, comprobará que el archivo es el publicado, se cerrará y volverá a abrirse ya actualizado. Tarda un minuto. Tus proyectos, conversaciones y datos se conservan.", "Actualizar ahora");
+  if (!ok) return;
+  try { await api("POST", "/api/actualizacion/instalar"); } catch (e) { return alerta(e.message); }
+  const banda = $("#banda-actualizacion");
+  const seguir = async () => {
+    let s;
+    try { s = await api("GET", "/api/actualizacion/estado"); } catch (e) { return; }   // la aplicación ya se está cerrando
+    if (s.fase === "error") { banda.innerHTML = `<span class="act-texto">${esc(s.error)}</span>`; return; }
+    banda.innerHTML = `<span class="act-icono" aria-hidden="true">⬆</span><span class="act-texto">${esc(s.mensaje || "Actualizando…")}</span>
+      <span class="progreso act-progreso"><i style="width:${Math.round((s.progreso || 0) * 100)}%"></i></span>`;
+    setTimeout(seguir, 800);
+  };
+  seguir();
 }
 
 // ------------------------------------------------------------------ eventos

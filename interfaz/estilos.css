@@ -348,3 +348,17 @@ details.conservar summary { cursor: pointer; font-weight: 600; }
 .version { border: 0; background: none; padding: 0; font: 12px var(--sans); color: var(--tinta-3); cursor: pointer; text-align: left; }
 .version:hover { color: var(--oro-hondo); text-decoration: underline; }
 #confirmar-texto { white-space: pre-line; }
+
+/* ---------- aviso de actualización (amarillo, para que se vea) ---------- */
+:root { --amarillo: #F6C343; --amarillo-hondo: #E0A800; --sobre-amarillo: #1B2633; }
+.banda-actualizacion { display: flex; align-items: center; gap: 12px; margin: 12px 20px 0; padding: 10px 14px; border-radius: var(--r-medio);
+  background: var(--amarillo); color: var(--sobre-amarillo); box-shadow: 0 2px 10px rgba(224,168,0,.35); flex-wrap: wrap; }
+.banda-actualizacion .act-icono { font-size: 18px; font-weight: 700; }
+.banda-actualizacion .act-texto { flex: 1; min-width: 200px; }
+.banda-actualizacion .boton-texto { color: var(--sobre-amarillo); }
+.boton-actualizar { background: var(--sobre-amarillo); color: var(--amarillo); border-color: var(--sobre-amarillo); font-weight: 700; }
+.boton-actualizar:hover { filter: brightness(1.15); }
+.act-progreso { flex-basis: 100%; margin: 4px 0 0; background: rgba(27,38,51,.2); }
+.act-progreso i { background: var(--sobre-amarillo); }
+.actualizacion { background: var(--amarillo); border-color: var(--amarillo-hondo); color: var(--sobre-amarillo); }
+.actualizacion span { color: var(--sobre-amarillo); opacity: .8; }

@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.3.3 · 26 de noviembre de 2026
+
+- **Actualizar con un clic.** Cuando hay una versión nueva aparece un aviso amarillo, arriba y en la barra lateral, con el botón «Actualizar». Seudónimo la descarga de GitHub, comprueba su huella SHA-256 con la publicada, se cierra, se instala y vuelve a abrirse solo. Los proyectos y los datos se conservan. No actualiza si hay una seudonimización en marcha.
+
 ## 0.3.2 · 26 de noviembre de 2026
 
 - **Escaneados: datos conocidos que no se dejaban tapar.** Cuando la verificación encuentra en la copia un dato ya conocido que la edición no supo localizar (partido entre líneas o leído de otra forma por el OCR), ahora marca dónde está y el siguiente ciclo lo tapa en el original. Antes el documento se quedaba en «Requiere revisión».

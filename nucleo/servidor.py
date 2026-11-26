@@ -32,6 +32,7 @@ if sys.stdout is None or sys.stderr is None:   # Windows sin consola
 
 from flask import Flask, Response, abort, jsonify, request, send_from_directory  # noqa: E402
 
+import actualizar  # noqa: E402
 import almacen as almacen_mod  # noqa: E402
 import asistente  # noqa: E402
 import cifrado  # noqa: E402
@@ -813,12 +814,38 @@ def buscar_actualizacion():
         d = {"version": d["tag_name"], "notas": d.get("body") or "", "pagina": d.get("html_url"),
              "mac": next((u for u in enlaces if u.endswith(".dmg")), None),
              "windows": next((u for u in enlaces if u.endswith(".exe")), None)}
-    descarga = d.get("windows") if rutas.ES_WINDOWS else d.get("mac")
-    descarga = descarga or d.get("pagina")
+    instalador = d.get("windows") if rutas.ES_WINDOWS else d.get("mac")
+    descarga = instalador or d.get("pagina")
     if descarga and not str(descarga).startswith("https://"):
         descarga = None
-    return jsonify(nueva=_version(d.get("version")) > _version(VERSION), version=str(d.get("version", "")).lstrip("v"),
-                   notas=str(d.get("notas", ""))[:2000], descarga=descarga, actual=VERSION)
+    version = str(d.get("version", "")).lstrip("v")
+    nueva = _version(version) > _version(VERSION)
+    _ULTIMA.clear()
+    if nueva and instalador and str(instalador).startswith(actualizar.ORIGEN):
+        _ULTIMA.update(url=instalador, version=version)
+    return jsonify(nueva=nueva, version=version, notas=str(d.get("notas", ""))[:2000], descarga=descarga, actual=VERSION,
+                   instalable=bool(_ULTIMA) and actualizar.instalable(), pagina=d.get("pagina"))
+
+
+_ULTIMA = {}     # la última versión nueva encontrada (la instalación usa esta, nunca una dirección del cliente)
+
+
+@app.post("/api/actualizacion/instalar")
+def instalar_actualizacion():
+    if not _ULTIMA or not actualizar.instalable():
+        return jsonify(error="No hay ninguna actualización que instalar desde aquí."), 400
+    if GESTOR.activos():
+        return jsonify(error="Hay una seudonimización en marcha. Espera a que termine o cancélala antes de actualizar."), 409
+    try:
+        actualizar.iniciar(_ULTIMA["url"], _ULTIMA["version"], int(os.environ["SEUDONIMO_PADRE"]))
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    return jsonify(actualizar.ESTADO)
+
+
+@app.get("/api/actualizacion/estado")
+def estado_actualizacion():
+    return jsonify(actualizar.ESTADO)
 
 
 @app.post("/api/actualizacion/descargar")
