@@ -345,3 +345,6 @@ details.conservar summary { cursor: pointer; font-weight: 600; }
 .pagina.con-restos .pagina-cab > span:first-child { color: var(--rojo); }
 .pagina-cab .repaso { font-weight: 400; color: var(--tinta-2); margin: 0; }
 .ayuda-repaso { margin: 0 0 14px; }
+.version { border: 0; background: none; padding: 0; font: 12px var(--sans); color: var(--tinta-3); cursor: pointer; text-align: left; }
+.version:hover { color: var(--oro-hondo); text-decoration: underline; }
+#confirmar-texto { white-space: pre-line; }

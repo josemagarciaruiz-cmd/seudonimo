@@ -723,6 +723,38 @@ def ver_plantillas():
 _cargar_listas()
 
 
+def _reparar_interrumpidos():
+    """Si la aplicación se cerró con un trabajo en marcha, ese trabajo queda «interrumpido» y sus
+    archivos recuperan el estado de su última copia terminada (o vuelven a «Sin tratar»)."""
+    try:
+        for p in ALM.proyectos():
+            hist = ALM.trabajos(p["id"])
+            for t in hist:
+                if t["estado"] in ("en_cola", "pendiente", "procesando"):
+                    t["estado"] = "interrumpido"
+                    t["terminado"] = t.get("terminado") or time.time()
+                    ALM.guardar_trabajo(t)
+            for a in ALM.archivos(p["id"]):
+                if a["estado"] not in ("en_cola", "procesando", "pendiente"):
+                    continue
+                previo = None
+                for t in hist:            # del más reciente al más antiguo
+                    docs = (t.get("resumen") or {}).get("documentos") or []
+                    d = next((x for x in docs if x.get("id") == a["id"]), None)
+                    if d and t["estado"] != "interrumpido":
+                        previo = (d["estado"], t["id"])
+                        break
+                if previo:
+                    ALM.marcar_archivo(a["id"], previo[0], previo[1])
+                else:
+                    ALM.marcar_archivo(a["id"], "nuevo")
+    except Exception:
+        traceback.print_exc()
+
+
+_reparar_interrumpidos()
+
+
 # ---------------------------------------------------------------- carpeta vigilada
 
 def _vigilancia():

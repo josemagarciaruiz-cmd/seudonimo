@@ -24,6 +24,7 @@ const E = {
 const ESTADOS = {
   nuevo: "Sin tratar", no_admitido: "No admitido", en_cola: "En cola", procesando: "Procesando",
   sin_hallazgos: "Sin hallazgos", revision: "Requiere revisión", error: "Error", cancelado: "Cancelado", pendiente: "Pendiente",
+  interrumpido: "Interrumpido (se cerró la aplicación)",
 };
 
 // ------------------------------------------------------------------ conexión
@@ -98,6 +99,7 @@ async function iniciar() {
 async function refrescarSalud() {
   try {
     E.salud = await api("GET", "/api/salud");
+    $("#version").textContent = `Versión ${E.salud.version}`;
     const el = $("#estado-motor");
     el.className = "estado-motor " + (E.salud.ollama ? "ok" : "mal");
     el.textContent = E.salud.ollama ? "Motor local activo" : (E.salud.instalado ? "Ollama detenido" : "Falta Ollama");
@@ -1365,6 +1367,20 @@ async function refrescarCola() {
 
 // ------------------------------------------------------------------ actualizaciones
 
+const PAGINA_VERSIONES = "https://github.com/josemagarciaruiz-cmd/seudonimo/releases";
+
+async function acercaDe() {
+  const actual = E.salud?.version || "";
+  let r = null;
+  try { r = await api("GET", "/api/actualizacion"); } catch (e) { /* sin conexión */ }
+  const texto = r && r.nueva ? `Tienes instalada la versión ${actual}. Hay una más reciente: la ${r.version}.`
+    : r && r.version ? `Tienes instalada la versión ${actual}, que es la última publicada.`
+    : `Tienes instalada la versión ${actual}. No he podido consultar si hay otra más reciente (¿sin conexión?).`;
+  const ok = await confirmar(`Seudónimo ${actual}`, texto + "\n\nLas versiones publicadas, con sus novedades, están en GitHub.",
+    r && r.nueva ? "Descargar la nueva" : "Ver las versiones en GitHub");
+  if (ok) await api("POST", "/api/actualizacion/descargar", { url: r && r.nueva && r.descarga ? r.descarga : PAGINA_VERSIONES });
+}
+
 async function buscarActualizacion() {
   try {
     const r = await api("GET", "/api/actualizacion");
@@ -1386,6 +1402,7 @@ function enlazar() {
   $("#nuevo-proyecto").onclick = () => abrirDialogoProyecto(false);
   $("#ajustes-proyecto").onclick = () => abrirDialogoProyecto(true);
   $("#abrir-modelos").onclick = abrirModelos;
+  $("#version").onclick = () => acercaDe().catch((e) => alerta(e.message));
   $("#cola").onclick = async () => {
     const pid = +$("#cola").dataset.colaProyecto;
     if (pid && (!E.proyecto || E.proyecto.id !== pid)) await abrirProyecto(pid);
