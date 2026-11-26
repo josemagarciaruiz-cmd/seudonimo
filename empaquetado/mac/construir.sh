@@ -36,6 +36,12 @@ APP="$D/escritorio/src-tauri/target/release/bundle/macos/$NOMBRE.app"
 
 # 4. Recursos dentro de la aplicación (ditto conserva los enlaces simbólicos de Python)
 ditto "$REC" "$APP/Contents/Resources/recursos"
+
+# 4 bis. Inventario de componentes (SBOM CycloneDX) del Python incluido y de los crates de Rust.
+# Antes de firmar y sin escribir bytecode: cualquier archivo nuevo dentro de la app rompe la firma.
+mkdir -p "$D/salida"
+PYTHONDONTWRITEBYTECODE=1 "$APP/Contents/Resources/recursos/python/bin/python3" -B -s "$D/empaquetado/sbom.py" \
+  "$D/escritorio/src-tauri/Cargo.lock" "$D/salida/AureaAsistenteLocal-$V-SBOM.cdx.json"
 find "$APP" -name "__pycache__" -type d -prune -exec rm -rf {} +
 chmod -R u+w "$APP"
 xattr -cr "$APP"
@@ -55,6 +61,3 @@ hdiutil create -volname "$NOMBRE" -srcfolder "$STG" -fs HFS+ -format UDZO -ov "$
 rm -rf "$STG"
 du -sh "$APP" "$DMG"
 
-# 7. Inventario de componentes (SBOM CycloneDX) del Python incluido y de los crates de Rust
-"$APP/Contents/Resources/recursos/python/bin/python3" -s "$D/empaquetado/sbom.py" \
-  "$D/escritorio/src-tauri/Cargo.lock" "$D/salida/AureaAsistenteLocal-$V-SBOM.cdx.json"
