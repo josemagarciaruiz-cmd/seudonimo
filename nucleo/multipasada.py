@@ -232,8 +232,18 @@ class TrabajoDocumento:
             # resoluciones y lo tapa; si aun así sigue en la siguiente copia, pasa a «restos» y el
             # documento queda para revisión humana.
             localizables = [d for d in v["nuevos"] if _localizable(d["texto"], self.texto_original)]
-            # una fecha que no está en la lectura del original es un artefacto del OCR, no un dato
-            ajenos = [d for d in v["nuevos"] if d not in localizables and d["tipo"] != "F_NACIMIENTO"]
+            ajenos, ruido = [], []
+            for d in v["nuevos"]:
+                if d in localizables or d["tipo"] == "F_NACIMIENTO":
+                    continue   # una fecha que no está en la lectura del original es un artefacto del OCR
+                variante = motor.variante_en(d["texto"], self.texto_original)
+                if variante:
+                    # el mismo dato leído de otra forma: se registran las dos lecturas
+                    ajenos += [d, dict(d, texto=variante)]
+                elif "regla" in (d.get("origen") or "") and motor.valido(d["texto"], d["tipo"]):
+                    ajenos.append(d)      # identificador con forma válida que el OCR del original leyó mal
+                else:
+                    ruido.append(d)       # ruido del OCR sobre los propios tachones («TELEO0 008», «Diña»)
             nuevas = self.registro.incorporar(motor.filtrar_fechas(localizables, self.texto_original) + ajenos,
                                               self.doc["id"])
             graves = [i for i in v["incidencias"] if i.get("grave")]
@@ -241,6 +251,7 @@ class TrabajoDocumento:
             self.incidencias = v["incidencias"]
             self.pasadas.append({"tipo": "verificacion", "ciclo": ciclo + 1, "metodo": v["metodo"],
                                  "nuevos": len(nuevas), "restos": len(restos), "fuera_del_original": len(ajenos),
+                                 "ruido_ocr": len(ruido),
                                  "incidencias_graves": len(graves), "tiempo": round(time.time() - self.t0, 1)})
             if nuevas:
                 limpias = 0

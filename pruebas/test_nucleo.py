@@ -65,3 +65,18 @@ def test_cifrado_ida_y_vuelta():
     otra = registro.Registro.de_bytes(cifrado.descifrar(7, sellado), 7)
     assert otra.buscar("Lucía Ferrer Gil")["marcador"] == "[PERSONA_001]"
     cifrado.borrar_clave(7)
+
+
+def test_validacion_estructural_y_variantes_ocr():
+    assert not motor.valido("008", "TELEFONO") and motor.valido("628 111 222", "TELEFONO")
+    assert not motor.valido("TELEO0 008", "TELEFONO")
+    assert motor.valido("12.345.678-Z", "DNI") and motor.valido("X1234567L", "DNI") and not motor.valido("1234", "DNI")
+    assert not motor.valido("Dña.", "PERSONA") and motor.valido("Lucía Ferrer", "PERSONA")
+    original = "Datos: DNI 5886S754Z y vive en Arrecife. D./Dña. Lucía Ferrer Gil"
+    assert motor.variante_en("58865754Z", original) == "5886S754Z"     # el OCR del original leyó una S
+    assert motor.variante_en("Diña", original) is None                  # ruido: no se parece a nada
+
+
+def test_registro_rechaza_formas_imposibles():
+    r = registro.Registro(2)
+    assert r.incorporar([{"texto": "008", "tipo": "TELEFONO"}, {"texto": "Dña.", "tipo": "PERSONA"}]) == []

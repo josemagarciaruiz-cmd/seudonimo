@@ -73,4 +73,4 @@ Flujo completo en la aplicación instalada, con gemma4:12b:
    - Regenerar las copias, sin repetir la detección. La nómina queda sin hallazgos.
    - Comprobación visual: datos sustituidos; antigüedad, periodo de liquidación, categoría e importes intactos.
 
-Incidencia conocida (cosmética, no es una fuga): en la nómina sintética, el tachón del número de afiliación cubre también parte de su etiqueta («N.º afili-»). Pendiente de ajustar la localización por palabras en PDF nativo.
+Aparente incidencia cosmética, ya explicada: en la nómina sintética, «N.º afili-» aparece tapado. No es un fallo del motor. El tachón del número de afiliación empieza después de la etiqueta (x = 382,6 frente a 380,0). Lo que tapa ese trozo es el tachón del domicilio de la empresa: en el documento generado, esa dirección es tan larga que invade la columna derecha en la misma línea. Es un defecto del generador del corpus, no de la seudonimización.

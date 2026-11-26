@@ -114,7 +114,7 @@ class Registro:
                 tipo = d.get("tipo") if d.get("tipo") in motor.TIPOS else "OTRO"
                 k = motor.clave_dato(texto)
                 if (not k or len(texto) < 2 or k in self.descartados or motor.MARCADOR.search(texto)
-                        or motor.MARCADOR_OCR.fullmatch(texto)):
+                        or motor.MARCADOR_OCR.fullmatch(texto) or not motor.valido(texto, tipo)):
                     continue
                 ya = self._indice.get(k)
                 if ya:

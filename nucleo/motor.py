@@ -238,6 +238,51 @@ def detectar_gemma(texto, progreso=None, costura=True, prompt=PROMPT, modelo=Non
     return res
 
 
+# ---------------------------------------------------------------- validación estructural
+
+_DIGITOS = {"TELEFONO": (9, 12), "IBAN": (20, 24), "NAF": (10, 12), "CCC": (9, 11)}
+
+
+def valido(texto, tipo):
+    """Forma mínima de cada tipo: descarta restos que no pueden ser el dato («008» no es un
+    teléfono, «Diña» no es un nombre). Solo filtra lo claramente imposible."""
+    t = (texto or "").strip()
+    compacto = re.sub(r"[\s.\-/]", "", t).upper()
+    n = len(re.sub(r"\D", "", compacto))
+    if tipo in _DIGITOS:
+        a, b = _DIGITOS[tipo]
+        return a <= n <= b
+    if tipo == "DNI":
+        return re.fullmatch(r"0?[XYZ]?\d{7,8}[A-Z]", compacto) is not None
+    if tipo == "NIF":
+        return re.fullmatch(r"[ABCDEFGHJNPQRSUVW]\d{7}[0-9A-J]", compacto) is not None
+    if tipo == "EMAIL":
+        return "@" in t and "." in t.split("@")[-1]
+    if tipo in ("PERSONA", "EMPRESA", "DOMICILIO", "DEPARTAMENTO"):
+        letras = re.sub(r"[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]", "", TRATAMIENTO.sub("", t))
+        return len(letras) >= 3
+    return True
+
+
+def variante_en(texto, original, umbral=0.85):
+    """Si el texto (leído en la copia) se parece a un tramo del original con el mismo número de
+    palabras, devuelve ese tramo: es el mismo dato leído de otra forma por el OCR."""
+    import difflib
+    objetivo = clave(texto)
+    n = max(1, len(objetivo.split()))
+    palabras = original.split()
+    mejor, mejor_r = None, umbral
+    for i in range(0, max(0, len(palabras) - n) + 1):
+        tramo = " ".join(palabras[i:i + n]).strip(" ,.;:()\"'«»")
+        k = clave(tramo)
+        if abs(len(k) - len(objetivo)) > max(3, len(objetivo) // 3):
+            continue
+        r = difflib.SequenceMatcher(None, objetivo, k).ratio()
+        if r > mejor_r:
+            mejor, mejor_r = tramo, r
+    return mejor
+
+
 # ---------------------------------------------------------------- mapa
 
 _NO_NACIMIENTO = re.compile(
