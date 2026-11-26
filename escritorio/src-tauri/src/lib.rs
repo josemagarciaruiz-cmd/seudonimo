@@ -1,4 +1,4 @@
-//! Áurea Asistente Local · ventana de escritorio.
+//! Seudónimo · ventana de escritorio.
 //!
 //! Al arrancar elige un puerto libre de 127.0.0.1 y un token aleatorio, y pone en marcha el
 //! servicio local (Python, incluido en el paquete) con ambos. La interfaz pide la conexión con
@@ -62,9 +62,9 @@ fn rutas(app: &tauri::App) -> (PathBuf, PathBuf, PathBuf) {
     if python.exists() {
         return (python, recursos.join("nucleo").join("servidor.py"), recursos);
     }
-    // desarrollo: el Python del entorno virtual del repositorio (o AUREA_PYTHON)
+    // desarrollo: el Python del entorno virtual del repositorio (o SEUDONIMO_PYTHON)
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
-    let py = std::env::var("AUREA_PYTHON").map(PathBuf::from).unwrap_or_else(|_| {
+    let py = std::env::var("SEUDONIMO_PYTHON").map(PathBuf::from).unwrap_or_else(|_| {
         if cfg!(windows) {
             repo.join(".venv").join("Scripts").join("python.exe")
         } else {
@@ -79,10 +79,10 @@ fn arrancar(app: &tauri::App, c: &Conexion) -> Result<Child, String> {
     let mut cmd = Command::new(&python);
     cmd.arg("-s")
         .arg(&servidor)
-        .env("AUREA_PUERTO", c.puerto.to_string())
-        .env("AUREA_TOKEN", &c.token)
-        .env("AUREA_PADRE", std::process::id().to_string())
-        .env("AUREA_RAIZ", &raiz)
+        .env("SEUDONIMO_PUERTO", c.puerto.to_string())
+        .env("SEUDONIMO_TOKEN", &c.token)
+        .env("SEUDONIMO_PADRE", std::process::id().to_string())
+        .env("SEUDONIMO_RAIZ", &raiz)
         .env("PYTHONIOENCODING", "utf-8")
         .env("PYTHONDONTWRITEBYTECODE", "1")
         .stdin(Stdio::null())

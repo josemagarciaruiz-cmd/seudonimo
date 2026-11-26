@@ -11,7 +11,7 @@
 
 | Modo | Qué se guarda | Para qué |
 |---|---|---|
-| Guardar cifrada | `registro.aurea`, cifrado con Fernet. La clave va en el Llavero de Mac o en el Administrador de credenciales de Windows. Si no hay almacén, en un archivo con permisos solo del usuario, y se advierte | Seudonimización reversible y coherencia entre lotes del mismo proyecto |
+| Guardar cifrada | `registro.seudonimo`, cifrado con Fernet. La clave va en el Llavero de Mac o en el Administrador de credenciales de Windows. Si no hay almacén, en un archivo con permisos solo del usuario, y se advierte | Seudonimización reversible y coherencia entre lotes del mismo proyecto |
 | No guardar | Nada: el registro vive en memoria durante el lote | Reducir la identificabilidad sin tabla persistente. No hace irreversible la seudonimización |
 
 Al borrar un proyecto se destruyen la tabla y su clave (borrado criptográfico). La exportación de la tabla en claro es una **acción explícita** del usuario, a una ruta que él elige, con aviso si esa carpeta está sincronizada con la nube.
@@ -24,4 +24,5 @@ Al borrar un proyecto se destruyen la tabla y su clave (borrado criptográfico).
 - **Instrucciones dentro de documentos.** El texto de los documentos se entrega al modelo como datos no confiables. Las herramientas tienen esquema y validación. Seudonimizar es un plan que confirma el usuario.
 - **Originales intactos.** Se trabaja sobre una copia de solo lectura. Nunca se sobrescribe el archivo del usuario.
 - **Temporales.** Las copias de trabajo y los ciclos se borran al terminar cada lote. La base de datos (SQLite) no guarda el texto de los documentos. El registro técnico (`registro.log`) no contiene texto de documentos. Los proyectos temporales se borran al cerrar.
-- **Carpetas sincronizadas.** Los resultados van por defecto a `~/Áurea Asistente`, fuera de Documentos y Escritorio, que suelen estar en iCloud u OneDrive. Si se elige una carpeta sincronizada, la aplicación lo advierte.
+- **Carpetas sincronizadas.** Los resultados van por defecto a `~/Seudónimo`, fuera de Documentos y Escritorio, que suelen estar en iCloud u OneDrive. Si se elige una carpeta sincronizada, la aplicación lo advierte.
+- **Dictado por voz.** El audio se graba en la ventana solo mientras el botón «Dictar» está activo, se escribe en un temporal de la carpeta de trabajo, lo transcribe whisper-cli en el propio equipo y se borra en el acto. No se guarda audio ni se envía a ningún servicio. El texto dictado queda en la caja de mensaje como si se hubiera tecleado.

@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-"""Áurea Asistente Local · servicio local (sidecar) que usa la ventana de escritorio.
+"""Seudónimo · servicio local (sidecar) que usa la ventana de escritorio.
 
 Seguridad:
 - Escucha solo en 127.0.0.1 (nunca en la red) y en un puerto libre elegido al arrancar.
-- Cada petición a /api lleva un token efímero (X-Aurea-Token), generado en cada arranque.
+- Cada petición a /api lleva un token efímero (X-Seudonimo-Token), generado en cada arranque.
 - Se valida el Host (contra DNS rebinding) y el Origin (solo la ventana de la aplicación).
 - El modelo solo ve archivos que el usuario ha añadido con el diálogo del sistema.
 
 Uso: python servidor.py [--puerto 0] [--navegador]
-Imprime «AUREA_LISTO <puerto>» cuando está preparado (lo lee la ventana de Tauri)."""
+Imprime «SEUDONIMO_LISTO <puerto>» cuando está preparado (lo lee la ventana de Tauri)."""
 import argparse
 import json
 import os
@@ -42,14 +42,15 @@ import multipasada  # noqa: E402
 import ocr  # noqa: E402
 import proveedores  # noqa: E402
 import trabajos  # noqa: E402
+import voz  # noqa: E402
 from version import VERSION  # noqa: E402
 
-INTERFAZ = os.environ.get("AUREA_INTERFAZ") or os.path.join(os.path.dirname(rutas.APP), "interfaz")
-TOKEN = os.environ.get("AUREA_TOKEN") or secrets.token_urlsafe(32)
+INTERFAZ = os.environ.get("SEUDONIMO_INTERFAZ") or os.path.join(os.path.dirname(rutas.APP), "interfaz")
+TOKEN = os.environ.get("SEUDONIMO_TOKEN") or secrets.token_urlsafe(32)
 ORIGENES = {"tauri://localhost", "http://tauri.localhost", "https://tauri.localhost"}
 
 app = Flask(__name__, static_folder=None)
-app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024    # el dictado envía hasta 3 minutos de audio (unos 6 MB)
 ALM = almacen_mod.Almacen()
 GESTOR = trabajos.Gestor(ALM)
 PUERTO = None
@@ -68,7 +69,7 @@ def _proteger():
             abort(403)
         if request.method == "OPTIONS":
             return None    # comprobación previa CORS de la ventana: no lleva el token (lo lleva la petición real)
-        if not secrets.compare_digest(request.headers.get("X-Aurea-Token", ""), TOKEN):
+        if not secrets.compare_digest(request.headers.get("X-Seudonimo-Token", ""), TOKEN):
             abort(401)
 
 
@@ -77,7 +78,7 @@ def _cabeceras(r):
     origen = request.headers.get("Origin")
     if origen in ORIGENES:
         r.headers["Access-Control-Allow-Origin"] = origen
-        r.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Aurea-Token"
+        r.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Seudonimo-Token"
         r.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, DELETE, OPTIONS"
         r.headers["Access-Control-Max-Age"] = "600"
     r.headers["X-Content-Type-Options"] = "nosniff"
@@ -107,7 +108,7 @@ def _proyecto(pid):
 def inicio():
     html = open(os.path.join(INTERFAZ, "index.html"), encoding="utf-8").read()
     # en modo navegador el token va en la propia página (servida solo a 127.0.0.1)
-    html = html.replace("<head>", "<head><script>window.AUREA_CONEXION={token:%s}</script>" % json.dumps(TOKEN), 1)
+    html = html.replace("<head>", "<head><script>window.SEUDONIMO_CONEXION={token:%s}</script>" % json.dumps(TOKEN), 1)
     return Response(html, mimetype="text/html")
 
 
@@ -181,6 +182,42 @@ def borrar_modelo():
 def modelo_defecto():
     ALM.poner_ajuste("modelo_defecto", _json().get("nombre") or motor.MODELO)
     return jsonify(ok=True)
+
+
+# ---------------------------------------------------------------- dictado por voz
+
+@app.get("/api/voz")
+def voz_estado():
+    return jsonify(voz.estado(ALM.ajuste("voz_modelo", "small")))
+
+
+@app.post("/api/voz/descargar")
+def voz_descargar():
+    try:
+        voz.descargar(_json().get("nombre") or "small")
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    return jsonify(voz.DESCARGA)
+
+
+@app.post("/api/voz/modelo")
+def voz_modelo():
+    nombre = _json().get("nombre")
+    if not any(m["nombre"] == nombre for m in voz.MODELOS):
+        return jsonify(error="Modelo de voz desconocido."), 400
+    ALM.poner_ajuste("voz_modelo", nombre)
+    return jsonify(voz.estado(nombre))
+
+
+@app.post("/api/voz/transcribir")
+def voz_transcribir():
+    datos = request.get_data(cache=False)
+    if not datos.startswith(b"RIFF"):
+        return jsonify(error="El audio no tiene el formato esperado."), 400
+    try:
+        return jsonify(voz.transcribir(datos, ALM.ajuste("voz_modelo", "small")))
+    except RuntimeError as e:
+        return jsonify(error=str(e)), 400
 
 
 @app.get("/api/instalacion")
@@ -308,9 +345,19 @@ def ver_conversacion(cid):
 
 
 @app.patch("/api/conversaciones/<int:cid>")
-def renombrar_conversacion(cid):
-    ALM.renombrar_conversacion(cid, (_json().get("titulo") or "Conversación")[:120])
-    return jsonify(ok=True)
+def editar_conversacion(cid):
+    """Renombrar y/o mover a otro proyecto."""
+    ALM.conversacion(cid) or abort(404)
+    d = _json()
+    if "titulo" in d:
+        ALM.renombrar_conversacion(cid, ((d.get("titulo") or "").strip() or "Conversación")[:120])
+    if d.get("proyecto") is not None:
+        _proyecto(int(d["proyecto"]))
+        c = ALM.conversacion(cid)
+        if any(GESTOR.meta.get(t["id"], {}).get("conversacion") == cid for t in GESTOR.activos(c["proyecto"])):
+            return jsonify(error="Esta conversación tiene una seudonimización en marcha. Espera a que termine o cancélala antes de moverla."), 409
+        ALM.mover_conversacion(cid, int(d["proyecto"]))
+    return jsonify(ALM.conversacion(cid))
 
 
 @app.delete("/api/conversaciones/<int:cid>")
@@ -530,23 +577,23 @@ def _al_arrancar():
 def main():
     global PUERTO
     ap = argparse.ArgumentParser()
-    ap.add_argument("--puerto", type=int, default=int(os.environ.get("AUREA_PUERTO", "0")))
+    ap.add_argument("--puerto", type=int, default=int(os.environ.get("SEUDONIMO_PUERTO", "0")))
     ap.add_argument("--navegador", action="store_true", help="abrir la interfaz en el navegador (modo de desarrollo)")
     a = ap.parse_args()
     _limpiar_temporales()
-    if os.environ.get("AUREA_PUERTO"):
-        PUERTO = int(os.environ["AUREA_PUERTO"])     # lo elige la ventana de escritorio
+    if os.environ.get("SEUDONIMO_PUERTO"):
+        PUERTO = int(os.environ["SEUDONIMO_PUERTO"])     # lo elige la ventana de escritorio
     else:
         PUERTO = _puerto_libre(a.puerto) if a.puerto else _puerto_libre(0)
     threading.Thread(target=_al_arrancar, daemon=True).start()
-    print("AUREA_LISTO %d" % PUERTO, flush=True)
+    print("SEUDONIMO_LISTO %d" % PUERTO, flush=True)
     if a.navegador:
         import webbrowser
         threading.Timer(1.0, lambda: webbrowser.open("http://127.0.0.1:%d/" % PUERTO)).start()
     from werkzeug.serving import make_server
     srv = make_server("127.0.0.1", PUERTO, app, threaded=True)
     # si la ventana de escritorio se cierra, el servicio se apaga con ella
-    padre = os.environ.get("AUREA_PADRE")
+    padre = os.environ.get("SEUDONIMO_PADRE")
     if padre:
         threading.Thread(target=_vigilar_padre, args=(int(padre),), daemon=True).start()
     srv.serve_forever()

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Áurea Anonimus · OCR de páginas escaneadas, siempre en el propio ordenador.
+"""Seudónimo · OCR de páginas escaneadas, siempre en el propio ordenador.
 
 En Mac se usa el motor de texto del sistema (Vision); en Windows, Tesseract, que va
 incluido en el instalador. Ambos devuelven la posición de cada línea y de cada palabra,
@@ -47,7 +47,7 @@ _TESSDATA = None
 if TESSERACT and os.path.isdir(os.path.join(os.path.dirname(TESSERACT), "tessdata")):
     _TESSDATA = os.path.join(os.path.dirname(TESSERACT), "tessdata")
 
-if os.environ.get("AUREA_OCR") == "tesseract":
+if os.environ.get("SEUDONIMO_OCR") == "tesseract":
     _VISION = False
 MOTOR = "Vision" if _VISION else ("Tesseract" if TESSERACT else None)
 DISPONIBLE = MOTOR is not None

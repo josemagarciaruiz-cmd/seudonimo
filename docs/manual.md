@@ -11,13 +11,13 @@
 
 ## Instalar
 
-**Mac.** Abre `AureaAsistenteLocal-<versión>-Mac.dmg` y arrastra la aplicación a Aplicaciones. La primera vez, macOS la bloquea porque no está certificada por Apple, un trámite de pago que no indica que sea peligrosa. Para permitirla:
+**Mac.** Abre `Seudonimo-<versión>-Mac.dmg` y arrastra la aplicación a Aplicaciones. La primera vez, macOS la bloquea porque no está certificada por Apple, un trámite de pago que no indica que sea peligrosa. Para permitirla:
 
 1. En el aviso, pulsa «Aceptar».
 2. Abre Ajustes del Sistema > Privacidad y seguridad.
 3. Pulsa «Abrir igualmente» y confirma con tu contraseña.
 
-**Windows.** Ejecuta `AureaAsistenteLocal-<versión>-Windows.exe`. Si aparece «Windows protegió su PC», pulsa «Más información» y después «Ejecutar de todas formas». La instalación es solo para tu usuario y no pide permisos de administrador.
+**Windows.** Ejecuta `Seudonimo-<versión>-Windows.exe`. Si aparece «Windows protegió su PC», pulsa «Más información» y después «Ejecutar de todas formas». La instalación es solo para tu usuario y no pide permisos de administrador.
 
 **Primera puesta en marcha.** Si falta Ollama, la aplicación lo indica con el botón «Instalar Ollama», que lo descarga de ollama.com. Después, en «Modelos», elige un modelo y pulsa «Descargar». Se recomienda **gemma4:12b**, de unos 8 GB. La aplicación comprueba antes el espacio libre y te enseña la licencia del modelo. No descarga nada sin que lo pidas.
 
@@ -26,16 +26,34 @@
 1. **Crea un proyecto** por asunto. Elige el modelo, la verificación por defecto y si quieres guardar la tabla de correspondencias cifrada. Un proyecto temporal se borra al cerrar la aplicación.
 2. **Añade la carpeta del expediente** o algunos archivos, con los botones o arrastrándolos a la ventana. Los originales nunca se modifican ni se mueven. La pestaña Archivos indica cuáles se pueden tratar y por qué no los demás.
 3. **Pide lo que necesites** en la conversación: «Seudonimiza toda la carpeta y conserva el formato», «¿Qué archivos hay?», «Resume la carta de despido».
-4. Cuando la petición crea archivos, Áurea muestra un **plan** con el alcance. Elige la verificación (estándar o intensiva) y pulsa «Seudonimizar».
+4. Cuando la petición crea archivos, Seudónimo muestra un **plan** con el alcance. Elige la verificación (estándar o intensiva) y pulsa «Seudonimizar».
 5. En **Operaciones** se ve cada archivo con su pista de pasadas: D1 y D2 son las detecciones, V1, V2… las verificaciones. El dorado indica que la pasada encontró datos nuevos; el verde, que no encontró nada; el ámbar, que quedan restos o incidencias.
 6. En **Revisión** están todos los datos con su marcador:
    - **Descartar** lo que no sea un dato personal: no volverá a proponerse.
    - **Añadir** a mano lo que se haya escapado.
    - **Regenerar copias** vuelve a generarlas y verificarlas sin repetir la detección.
 
+## Organizar proyectos y conversaciones
+
+Al pasar el ratón por un proyecto o una conversación de la barra lateral aparece el botón «⋯»:
+
+- **Proyecto**: renombrar, abrir sus ajustes o eliminarlo. Eliminar un proyecto borra sus conversaciones, su tabla de correspondencias y la clave; los documentos originales y los resultados ya generados no se tocan.
+- **Conversación**: renombrar, moverla a otro proyecto o eliminarla. Al moverla se lleva todos sus mensajes; los planes que no se hubieran confirmado quedan anulados, porque se referían a los archivos del proyecto de origen.
+
+## Dictar en lugar de escribir
+
+1. Pulsa **«Dictar»** junto a la caja de mensaje (o ⌘⇧D en Mac, Ctrl+Mayús+D en Windows).
+2. La primera vez, la aplicación pide descargar el **modelo de voz** (unos 190 MB, una sola vez) y el sistema pide **permiso para usar el micrófono**. Concédelo.
+3. Habla. El botón pasa a rojo y muestra el tiempo. Vuelve a pulsarlo para terminar (Esc cancela). Máximo, 3 minutos seguidos.
+4. El texto aparece en la caja de mensaje. **Revísalo y pulsa Enviar**: nunca se envía solo.
+
+La voz se transcribe en este ordenador con Whisper y el audio no se guarda. En «Modelos > Dictado por voz» puedes cambiar al modelo `large-v3-turbo` (574 MB), más preciso con ruido o acentos marcados.
+
+Si en Mac el dictado dice que no hay permiso: Ajustes del Sistema > Privacidad y seguridad > Micrófono, y activa Seudónimo.
+
 ## Resultados
 
-En la carpeta de resultados del proyecto (por defecto `~/Áurea Asistente/<proyecto>/<fecha>`):
+En la carpeta de resultados del proyecto (por defecto `~/Seudónimo/<proyecto>/<fecha>`):
 
 - **Aprobados/**: copias sin hallazgos en las comprobaciones configuradas.
 - **Para revisar/**: copias con algún motivo de revisión, que se explica en el informe. Revísalas antes de usarlas.
@@ -52,4 +70,4 @@ Si el proyecto la guarda, va cifrada en este ordenador, con la clave en el Llave
 - **«Falta Ollama»** o **«Ollama detenido»**: abre Ollama, o pulsa «Instalar Ollama».
 - **El modelo va muy lento**: cierra programas pesados. Con 16 GB se carga un solo modelo cada vez.
 - **Un documento con error**: el informe explica el motivo, por ejemplo que esté cifrado o dañado, o tenga macros.
-- **Registro técnico**, sin texto de documentos: en Mac, `~/Library/Application Support/AureaAsistente/registro.log`; en Windows, `%LOCALAPPDATA%\AureaAsistente\registro.log`.
+- **Registro técnico**, sin texto de documentos: en Mac, `~/Library/Application Support/Seudonimo/registro.log`; en Windows, `%LOCALAPPDATA%\Seudonimo\registro.log`.

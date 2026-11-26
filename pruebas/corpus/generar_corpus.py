@@ -162,7 +162,7 @@ y -= 6; cv.setFont("DVB", 9); cv.drawString(40, y, "TOTAL DEVENGADO"); cv.drawRi
 cv.setFont("DV", 9)
 cv.drawString(40, y, "Líquido a percibir mediante transferencia a la cuenta " + n4["iban"]); y -= 13
 cv.drawString(40, y, "Firma y sello de la empresa"); cv.drawString(320, y, "Recibí: " + n4["nombre"] + " " + n4["ap1"])
-cv.setFont("DV", 7); cv.drawString(40, 30, "Documento con datos ficticios generado para probar Áurea Asistente Local.")
+cv.setFont("DV", 7); cv.drawString(40, 30, "Documento con datos ficticios generado para probar Seudónimo.")
 cv.save()
 ET[nom] = {"sensibles": [S(EMPRESA_CORTA, "EMPRESA"), S(CIF, "NIF"), S("Avenida de las Playas, 61", "DOMICILIO"), S(EMP_CCC, "CCC"),
                          S(n4["completo"], "PERSONA"), S(n4["doc"], "DNI"), S(n4["naf"], "NAF"), S(n4["iban"], "IBAN"),

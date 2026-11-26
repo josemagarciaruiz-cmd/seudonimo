@@ -1,4 +1,4 @@
-"""Genera material de prueba para Áurea Anonimus. TODOS LOS DATOS SON INVENTADOS.
+"""Genera material de prueba para Seudónimo. TODOS LOS DATOS SON INVENTADOS.
 Los DNI, NAF, CCC e IBAN tienen formato y dígitos de control válidos, pero son aleatorios."""
 import csv, os, random, math
 from PIL import Image, ImageDraw, ImageFont
@@ -102,7 +102,7 @@ fino = Side(style="thin", color="C9B98F"); borde = Border(left=fino, right=fino,
 ws["A1"] = "EVALUACIÓN DEL DESEMPEÑO · EJERCICIO 2026"; ws["A1"].font = Font(bold=True, size=14)
 ws["A2"] = "%s · CIF %s · %s" % (EMPRESA, CIF, EMP_DIR)
 ws["A3"] = "Responsable de RR. HH.: %s (%s) · Tel. %s" % (RRHH[0], RRHH[1], EMP_TEL)
-ws["A4"] = "Datos ficticios generados para probar Áurea Asistente Local."; ws["A4"].font = Font(italic=True, color="888888", size=9)
+ws["A4"] = "Datos ficticios generados para probar Seudónimo."; ws["A4"].font = Font(italic=True, color="888888", size=9)
 cab = ["Nº", "Nombre y apellidos", "DNI / NIE", "N.º afiliación SS", "Fecha nacimiento", "Fecha antigüedad",
        "Puesto", "Departamento", "Domicilio", "C.P.", "Municipio", "Teléfono", "Correo electrónico", "IBAN nómina",
        "Salario bruto mensual (€)", "Orientación al cliente", "Trabajo en equipo", "Calidad del trabajo",
@@ -237,7 +237,7 @@ c.drawImage(TMP + "/firma.png", 185, y - 85, 150, 52, mask="auto")
 c.setFont("DV", 10); c.drawString(185, y - 100, RRHH[0]); c.drawString(185, y - 113, "Responsable de Recursos Humanos")
 c.drawString(380, y - 100, "Recibí: %s" % p["nombre"]); c.drawString(380, y - 113, "Fecha: ____/____/______")
 c.setFont("DV", 7); c.setFillColorRGB(0.5, 0.5, 0.5)
-c.drawString(40, 30, "Documento con datos ficticios generado para probar Áurea Anonimus. Registro de salida nº 20260045123300871.")
+c.drawString(40, 30, "Documento con datos ficticios generado para probar Seudónimo. Registro de salida nº 20260045123300871.")
 c.setFillColorRGB(0, 0, 0)
 c.showPage()
 # página 2: certificado de empresa con tabla
@@ -261,7 +261,7 @@ y = parrafo(y, "Y para que conste a los efectos oportunos, a petición de la per
 c.drawImage(TMP + "/sello.png", 380, y - 120, 110, 110, mask="auto")
 c.drawImage(TMP + "/firma.png", 200, y - 80, 150, 52, mask="auto")
 c.setFont("DV", 7); c.setFillColorRGB(0.5, 0.5, 0.5)
-c.drawString(40, 30, "Documento con datos ficticios generado para probar Áurea Anonimus.")
+c.drawString(40, 30, "Documento con datos ficticios generado para probar Seudónimo.")
 c.save()
 
 # ------------------------------------------------------------------ 5. Tres «capturas» de chat

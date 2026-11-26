@@ -1,4 +1,4 @@
-/* Áurea Asistente Local · estilos
+/* Seudónimo · estilos
    Un único elemento memorable: el marcador como tachón de tinta ([PERSONA_001]).
    Todo lo demás, sobrio. */
 
@@ -14,7 +14,7 @@
   --tinta-3: #7B8794;     /* texto terciario */
   --linea: #D9DEE3;
   --linea-suave: #E7EBEE;
-  --oro: #A8822A;         /* Áurea: acción principal */
+  --oro: #A8822A;         /* oro: acción principal */
   --oro-hondo: #8A6A1F;
   --oro-claro: #F4ECD8;
   --sobre-oro: #FFFFFF;
@@ -247,3 +247,21 @@ select { -webkit-appearance: none; appearance: none; padding-right: 26px; backgr
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* menús de proyectos y conversaciones */
+.fila { display: flex; align-items: center; gap: 2px; position: relative; }
+.fila > .proyecto-cab, .fila > .conv { flex: 1; min-width: 0; }
+.mas { flex: 0 0 auto; border: 0; background: none; color: var(--tinta-3); width: 26px; height: 26px; border-radius: var(--r-pequeno);
+  cursor: pointer; opacity: 0; font-size: 16px; line-height: 1; }
+.fila:hover > .mas, .mas:focus-visible, .proyecto.activo > .fila > .mas, .fila:has(.conv.activa) > .mas { opacity: 1; }
+.mas:hover { background: var(--linea-suave); color: var(--tinta); }
+.menu { position: fixed; z-index: 20; min-width: 200px; background: var(--papel); border: 1px solid var(--linea); border-radius: var(--r-medio);
+  box-shadow: var(--sombra); padding: 4px; display: grid; }
+.menu button { border: 0; background: none; text-align: left; padding: 7px 10px; border-radius: var(--r-pequeno); cursor: pointer; color: var(--tinta); }
+.menu button:hover, .menu button:focus-visible { background: var(--linea-suave); }
+.menu button.peligro { color: var(--rojo); }
+
+/* dictado */
+.dictar { display: inline-flex; align-items: center; gap: 6px; }
+.dictar.grabando { background: var(--rojo-claro); border-color: var(--rojo); color: var(--rojo);
+  box-shadow: 0 0 0 calc(var(--nivel, 0) * 6px) color-mix(in srgb, var(--rojo) 25%, transparent); transition: box-shadow .1s; }

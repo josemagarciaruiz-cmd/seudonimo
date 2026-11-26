@@ -1,12 +1,12 @@
 [package]
-name = "aurea-asistente-local"
-version = "0.1.0"
-description = "Áurea Asistente Local"
+name = "seudonimo"
+version = "0.2.0"
+description = "Seudónimo"
 authors = ["José María García Ruiz"]
 edition = "2021"
 
 [lib]
-name = "aurea_lib"
+name = "seudonimo_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

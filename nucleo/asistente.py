@@ -21,7 +21,7 @@ import proveedores
 MAX_RONDAS = 4
 PRESUPUESTO_HISTORIAL = 16000   # caracteres de conversación previa que se envían al modelo
 
-SISTEMA = """Eres Áurea, un asistente documental jurídico que funciona íntegramente en el ordenador del usuario, con un modelo local. Trabajas para profesionales del derecho del trabajo y de la Seguridad Social en España. Respondes en español, con precisión, de forma breve y sin adornos.
+SISTEMA = """Eres Seudónimo, un asistente documental jurídico que funciona íntegramente en el ordenador del usuario, con un modelo local. Trabajas para profesionales del derecho del trabajo y de la Seguridad Social en España. Respondes en español, con precisión, de forma breve y sin adornos.
 
 Proyecto actual: «{proyecto}».
 {instrucciones}

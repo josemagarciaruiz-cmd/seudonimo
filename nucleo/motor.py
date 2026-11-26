@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Áurea Asistente Local · motor de detección y sustitución (heredado de Áurea Anonimus 2.1.0).
+"""Seudónimo · motor de detección y sustitución (heredado de Áurea Anonimus 2.1.0).
 Todo se ejecuta en este ordenador: reglas fijas + el modelo local elegido (por defecto Gemma 4
 servido por Ollama en 127.0.0.1), a través de la interfaz común de proveedores."""
 import re

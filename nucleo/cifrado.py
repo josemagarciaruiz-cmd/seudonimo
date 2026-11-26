@@ -13,7 +13,8 @@ from cryptography.fernet import Fernet, InvalidToken
 
 import rutas
 
-SERVICIO = "Áurea Asistente Local"
+SERVICIO = "Seudónimo"
+SERVICIO_ANTERIOR = "Áurea Asistente Local"   # nombre de la aplicación hasta la 0.1.x
 
 try:
     import keyring
@@ -52,6 +53,14 @@ def clave(proyecto, crear=True):
             k = keyring.get_password(SERVICIO, usuario)
             if k:
                 return k.encode()
+            k = keyring.get_password(SERVICIO_ANTERIOR, usuario)
+            if k:                     # clave creada con el nombre anterior: se pasa al nuevo
+                try:
+                    keyring.set_password(SERVICIO, usuario, k)
+                    keyring.delete_password(SERVICIO_ANTERIOR, usuario)
+                except Exception:
+                    pass
+                return k.encode()
             if not crear:
                 return None
             k = Fernet.generate_key()
@@ -82,6 +91,10 @@ def borrar_clave(proyecto):
     if keyring is not None:
         try:
             keyring.delete_password(SERVICIO, "proyecto-%s" % proyecto)
+        except Exception:
+            pass
+        try:
+            keyring.delete_password(SERVICIO_ANTERIOR, "proyecto-%s" % proyecto)
         except Exception:
             pass
     try:

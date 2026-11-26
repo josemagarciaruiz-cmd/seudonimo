@@ -1,5 +1,11 @@
 # Cambios
 
+## 0.2.0 · 26 de noviembre de 2026 · ahora se llama Seudónimo
+
+- **Nuevo nombre: Seudónimo.** Lo que hace la aplicación es seudonimizar, no anonimizar. Cambian la ventana, el icono, los instaladores (`Seudonimo-<versión>-…`), las carpetas (`~/Seudónimo` para los resultados) y el repositorio. La primera vez que se abre, traslada sola los datos, los resultados, las tablas cifradas y sus claves de «Áurea Asistente Local».
+- **Gestión de proyectos y conversaciones** como en Claude: menú «⋯» en la barra lateral para renombrar, eliminar y mover una conversación a otro proyecto. Al moverla, los planes sin confirmar se anulan.
+- **Dictado por voz** (botón «Dictar», ⌘⇧D): Whisper transcribe en el propio ordenador y el texto queda en la caja de mensaje para revisarlo. Modelos `small` (190 MB, por defecto) y `large-v3-turbo` (574 MB), que se descargan solo cuando se piden. `whisper-cli` (whisper.cpp b5454, MIT) va incluido en los instaladores.
+
 ## 0.1.1 · 26 de noviembre de 2026
 
 - **Verificación intensiva más fiable.** El ruido del OCR sobre los propios tachones (marcadores mal leídos, tratamientos deformados como «Diña») ya no se reincorpora como dato. Lo que solo aparece en la copia se admite si se parece a la lectura del original o si viene de una regla con forma válida.

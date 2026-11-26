@@ -151,6 +151,27 @@ class Almacen:
     def renombrar_conversacion(self, cid, titulo):
         self._x("UPDATE conversaciones SET titulo=? WHERE id=?", (titulo, cid))
 
+    def mover_conversacion(self, cid, pid):
+        """Pasa la conversación a otro proyecto. Los planes sin confirmar se anulan: se referían a
+        archivos del proyecto de origen, que el nuevo proyecto no tiene."""
+        c = self.conversacion(cid)
+        if not c:
+            return False
+        for m in self.mensajes(cid):
+            d = m["datos"] or {}
+            cambiado = False
+            for plan in d.get("planes") or []:
+                if not plan.get("estado"):
+                    plan["estado"] = "otro_proyecto"
+                    cambiado = True
+            if cambiado:
+                self.actualizar_mensaje(m["id"], datos=d)
+        ahora = time.time()
+        self._x("UPDATE conversaciones SET proyecto=?, actualizado=? WHERE id=?", (pid, ahora, cid))
+        self.tocar(pid)
+        self.tocar(c["proyecto"])
+        return True
+
     def borrar_conversacion(self, cid):
         self._x("DELETE FROM conversaciones WHERE id=?", (cid,))
 

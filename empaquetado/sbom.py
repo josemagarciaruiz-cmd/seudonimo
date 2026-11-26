@@ -56,7 +56,7 @@ if __name__ == "__main__":
     lock, salida = sys.argv[1], sys.argv[2]
     bom = {"bomFormat": "CycloneDX", "specVersion": "1.5", "serialNumber": "urn:uuid:%s" % uuid.uuid4(), "version": 1,
            "metadata": {"timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                        "component": {"type": "application", "name": "Áurea Asistente Local"}},
+                        "component": {"type": "application", "name": "Seudónimo"}},
            "components": componentes_python() + componentes_rust(lock)}
     with open(salida, "w", encoding="utf-8") as f:
         json.dump(bom, f, ensure_ascii=False, indent=1)

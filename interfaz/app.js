@@ -1,4 +1,4 @@
-/* Áurea Asistente Local · interfaz
+/* Seudónimo · interfaz
    Sin frameworks. Habla con el servicio local (127.0.0.1) con un token efímero.
    En la ventana de escritorio (Tauri) usa los diálogos nativos; en modo navegador, el servicio. */
 "use strict";
@@ -29,13 +29,13 @@ const ESTADOS = {
 // ------------------------------------------------------------------ conexión
 
 async function conectar() {
-  if (window.AUREA_CONEXION) return { base: "", token: window.AUREA_CONEXION.token };
+  if (window.SEUDONIMO_CONEXION) return { base: "", token: window.SEUDONIMO_CONEXION.token };
   if (T) {
     const c = await T.core.invoke("conexion");   // puerto y token que ha elegido la ventana
     const base = `http://127.0.0.1:${c.puerto}`;
     for (let i = 0; i < 180; i++) {               // el servicio tarda unos segundos en arrancar
       try {
-        const r = await fetch(base + "/api/salud", { headers: { "X-Aurea-Token": c.token } });
+        const r = await fetch(base + "/api/salud", { headers: { "X-Seudonimo-Token": c.token } });
         if (r.ok) return { base, token: c.token };
       } catch (e) { /* aún arranca */ }
       await new Promise((r) => setTimeout(r, 500));
@@ -47,7 +47,7 @@ async function conectar() {
 async function api(metodo, ruta, cuerpo) {
   const r = await fetch(E.conexion.base + ruta, {
     method: metodo,
-    headers: { "Content-Type": "application/json", "X-Aurea-Token": E.conexion.token },
+    headers: { "Content-Type": "application/json", "X-Seudonimo-Token": E.conexion.token },
     body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
   });
   let datos = null;
@@ -73,7 +73,7 @@ async function iniciar() {
   try {
     E.conexion = await conectar();
   } catch (e) {
-    document.body.innerHTML = `<div class="vacio"><h2>No se ha podido arrancar Áurea</h2><p>${esc(e.message || e)}</p></div>`;
+    document.body.innerHTML = `<div class="vacio"><h2>No se ha podido arrancar Seudónimo</h2><p>${esc(e.message || e)}</p></div>`;
     return;
   }
   enlazar();
@@ -149,13 +149,123 @@ function pintarLateral() {
     const activo = E.proyecto && E.proyecto.id === p.id;
     const convs = activo ? (E.conversaciones[p.id] || []) : [];
     return `<div class="proyecto${activo ? " activo" : ""}">
-      <button class="proyecto-cab" data-proyecto="${p.id}">${esc(p.nombre)}${p.temporal ? ' <span class="temporal">temporal</span>' : ""}</button>
+      <div class="fila">
+        <button class="proyecto-cab" data-proyecto="${p.id}">${esc(p.nombre)}${p.temporal ? ' <span class="temporal">temporal</span>' : ""}</button>
+        <button class="mas" data-menu-proyecto="${p.id}" aria-label="Opciones del proyecto ${esc(p.nombre)}" title="Opciones">⋯</button>
+      </div>
       ${activo ? `<div class="conversaciones">
         <button class="conv conv-nueva" data-nueva-conv="${p.id}">Nueva conversación</button>
-        ${convs.map((c) => `<button class="conv${c.id === E.conversacion ? " activa" : ""}" data-conv="${c.id}" title="${esc(c.titulo)}">${esc(c.titulo)}</button>`).join("")}
+        ${convs.map((c) => `<div class="fila"><button class="conv${c.id === E.conversacion ? " activa" : ""}" data-conv="${c.id}" title="${esc(c.titulo)}">${esc(c.titulo)}</button><button class="mas" data-menu-conv="${c.id}" aria-label="Opciones de la conversación" title="Opciones">⋯</button></div>`).join("")}
       </div>` : ""}
     </div>`;
   }).join("");
+}
+
+// ------------------------------------------------------------------ menús de proyectos y conversaciones
+
+function abrirMenu(boton, opciones) {
+  cerrarMenu();
+  const m = document.createElement("div");
+  m.className = "menu";
+  m.id = "menu";
+  m.setAttribute("role", "menu");
+  m.innerHTML = opciones.map((o, i) => `<button role="menuitem" class="${o.peligro ? "peligro" : ""}" data-i="${i}">${esc(o.texto)}</button>`).join("");
+  document.body.append(m);
+  const r = boton.getBoundingClientRect();
+  m.style.top = Math.min(r.bottom + 4, window.innerHeight - m.offsetHeight - 8) + "px";
+  m.style.left = Math.min(r.left, window.innerWidth - m.offsetWidth - 8) + "px";
+  m.addEventListener("click", async (ev) => {
+    const b = ev.target.closest("button[data-i]");
+    if (!b) return;
+    ev.stopPropagation();
+    cerrarMenu();
+    try { await opciones[+b.dataset.i].accion(); } catch (e) { alerta(e.message); }
+  });
+  m.querySelector("button")?.focus();
+}
+
+function cerrarMenu() { $("#menu")?.remove(); }
+
+function pedirTexto(titulo, valor, aceptar = "Guardar") {
+  const d = $("#dlg-texto");
+  $("#texto-titulo").textContent = titulo;
+  $("#texto-aceptar").textContent = aceptar;
+  const i = $("#texto-valor");
+  i.value = valor || "";
+  d.showModal();
+  i.select();
+  return new Promise((res) => d.addEventListener("close", () => res(d.returnValue === "si" ? i.value.trim() : null), { once: true }));
+}
+
+function menuProyecto(boton, pid) {
+  const p = E.proyectos.find((x) => x.id === pid);
+  abrirMenu(boton, [
+    { texto: "Renombrar", accion: async () => {
+      const n = await pedirTexto("Renombrar el proyecto", p.nombre);
+      if (!n) return;
+      await api("PATCH", `/api/proyectos/${pid}`, { nombre: n });
+      await refrescarProyectos();
+      if (E.proyecto?.id === pid) { E.proyecto.nombre = n; $("#titulo-proyecto").textContent = n; }
+    } },
+    { texto: "Ajustes del proyecto", accion: async () => { if (E.proyecto?.id !== pid) await abrirProyecto(pid); abrirDialogoProyecto(true); } },
+    { texto: "Eliminar proyecto", peligro: true, accion: () => eliminarProyecto(pid) },
+  ]);
+}
+
+function menuConversacion(boton, cid) {
+  const c = (E.conversaciones[E.proyecto.id] || []).find((x) => x.id === cid);
+  const otros = E.proyectos.filter((p) => p.id !== E.proyecto.id);
+  abrirMenu(boton, [
+    { texto: "Renombrar", accion: async () => {
+      const n = await pedirTexto("Renombrar la conversación", c.titulo);
+      if (!n) return;
+      await api("PATCH", `/api/conversaciones/${cid}`, { titulo: n });
+      await refrescarConversaciones();
+    } },
+    ...(otros.length ? [{ texto: "Mover a otro proyecto…", accion: () => moverConversacion(cid, otros) }] : []),
+    { texto: "Eliminar conversación", peligro: true, accion: async () => {
+      if (!await confirmar("Eliminar la conversación", `Se eliminará «${c.titulo}» con todos sus mensajes. Los archivos del proyecto y las copias seudonimizadas no se tocan.`, "Eliminar")) return;
+      await api("DELETE", `/api/conversaciones/${cid}`);
+      await refrescarConversaciones();
+      if (E.conversacion === cid) {
+        const resto = E.conversaciones[E.proyecto.id];
+        if (resto.length) await abrirConversacion(resto[0].id);
+        else { E.conversacion = null; $("#titulo-conversacion").textContent = ""; pintarVacioProyecto(); pintarLateral(); }
+      }
+    } },
+  ]);
+}
+
+async function moverConversacion(cid, otros) {
+  const d = $("#dlg-mover");
+  $("#mover-destino").innerHTML = otros.map((p) => `<option value="${p.id}">${esc(p.nombre)}</option>`).join("");
+  d.showModal();
+  const ok = await new Promise((res) => d.addEventListener("close", () => res(d.returnValue === "si"), { once: true }));
+  if (!ok) return;
+  const destino = +$("#mover-destino").value;
+  await api("PATCH", `/api/conversaciones/${cid}`, { proyecto: destino });
+  await refrescarProyectos();
+  await abrirProyecto(destino, cid);
+}
+
+async function refrescarConversaciones() {
+  E.conversaciones[E.proyecto.id] = await api("GET", `/api/proyectos/${E.proyecto.id}/conversaciones`);
+  const c = E.conversaciones[E.proyecto.id].find((x) => x.id === E.conversacion);
+  $("#titulo-conversacion").textContent = c ? c.titulo : "";
+  pintarLateral();
+}
+
+async function eliminarProyecto(pid) {
+  const p = E.proyectos.find((x) => x.id === pid);
+  const ok = await confirmar("Eliminar el proyecto", `Se eliminarán «${p.nombre}», sus conversaciones, su registro de datos y la tabla de correspondencias cifrada con su clave. Tus archivos originales y las copias ya exportadas no se tocan.`, "Eliminar proyecto");
+  if (!ok) return;
+  if ($("#dlg-proyecto").open) $("#dlg-proyecto").close("cancelar");
+  await api("DELETE", `/api/proyectos/${pid}`);
+  if (E.proyecto?.id === pid) { E.proyecto = null; E.conversacion = null; }
+  await refrescarProyectos();
+  if (E.proyecto) pintarLateral();
+  else if (E.proyectos.length) await abrirProyecto(E.proyectos[0].id);
+  else pintarBienvenida();
 }
 
 async function abrirProyecto(pid, conv) {
@@ -203,13 +313,13 @@ async function nuevaConversacion() {
 }
 
 function pintarBienvenida() {
-  $("#titulo-proyecto").textContent = "Áurea Asistente Local";
+  $("#titulo-proyecto").textContent = "Seudónimo";
   $("#titulo-conversacion").textContent = "";
   $("#redactor").hidden = true;
   $("#ajustes-proyecto").hidden = true;
   $("#hilo").innerHTML = `<div class="vacio">
     <h2>Tus expedientes, sin salir de este ordenador</h2>
-    <p>Un proyecto reúne las carpetas de un asunto y sus conversaciones. Añade la carpeta del expediente y pídele a Áurea que la seudonimice: el modelo local hace varias pasadas y se comprueba a sí mismo antes de dar nada por bueno.</p>
+    <p>Un proyecto reúne las carpetas de un asunto y sus conversaciones. Añade la carpeta del expediente y pídele a Seudónimo que la seudonimice: el modelo local hace varias pasadas y se comprueba a sí mismo antes de dar nada por bueno.</p>
     <button class="boton boton-principal" data-accion="nuevo-proyecto">Crear el primer proyecto</button>
   </div>`;
   $("#panel-archivos").innerHTML = `<p class="nota">Crea un proyecto para añadir carpetas y archivos.</p>`;
@@ -262,7 +372,7 @@ function nodoPlan(plan, mid, datos) {
   if (estado) {
     d.classList.add("cerrado");
     d.innerHTML = `<h4>Seudonimización de ${n} archivo${n === 1 ? "" : "s"}</h4>
-      <p class="resultado">${estado === "confirmado" ? `Confirmada (${plan.perfil === "intensivo" ? "verificación intensiva" : "verificación estándar"}). El avance está en la pestaña Operaciones.` : "Descartada."}</p>`;
+      <p class="resultado">${estado === "confirmado" ? `Confirmada (${plan.perfil === "intensivo" ? "verificación intensiva" : "verificación estándar"}). El avance está en la pestaña Operaciones.` : estado === "otro_proyecto" ? "Este plan era del proyecto de origen de la conversación. Si lo necesitas aquí, vuelve a pedirlo." : "Descartada."}</p>`;
     return d;
   }
   const intensivo = plan.perfil === "intensivo";
@@ -323,7 +433,7 @@ async function enviar(texto) {
   const planes = [];
   try {
     const r = await fetch(E.conexion.base + `/api/conversaciones/${E.conversacion}/mensajes`, {
-      method: "POST", headers: { "Content-Type": "application/json", "X-Aurea-Token": E.conexion.token },
+      method: "POST", headers: { "Content-Type": "application/json", "X-Seudonimo-Token": E.conexion.token },
       body: JSON.stringify({ texto, modelo: $("#selector-modelo").value }),
     });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Error ${r.status}`);
@@ -587,6 +697,7 @@ function abrirDialogoProyecto(editar) {
 async function abrirModelos() {
   await refrescarModelos();
   pintarModelos();
+  api("GET", "/api/voz").then(pintarVoz).catch(() => {});
   $("#dlg-modelos").showModal();
   const vigilar = async () => {
     if (!$("#dlg-modelos").open) return;
@@ -642,6 +753,175 @@ function mostrarPestana(n) {
   if (n === "operaciones") refrescarOperaciones();
 }
 
+// ------------------------------------------------------------------ dictado por voz
+// Se graba en la ventana, se convierte a WAV mono de 16 kHz y lo transcribe Whisper en este
+// ordenador. El texto se escribe en la caja de mensaje para revisarlo antes de enviarlo.
+
+const DICTADO = { estado: "parado", flujo: null, ctx: null, nodo: null, trozos: [], tasa: 48000, t0: 0, reloj: null };
+const MAX_DICTADO = 180;
+
+async function alternarDictado() {
+  if (DICTADO.estado === "grabando") return pararDictado();
+  if (DICTADO.estado !== "parado") return;
+  const v = await api("GET", "/api/voz");
+  if (!v.binario) return alerta("Esta instalación no incluye el programa de dictado.", "Dictado no disponible");
+  if (!v.listo) {
+    const m = v.modelos.find((x) => x.nombre === v.activo) || v.modelos[0];
+    if (v.descarga.fase === "trabajando") return alerta(`Se está descargando el modelo de voz (${Math.round(v.descarga.progreso * 100)} %). Prueba en un momento.`, "Un momento");
+    const ok = await confirmar("Activar el dictado",
+      `Para dictar hace falta el modelo de voz «${m.nombre}» (${m.mb} MB). Se descarga una sola vez y después todo funciona sin internet: tu voz nunca sale de este ordenador.`, "Descargar");
+    if (!ok) return;
+    await api("POST", "/api/voz/descargar", { nombre: m.nombre });
+    seguirDescargaVoz();
+    return;
+  }
+  try {
+    DICTADO.flujo = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+  } catch (e) {
+    return alerta("No tengo permiso para usar el micrófono, o no hay ninguno conectado. En Mac: Ajustes del Sistema > Privacidad y seguridad > Micrófono, y activa Seudónimo.", "Micrófono no disponible");
+  }
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  DICTADO.ctx = new Ctx();
+  DICTADO.tasa = DICTADO.ctx.sampleRate;
+  const fuente = DICTADO.ctx.createMediaStreamSource(DICTADO.flujo);
+  DICTADO.nodo = DICTADO.ctx.createScriptProcessor(4096, 1, 1);
+  DICTADO.trozos = [];
+  DICTADO.nodo.onaudioprocess = (ev) => {
+    const datos = ev.inputBuffer.getChannelData(0);
+    DICTADO.trozos.push(new Float32Array(datos));
+    let pico = 0;
+    for (let i = 0; i < datos.length; i += 64) pico = Math.max(pico, Math.abs(datos[i]));
+    $("#dictar").style.setProperty("--nivel", Math.min(1, pico * 4).toFixed(2));
+  };
+  fuente.connect(DICTADO.nodo);
+  DICTADO.nodo.connect(DICTADO.ctx.destination);
+  DICTADO.estado = "grabando";
+  DICTADO.t0 = Date.now();
+  pintarDictado();
+  DICTADO.reloj = setInterval(() => {
+    const s = Math.round((Date.now() - DICTADO.t0) / 1000);
+    if (s >= MAX_DICTADO) pararDictado();
+    else pintarDictado();
+  }, 500);
+}
+
+function cancelarDictado() {
+  if (DICTADO.estado !== "grabando") return;
+  limpiarGrabacion();
+  DICTADO.estado = "parado";
+  pintarDictado();
+}
+
+function limpiarGrabacion() {
+  clearInterval(DICTADO.reloj);
+  try { DICTADO.nodo && DICTADO.nodo.disconnect(); } catch (e) { /* ya */ }
+  try { DICTADO.flujo && DICTADO.flujo.getTracks().forEach((t) => t.stop()); } catch (e) { /* ya */ }
+  try { DICTADO.ctx && DICTADO.ctx.close(); } catch (e) { /* ya */ }
+  $("#dictar").style.removeProperty("--nivel");
+}
+
+async function pararDictado() {
+  limpiarGrabacion();
+  DICTADO.estado = "transcribiendo";
+  pintarDictado();
+  try {
+    const wav = aWav(DICTADO.trozos, DICTADO.tasa);
+    DICTADO.trozos = [];
+    const r = await fetch(E.conexion.base + "/api/voz/transcribir", {
+      method: "POST", headers: { "Content-Type": "audio/wav", "X-Seudonimo-Token": E.conexion.token }, body: wav,
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "No se ha podido transcribir.");
+    if (d.texto) {
+      const e = $("#entrada");
+      e.value = (e.value.trim() ? e.value.trim() + " " : "") + d.texto;
+      e.dispatchEvent(new Event("input"));
+      e.focus();
+    } else {
+      alerta("No he entendido nada en la grabación. Comprueba el micrófono y vuelve a probar.", "Sin texto");
+    }
+  } catch (e) {
+    alerta(e.message);
+  } finally {
+    DICTADO.estado = "parado";
+    pintarDictado();
+  }
+}
+
+function pintarDictado() {
+  const b = $("#dictar");
+  const s = Math.round((Date.now() - DICTADO.t0) / 1000);
+  b.classList.toggle("grabando", DICTADO.estado === "grabando");
+  b.disabled = DICTADO.estado === "transcribiendo";
+  $("#dictar-texto").textContent = DICTADO.estado === "grabando" ? `Parar · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`
+    : DICTADO.estado === "transcribiendo" ? "Transcribiendo…" : "Dictar";
+  b.setAttribute("aria-pressed", String(DICTADO.estado === "grabando"));
+}
+
+// Mezcla los trozos, baja a 16 kHz (media por bloques) y escribe un WAV PCM de 16 bits
+function aWav(trozos, tasa) {
+  const total = trozos.reduce((n, t) => n + t.length, 0);
+  const todo = new Float32Array(total);
+  let o = 0;
+  for (const t of trozos) { todo.set(t, o); o += t.length; }
+  const paso = tasa / 16000;
+  const n = Math.floor(total / paso);
+  const pcm = new Int16Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor(i * paso), b = Math.min(total, Math.floor((i + 1) * paso));
+    let s = 0;
+    for (let k = a; k < b; k++) s += todo[k];
+    const v = Math.max(-1, Math.min(1, s / Math.max(1, b - a)));
+    pcm[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+  }
+  const buf = new ArrayBuffer(44 + pcm.length * 2);
+  const dv = new DataView(buf);
+  const txt = (p, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(p + i, s.charCodeAt(i)); };
+  txt(0, "RIFF"); dv.setUint32(4, 36 + pcm.length * 2, true); txt(8, "WAVE"); txt(12, "fmt ");
+  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, 16000, true);
+  dv.setUint32(28, 32000, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); txt(36, "data");
+  dv.setUint32(40, pcm.length * 2, true);
+  new Int16Array(buf, 44).set(pcm);
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+function seguirDescargaVoz() {
+  const b = $("#aviso-banda");
+  const paso = async () => {
+    const v = await api("GET", "/api/voz");
+    const d = v.descarga;
+    if (d.fase === "trabajando") {
+      b.hidden = false;
+      b.innerHTML = `<span>${esc(d.mensaje || "Descargando el modelo de voz…")}</span><span>${Math.round(d.progreso * 100)} %</span>`;
+      setTimeout(paso, 1000);
+    } else if (d.fase === "error") {
+      b.hidden = false;
+      b.innerHTML = `<span>${esc(d.error)}</span>`;
+    } else {
+      pintarAviso();
+      if (d.fase === "listo") alerta("Ya puedes dictar: pulsa «Dictar», habla y vuelve a pulsar para terminar.", "Dictado listo");
+    }
+    if ($("#dlg-modelos").open) pintarVoz(v);
+  };
+  paso();
+}
+
+function pintarVoz(v) {
+  const el = $("#voz-modelos");
+  if (!el) return;
+  if (!v.binario) { el.innerHTML = `<p class="nota">Esta instalación no incluye el programa de dictado.</p>`; return; }
+  el.innerHTML = v.modelos.map((m) => {
+    const bajando = v.descarga.fase === "trabajando" && v.descarga.nombre === m.nombre;
+    return `<div class="modelo">
+      <span><b>Whisper ${esc(m.nombre)}</b>${m.nombre === v.activo ? ' <span class="chip sin_hallazgos">en uso</span>' : ""} <span class="nota">${m.mb} MB</span></span>
+      <span class="botones">${bajando ? `<span class="nota">${Math.round(v.descarga.progreso * 100)} %</span>`
+        : !m.descargado ? `<button type="button" class="boton" data-voz-descargar="${m.nombre}">Descargar</button>`
+        : m.nombre !== v.activo ? `<button type="button" class="boton-texto" data-voz-usar="${m.nombre}">Usar</button>` : ""}</span>
+      <span class="desc">${esc(m.descripcion)}</span>
+    </div>`;
+  }).join("");
+}
+
 // ------------------------------------------------------------------ eventos
 
 function enlazar() {
@@ -666,33 +946,35 @@ function enlazar() {
     if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $("#redactor").requestSubmit(); }
   });
   $("#redactor").onsubmit = (ev) => { ev.preventDefault(); const t = entrada.value; entrada.value = ""; entrada.style.height = "auto"; enviar(t); };
+  $("#dictar").onclick = () => alternarDictado().catch((e) => alerta(e.message));
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && DICTADO.estado === "grabando") cancelarDictado();
+    // ⌘/Ctrl + Mayúsculas + D: empezar o terminar de dictar
+    if ((ev.metaKey || ev.ctrlKey) && ev.shiftKey && ev.key.toLowerCase() === "d" && !$("#redactor").hidden) { ev.preventDefault(); alternarDictado().catch((e) => alerta(e.message)); }
+  });
   $("#adjuntar-archivos").onclick = async () => anadirRutas(await elegir("archivos"));
   $("#adjuntar-carpeta").onclick = async () => anadirRutas(await elegir("carpeta"));
   $("#elegir-salida").onclick = async () => {
     const r = await elegir("carpeta_salida");
     if (r[0]) $("#form-proyecto").salida.value = r[0];
   };
-  $("#borrar-proyecto").onclick = async () => {
-    const ok = await confirmar("Borrar el proyecto", `Se borrarán sus conversaciones, su registro de entidades y la tabla de correspondencias cifrada (y su clave). Tus archivos originales y las copias ya exportadas no se tocan.`, "Borrar proyecto");
-    if (!ok) return;
-    $("#dlg-proyecto").close("cancelar");
-    await api("DELETE", `/api/proyectos/${E.proyecto.id}`);
-    E.proyecto = null; E.conversacion = null;
-    await refrescarProyectos();
-    if (E.proyectos.length) await abrirProyecto(E.proyectos[0].id); else pintarBienvenida();
-  };
+  $("#borrar-proyecto").onclick = () => eliminarProyecto(E.proyecto.id);
   $("#descargar-libre").onclick = async () => {
     const n = $("#modelo-libre").value.trim();
     if (!n) return;
     try { await api("POST", "/api/modelos/descargar", { nombre: n }); $("#modelo-libre").value = ""; await refrescarModelos(); pintarModelos(); } catch (e) { alerta(e.message); }
   };
 
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrarMenu(); });
   document.addEventListener("click", async (ev) => {
+    if (!ev.target.closest("#menu")) cerrarMenu();
     const b = ev.target.closest("button, [data-proyecto]");
     if (!b) return;
     const d = b.dataset;
     try {
-      if (d.proyecto) await abrirProyecto(+d.proyecto);
+      if (d.menuProyecto) { ev.stopPropagation(); menuProyecto(b, +d.menuProyecto); }
+      else if (d.menuConv) { ev.stopPropagation(); menuConversacion(b, +d.menuConv); }
+      else if (d.proyecto) await abrirProyecto(+d.proyecto);
       else if (d.conv) await abrirConversacion(+d.conv);
       else if (d.nuevaConv) await nuevaConversacion();
       else if (d.sugerencia) enviar(d.sugerencia);
@@ -703,6 +985,8 @@ function enlazar() {
       else if (d.reactivarEnt) { await api("POST", `/api/proyectos/${E.proyecto.id}/registro/${d.reactivarEnt}/reactivar`); pintarRevision(); }
       else if (d.descargar) { await api("POST", "/api/modelos/descargar", { nombre: d.descargar }); await refrescarModelos(); pintarModelos(); }
       else if (d.defecto) { await api("POST", "/api/modelos/defecto", { nombre: d.defecto }); await refrescarModelos(); pintarModelos(); }
+      else if (d.vozDescargar) { await api("POST", "/api/voz/descargar", { nombre: d.vozDescargar }); seguirDescargaVoz(); }
+      else if (d.vozUsar) pintarVoz(await api("POST", "/api/voz/modelo", { nombre: d.vozUsar }));
       else if (d.licencia) await verLicencia(d.licencia);
       else if (d.borrarModelo) {
         if (await confirmar("Borrar el modelo", `Se borrará ${d.borrarModelo} de este ordenador y se liberará su espacio. Podrás volver a descargarlo.`, "Borrar")) {

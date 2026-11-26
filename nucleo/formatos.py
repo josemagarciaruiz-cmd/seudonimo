@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Áurea Anonimus · lectura y escritura de cada formato.
+"""Seudónimo · lectura y escritura de cada formato.
 Word, PowerPoint y Excel se editan por dentro (XML), de modo que el documento
 anonimizado conserva su formato, tablas, gráficos e imágenes. Los PDF se leen y se
 tachan con PDFium (ver pdfdoc.py)."""

@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# Prepara los recursos del instalador de Windows (Python embebido, librerías, Tesseract y el
-# núcleo) en escritorio/src-tauri/recursos/. Se ejecuta en Linux o Mac; no hace falta Windows.
+# Prepara los recursos del instalador de Windows (Python embebido, librerías, Tesseract,
+# whisper-cli para el dictado y el núcleo) en escritorio/src-tauri/recursos/. Se ejecuta en Linux o Mac; no hace falta Windows.
 #
 # Necesita en descargas/:
 #   python-embed.zip     https://www.python.org/ftp/python/3.13.9/python-3.13.9-embed-amd64.zip
 #   tesseract/           carpeta con tesseract.exe, sus DLL y tessdata (spa, eng, osd), o bien
 #   tesseract-setup.exe  el instalador de UB Mannheim 5.4 y spa.traineddata (se extrae con 7-Zip)
+#   whisper-bin-x64.zip  https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-x64.zip
+#                        (si falta, se descarga)
 # Uso:  bash empaquetado/windows/preparar_recursos.sh
 set -euo pipefail
 D="$(cd "$(dirname "$0")/../.." && pwd)"
 DESC="$D/descargas"
 REC="$D/escritorio/src-tauri/recursos"
 rm -rf "$REC"
-mkdir -p "$REC/python/Lib/site-packages" "$REC/tesseract" "$REC/nucleo" "$REC/licencias"
+mkdir -p "$REC/python/Lib/site-packages" "$REC/tesseract" "$REC/whisper" "$REC/nucleo" "$REC/licencias"
 
 # 1. Python embebido: el núcleo añade su propia carpeta al path al arrancar
 unzip -q "$DESC/python-embed.zip" -d "$REC/python"
@@ -45,6 +47,16 @@ if [ ! -d "$DESC/tesseract" ] && [ -f "$DESC/tesseract-setup.exe" ]; then
   rm -rf "$TMP"
 fi
 cp -R "$DESC/tesseract/." "$REC/tesseract/"
+
+# 3 bis. Dictado: whisper-cli de la misma versión que la de Mac (b5454), compilación oficial para CPU
+WZ="$DESC/whisper-bin-x64.zip"
+[ -f "$WZ" ] || curl -fsSL -o "$WZ" https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-x64.zip
+TMP="$(mktemp -d)"
+unzip -q "$WZ" -d "$TMP"
+B="$(dirname "$(find "$TMP" -name whisper-cli.exe | head -1)")"
+cp "$B/whisper-cli.exe" "$B"/*.dll "$REC/whisper/"
+rm -rf "$TMP"
+curl -fsSL -o "$REC/licencias/LICENSE-whisper.cpp.txt" https://raw.githubusercontent.com/ggml-org/whisper.cpp/b5454/LICENSE
 
 # 4. Núcleo
 cp -R "$D/nucleo/." "$REC/nucleo/"

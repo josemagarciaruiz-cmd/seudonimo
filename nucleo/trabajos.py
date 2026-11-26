@@ -18,7 +18,14 @@ _CERROJO = threading.RLock()
 
 
 def _ruta_registro(pid):
-    return os.path.join(rutas.PROYECTOS, str(pid), "registro.aurea")
+    ruta = os.path.join(rutas.PROYECTOS, str(pid), "registro.seudonimo")
+    anterior = os.path.join(rutas.PROYECTOS, str(pid), "registro.aurea")     # nombre hasta la 0.1.x
+    if not os.path.exists(ruta) and os.path.isfile(anterior):
+        try:
+            os.rename(anterior, ruta)
+        except OSError:
+            return anterior
+    return ruta
 
 
 def registro(pid, tabla="cifrada"):

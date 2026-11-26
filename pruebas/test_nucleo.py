@@ -5,7 +5,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nucleo"))
-os.environ.setdefault("AUREA_DATOS", tempfile.mkdtemp())
+os.environ.setdefault("SEUDONIMO_DATOS", tempfile.mkdtemp())
 
 import motor  # noqa: E402
 import registro  # noqa: E402

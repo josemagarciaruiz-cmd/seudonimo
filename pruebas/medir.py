@@ -3,7 +3,7 @@
 necesario para evaluar (SOLO para el corpus sintético: el archivo corpus_resultado.json
 contiene los datos detectados).
 
-Uso:  python pruebas/medir.py <estandar|intensivo> <carpeta> <salida>   (AUREA_MODELO para otro modelo)"""
+Uso:  python pruebas/medir.py <estandar|intensivo> <carpeta> <salida>   (SEUDONIMO_MODELO para otro modelo)"""
 import glob
 import json
 import os
@@ -12,7 +12,7 @@ import threading
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nucleo"))
-os.environ.setdefault("AUREA_DATOS", "/tmp/aurea-medicion")
+os.environ.setdefault("SEUDONIMO_DATOS", "/tmp/seudonimo-medicion")
 import rutas  # noqa: E402
 
 rutas.preparar()
@@ -24,7 +24,7 @@ docs = [{"id": i, "ruta": p, "rel": os.path.relpath(p, carpeta), "nombre": os.pa
         for i, p in enumerate(sorted(glob.glob(carpeta + "/**/*", recursive=True)))
         if os.path.isfile(p) and not p.endswith("etiquetas.json")]
 reg = registro.Registro(0)
-lote = multipasada.TrabajoLote("m", docs, reg, perfil=perfil, modelo=os.environ.get("AUREA_MODELO", "gemma4:12b"), destino=salida)
+lote = multipasada.TrabajoLote("m", docs, reg, perfil=perfil, modelo=os.environ.get("SEUDONIMO_MODELO", "gemma4:12b"), destino=salida)
 
 
 def vigilar():

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Áurea Asistente Local · puesta en marcha y gestión de modelos.
+"""Seudónimo · puesta en marcha y gestión de modelos.
 
 Comprueba que Ollama (el programa que ejecuta los modelos en el propio ordenador) está
 instalado y en marcha. Si falta, lo descarga de su web oficial y lo instala. Los modelos se

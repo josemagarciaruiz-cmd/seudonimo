@@ -1,4 +1,4 @@
-# Áurea Asistente Local
+# Seudónimo
 
 Asistente documental jurídico **de escritorio**, al estilo de las aplicaciones de Claude o ChatGPT, que funciona **entero en el ordenador del usuario** con modelos locales. Tiene proyectos, conversaciones y carpetas adjuntas, y su primer caso de uso es la **seudonimización de expedientes jurídico-laborales con auditoría multipasada verificable**.
 
@@ -8,7 +8,8 @@ Ningún documento sale del equipo: la lectura, el OCR, el modelo (por defecto Ge
 
 ## Qué hace
 
-- **Proyectos** con carpetas y archivos autorizados por el usuario (diálogo del sistema), **conversaciones** y **selector de modelo**.
+- **Proyectos** con carpetas y archivos autorizados por el usuario (diálogo del sistema), **conversaciones** y **selector de modelo**. Proyectos y conversaciones se renombran y se eliminan desde su menú «⋯», y una conversación puede **moverse a otro proyecto**.
+- **Dictado por voz**: el botón «Dictar» (⌘⇧D) transcribe con Whisper (whisper.cpp) en el propio ordenador y deja el texto en la caja de mensaje para revisarlo antes de enviarlo. El modelo de voz se descarga una sola vez, cuando se pide.
 - El asistente entiende órdenes como «Seudonimiza toda esta carpeta, mantén la coherencia de las etiquetas y conserva el formato». Prepara un **plan** con su alcance y el usuario lo confirma.
 - **Motor multipasada** (anexo técnico): dos pasadas de detección y ciclos de transformación y verificación independiente desde el original inmutable. Termina por convergencia, por límites o por error, nunca porque el modelo diga que está limpio.
 - Estados honestos: «Sin hallazgos en las comprobaciones configuradas», «Requiere revisión» o «Error de procesamiento». Nunca «anonimización garantizada».
@@ -25,7 +26,8 @@ Ningún documento sale del equipo: la lectura, el OCR, el modelo (por defecto Ge
 | Asistente | `nucleo/asistente.py`, `nucleo/herramientas.py` | Llamadas a herramientas registradas con esquema; clasificador de intención si el modelo no las admite. |
 | Proveedores | `nucleo/proveedores/` | Interfaz común (`listar`, `chat`, `estructurado`, `descargar`…). Primer adaptador: Ollama. |
 | Multipasada | `nucleo/multipasada.py`, `nucleo/verificacion.py`, `nucleo/registro.py` | Controlador determinista, verificación independiente y registro de entidades del proyecto. |
-| Motor documental | `nucleo/motor.py`, `formatos.py`, `ocr.py`, `pdfdoc.py` | Heredado de Áurea Anonimus 2.1.0: reglas, OCR (Vision en Mac, Tesseract en Windows) y PDF con pypdfium2. |
+| Motor documental | `nucleo/motor.py`, `formatos.py`, `ocr.py`, `pdfdoc.py` | Heredado de Áurea Anonimus 2.1.0, la versión anterior de la herramienta: reglas, OCR (Vision en Mac, Tesseract en Windows) y PDF con pypdfium2. |
+| Dictado | `nucleo/voz.py` | whisper-cli incluido en el instalador; el audio solo existe en un temporal que se borra al transcribir. |
 | Persistencia | `nucleo/almacen.py`, `nucleo/cifrado.py` | SQLite sin texto de documentos; tabla de correspondencias cifrada (Fernet). |
 
 ## Desarrollo
@@ -49,8 +51,8 @@ python pruebas/evaluar.py /tmp/corpus /tmp/lote                             # re
 
 ## Instaladores
 
-- **Mac** (en un Mac con chip Apple): `zsh empaquetado/mac/construir.sh` → `salida/AureaAsistenteLocal-<versión>-Mac.dmg` y el SBOM.
-- **Windows** (desde un Mac, con MinGW-w64): `bash empaquetado/windows/preparar_recursos.sh` y después `zsh empaquetado/windows/construir_desde_mac.sh` → `salida/AureaAsistenteLocal-<versión>-Windows.exe`. Instalación por usuario, sin permisos de administrador.
+- **Mac** (en un Mac con chip Apple): `zsh empaquetado/mac/construir.sh` → `salida/Seudonimo-<versión>-Mac.dmg` y el SBOM. El dictado usa `whisper-cli`, que compila `empaquetado/mac/whisper.sh` (cmake) si no está en `descargas/`.
+- **Windows** (desde un Mac, con MinGW-w64): `bash empaquetado/windows/preparar_recursos.sh` y después `zsh empaquetado/windows/construir_desde_mac.sh` → `salida/Seudonimo-<versión>-Windows.exe`. Instalación por usuario, sin permisos de administrador.
 
 Los instaladores no están firmados con certificado de Apple ni de Microsoft (firmar y notarizar tiene coste y requisitos de cuenta), así que el sistema avisa la primera vez. Ver `docs/manual.md`.
 
@@ -58,8 +60,10 @@ Documentación: `docs/00-auditoria-motor.md`, `docs/multipasada.md`, `docs/matri
 
 ## Privacidad
 
-- Los datos de trabajo van a la carpeta de datos de la aplicación y los resultados a `~/Áurea Asistente`, fuera de carpetas sincronizadas con la nube. Si el usuario elige una carpeta sincronizada, la aplicación lo advierte.
+- Los datos de trabajo van a la carpeta de datos de la aplicación y los resultados a `~/Seudónimo`, fuera de carpetas sincronizadas con la nube. Si el usuario elige una carpeta sincronizada, la aplicación lo advierte.
 - La base de datos no guarda el texto de los documentos. Los temporales con datos originales se borran al terminar cada lote. Los proyectos temporales se borran al cerrar.
 - **No subas nunca a este repositorio documentos de clientes ni resultados con datos reales.**
 
 © José María García Ruiz · josemaria.ai. Todos los derechos reservados. Licencias de terceros en `THIRD_PARTY_NOTICES.md`.
+
+Hasta la versión 0.1.1 la aplicación se llamaba «Áurea Asistente Local». La 0.2.0 traslada sola sus datos, resultados y claves al nombre nuevo la primera vez que se abre.

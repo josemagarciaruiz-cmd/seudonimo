@@ -10,7 +10,7 @@ import requests
 
 from .base import ErrorProveedor, ProveedorModelos, json_de_texto
 
-URL = os.environ.get("AUREA_OLLAMA", "http://127.0.0.1:11434")
+URL = os.environ.get("SEUDONIMO_OLLAMA", "http://127.0.0.1:11434")
 CONTEXTO = 8192          # hipótesis inicial del plan (4.096–8.192 tokens); ajustable por modelo
 MANTENER = "15m"          # el modelo sigue cargado durante el lote
 

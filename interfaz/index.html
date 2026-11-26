@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Áurea Asistente Local</title>
+<title>Seudónimo</title>
 <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
@@ -12,8 +12,8 @@
   <!-- Barra lateral: proyectos y conversaciones -->
   <nav class="lateral" aria-label="Proyectos">
     <div class="marca">
-      <span class="sello" aria-hidden="true">Á</span>
-      <span class="marca-nombre">Áurea<br><small>Asistente local</small></span>
+      <span class="sello" aria-hidden="true">S</span>
+      <span class="marca-nombre">Seudónimo<br><small>Asistente local</small></span>
     </div>
     <button class="boton boton-principal ancho" id="nuevo-proyecto">Nuevo proyecto</button>
     <div class="lista-proyectos" id="lista-proyectos"></div>
@@ -27,7 +27,7 @@
   <main class="centro">
     <header class="cabecera" id="cabecera">
       <div class="cabecera-titulo">
-        <h1 id="titulo-proyecto">Áurea Asistente Local</h1>
+        <h1 id="titulo-proyecto">Seudónimo</h1>
         <span id="titulo-conversacion" class="subtitulo"></span>
       </div>
       <div class="cabecera-acciones">
@@ -52,6 +52,10 @@
             <button type="button" class="boton-texto" id="adjuntar-archivos">Añadir archivos</button>
             <button type="button" class="boton-texto" id="adjuntar-carpeta">Añadir carpeta</button>
           </div>
+          <button type="button" class="boton dictar" id="dictar" aria-pressed="false" title="Dictar con la voz (⌘⇧D). Se transcribe en este ordenador.">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg>
+            <span id="dictar-texto">Dictar</span>
+          </button>
           <label class="interruptor" title="Más ciclos de verificación y un modelo auditor en cada uno">
             <input type="checkbox" id="intensiva"> <span>Verificación intensiva</span>
           </label>
@@ -101,7 +105,7 @@
     </fieldset>
     <div class="solo-edicion">
       <label class="campo">Carpeta de resultados
-        <span class="fila-campo"><input name="salida" readonly placeholder="~/Áurea Asistente/<proyecto>"><button type="button" class="boton-texto" id="elegir-salida">Cambiar</button></span>
+        <span class="fila-campo"><input name="salida" readonly placeholder="~/Seudónimo/<proyecto>"><button type="button" class="boton-texto" id="elegir-salida">Cambiar</button></span>
       </label>
       <p class="aviso-campo" id="aviso-salida" hidden>Esa carpeta parece sincronizada con la nube. Los resultados contienen información del asunto: mejor una carpeta local.</p>
       <label class="campo">Instrucciones para el asistente en este proyecto
@@ -128,6 +132,10 @@
     <div id="modelos-instalados" class="tabla-modelos"></div>
     <h3>Disponibles para descargar</h3>
     <div id="modelos-catalogo" class="tabla-modelos"></div>
+    <h3>Dictado por voz</h3>
+    <p class="nota">Whisper convierte tu voz en texto dentro de este ordenador. El audio no se guarda ni sale del equipo.</p>
+    <div id="voz-modelos" class="tabla-modelos"></div>
+    <h3>Otro modelo de lenguaje</h3>
     <div class="fila-campo">
       <input id="modelo-libre" placeholder="Otra etiqueta de ollama.com, por ejemplo qwen3.5:9b">
       <button type="button" class="boton" id="descargar-libre">Descargar</button>
@@ -141,6 +149,29 @@
     <h2 id="licencia-titulo">Licencia</h2>
     <pre id="licencia-texto" class="licencia"></pre>
     <div class="dialogo-pie"><span class="hueco"></span><button value="cerrar" class="boton">Cerrar</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-texto" class="dialogo">
+  <form method="dialog">
+    <h2 id="texto-titulo">Renombrar</h2>
+    <label class="campo"><span class="visualmente-oculto">Nombre</span><input id="texto-valor" maxlength="120" required></label>
+    <div class="dialogo-pie"><span class="hueco"></span>
+      <button value="no" class="boton" formnovalidate>Cancelar</button>
+      <button value="si" class="boton boton-principal" id="texto-aceptar">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-mover" class="dialogo">
+  <form method="dialog">
+    <h2>Mover la conversación</h2>
+    <p class="nota">La conversación pasa al proyecto que elijas, con todos sus mensajes. Los planes que no se hayan confirmado se anulan, porque se referían a los archivos del proyecto de origen.</p>
+    <label class="campo">Proyecto de destino <select id="mover-destino"></select></label>
+    <div class="dialogo-pie"><span class="hueco"></span>
+      <button value="no" class="boton">Cancelar</button>
+      <button value="si" class="boton boton-principal">Mover</button>
+    </div>
   </form>
 </dialog>
 

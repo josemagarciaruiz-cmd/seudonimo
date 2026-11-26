@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Áurea Anonimus · lectura y tachado de PDF con PDFium (licencia Apache 2.0 / BSD).
+"""Seudónimo · lectura y tachado de PDF con PDFium (licencia Apache 2.0 / BSD).
 
 Sustituye a PyMuPDF, cuya licencia AGPL impedía distribuir la aplicación.
 

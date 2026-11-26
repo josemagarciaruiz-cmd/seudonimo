@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Construye «Áurea Asistente Local.app» y el .dmg para Mac con chip Apple.
+# Construye «Seudónimo.app» y el .dmg para Mac con chip Apple.
 # Se ejecuta en un Mac con Rust, Node y las herramientas de línea de órdenes de Xcode.
 #
 # Necesita, en descargas/python-mac.tar.gz, un Python 3.13 autocontenido para arm64 de
@@ -7,11 +7,13 @@
 #   https://github.com/astral-sh/python-build-standalone/releases
 #
 # Uso:  zsh empaquetado/mac/construir.sh
-# Resultado: salida/AureaAsistenteLocal-<versión>-Mac.dmg
+# El dictado necesita whisper-cli: si falta descargas/whisper-mac, lo compila whisper.sh (cmake).
+#
+# Resultado: salida/Seudonimo-<versión>-Mac.dmg
 set -e
 D="$(cd "$(dirname "$0")/../.." && pwd)"
 V="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' "$D/nucleo/version.py")"
-NOMBRE="Áurea Asistente Local"
+NOMBRE="Seudónimo"
 REC="$D/construccion/mac/recursos"
 rm -rf "$D/construccion/mac"
 mkdir -p "$REC"
@@ -27,6 +29,13 @@ find "$REC/python/lib" -type d \( -name "test" -o -name "tests" -o -name "idleli
 mkdir -p "$REC/nucleo"
 rsync -a --exclude "__pycache__" "$D/nucleo/" "$REC/nucleo/"
 
+# 2 bis. Dictado: whisper-cli estático (Metal incrustado) y su licencia
+[ -x "$D/descargas/whisper-mac/whisper-cli" ] || zsh "$D/empaquetado/mac/whisper.sh"
+mkdir -p "$REC/whisper" "$REC/licencias"
+cp "$D/descargas/whisper-mac/whisper-cli" "$REC/whisper/"
+cp "$D/descargas/whisper-mac/LICENSE-whisper.cpp.txt" "$REC/licencias/"
+cp "$D/THIRD_PARTY_NOTICES.md" "$REC/licencias/"
+
 # 3. La ventana de escritorio (Tauri)
 cd "$D/escritorio"
 [ -d node_modules/@tauri-apps/cli ] || npm install --include=dev --silent   # NODE_ENV=production omitiría la CLI
@@ -41,7 +50,7 @@ ditto "$REC" "$APP/Contents/Resources/recursos"
 # Antes de firmar y sin escribir bytecode: cualquier archivo nuevo dentro de la app rompe la firma.
 mkdir -p "$D/salida"
 PYTHONDONTWRITEBYTECODE=1 "$APP/Contents/Resources/recursos/python/bin/python3" -B -s "$D/empaquetado/sbom.py" \
-  "$D/escritorio/src-tauri/Cargo.lock" "$D/salida/AureaAsistenteLocal-$V-SBOM.cdx.json"
+  "$D/escritorio/src-tauri/Cargo.lock" "$D/salida/Seudonimo-$V-SBOM.cdx.json"
 find "$APP" -name "__pycache__" -type d -prune -exec rm -rf {} +
 chmod -R u+w "$APP"
 xattr -cr "$APP"
@@ -55,7 +64,7 @@ STG="$D/construccion/mac/dmg"
 mkdir -p "$STG" "$D/salida"
 ditto "$APP" "$STG/$NOMBRE.app"
 ln -s /Applications "$STG/Aplicaciones"
-DMG="$D/salida/AureaAsistenteLocal-$V-Mac.dmg"
+DMG="$D/salida/Seudonimo-$V-Mac.dmg"
 rm -f "$DMG"
 hdiutil create -volname "$NOMBRE" -srcfolder "$STG" -fs HFS+ -format UDZO -ov "$DMG" >/dev/null
 rm -rf "$STG"
