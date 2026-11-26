@@ -272,7 +272,21 @@ def _abrir_pdf(ruta):
         raise ErrorFormato(str(e))
 
 
+def extraer_paginas(ruta, ext, progreso=None, verificar=False, dpi=None):
+    """Texto de cada página (PDF); para el resto de formatos, una sola «página» con todo el texto."""
+    if ext == ".pdf":
+        return _paginas_pdf(ruta, progreso, verificar, dpi)
+    return [extraer_texto(ruta, ext, comprobar=False, progreso=progreso, verificar=verificar, dpi=dpi)]
+
+
 def _extraer_pdf(ruta, comprobar=True, progreso=None, verificar=False, dpi=None):
+    texto = "\n".join(_paginas_pdf(ruta, progreso, verificar, dpi))
+    if comprobar and not texto.strip():
+        raise ErrorFormato("No he encontrado texto en el PDF, ni siquiera con OCR.")
+    return texto
+
+
+def _paginas_pdf(ruta, progreso=None, verificar=False, dpi=None):
     with _abrir_pdf(ruta) as doc:
         escaneadas = [p.number for p in doc if necesita_ocr(p, verificar)]
         if escaneadas and not ocr.DISPONIBLE:
@@ -287,10 +301,7 @@ def _extraer_pdf(ruta, comprobar=True, progreso=None, verificar=False, dpi=None)
                 t_ocr = "\n".join(l["texto"] for l in lineas)
                 t = (t + "\n" + t_ocr) if verificar else t_ocr
             partes.append(t)
-    texto = "\n".join(partes)
-    if comprobar and not texto.strip():
-        raise ErrorFormato("No he encontrado texto en el PDF, ni siquiera con OCR.")
-    return texto
+    return partes
 
 
 # ---------------------------------------------------------------- escritura

@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.3.2 · 26 de noviembre de 2026
+
+- **Repasar páginas concretas.** En la mesa de revisión, los PDF se ven por páginas, con su número; las que conservan datos conocidos sin tapar se marcan en rojo. Marca «Repasar esta página» en una o varias y pulsa «Repasar»: el modelo vuelve a buscar datos solo en esas páginas, y la copia se regenera y se verifica entera. También se puede pedir por el chat: «Repasa las páginas 6 y 7 del informe».
+
 ## 0.3.1 · 26 de noviembre de 2026
 
 - **Cola de trabajos a la vista:** abajo a la izquierda se ve qué se está seudonimizando, en qué proyecto, con qué avance y cuántos trabajos esperan. Un clic lleva a su pestaña Progreso.

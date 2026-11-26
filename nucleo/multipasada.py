@@ -108,6 +108,7 @@ class TrabajoDocumento:
         self.ext = None
         self.ext_original = os.path.splitext(doc["nombre"])[1].lower()
         self.texto_original = None  # solo en memoria; nunca se guarda en disco
+        self.paginas_texto = None   # texto por página (PDF), para repasar solo unas páginas
         self.version_registro = -1
         self.aplicado = set()       # (forma, marcador) aplicados en el último ciclo
         self.aviso = None
@@ -165,9 +166,10 @@ class TrabajoDocumento:
         with self.crono.medir("preparacion"):
             self.ruta, self.ext, self.aviso = formatos.preparar(copia, orig)
         with self.crono.medir("extraccion_ocr"):
-            self.texto_original = formatos.extraer_texto(
+            self.paginas_texto = formatos.extraer_paginas(
                 self.ruta, self.ext,
                 progreso=lambda i, t: self.avisar(0.02 + 0.13 * i / t, "OCR de la página escaneada %d de %d" % (i, t)))
+            self.texto_original = "\n".join(self.paginas_texto)
         if not self.texto_original.strip():
             raise formatos.ErrorFormato("El documento no contiene texto que seudonimizar.")
 
@@ -181,6 +183,15 @@ class TrabajoDocumento:
 
     def _detectar(self):
         texto = self.texto_original
+        pags = self.doc.get("paginas")
+        if pags and self.paginas_texto and len(self.paginas_texto) > 1:
+            # repaso de unas páginas concretas: el modelo solo lee esas páginas; la copia se
+            # regenera entera desde el original con todo lo que ya sabe el registro
+            validas = [p for p in pags if 1 <= p <= len(self.paginas_texto)]
+            if not validas:
+                raise formatos.ErrorFormato("El documento tiene %d páginas: no existe la página %s." % (
+                    len(self.paginas_texto), ", ".join(map(str, pags))))
+            texto = "\n".join(self.paginas_texto[p - 1] for p in validas)
         # Pasada de detección 1: reglas + modelo con el prompt de detección
         self.comprobar()
         ents = motor.detectar_regex(texto) + registro_mod.de_la_lista(texto)
@@ -338,7 +349,7 @@ class TrabajoLote:
                 "perfil": self.ajustes["perfil"], "modelo": self.ajustes.get("modelo"),
                 "docs": [{"id": d.doc["id"], "nombre": d.doc["nombre"], "rel": d.doc["rel"], "estado": d.estado,
                           "estado_texto": ESTADOS[d.estado], "motivos": d.motivos, "pasadas": d.pasadas,
-                          "incidencias": d.incidencias, "aviso": d.aviso} for d in self.docs],
+                          "incidencias": d.incidencias, "aviso": d.aviso, "paginas": d.doc.get("paginas")} for d in self.docs],
                 "registro": self.registro.resumen(), "destino": self.destino, "informe": self.informe}
 
     def ejecutar(self):

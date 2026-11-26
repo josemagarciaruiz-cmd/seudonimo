@@ -374,28 +374,32 @@ function nodoPlan(plan, mid, datos) {
   d.className = "plan";
   const n = plan.archivos.length;
   const estado = plan.estado;   // confirmado | descartado | undefined
+  const pags = plan.paginas && plan.paginas.length ? plan.paginas : null;
+  const titulo = pags ? `Repasar ${pags.length === 1 ? "la página " + pags[0] : "las páginas " + pags.join(", ")} de ${plan.nombres[0]}`
+    : `Seudonimizar ${n} archivo${n === 1 ? "" : "s"}`;
   if (estado) {
     d.classList.add("cerrado");
-    d.innerHTML = `<h4>Seudonimización de ${n} archivo${n === 1 ? "" : "s"}</h4>
+    d.innerHTML = `<h4>${esc(pags ? titulo : `Seudonimización de ${n} archivo${n === 1 ? "" : "s"}`)}</h4>
       <p class="resultado">${estado === "confirmado" ? `Confirmada (${plan.perfil === "intensivo" ? "verificación intensiva" : "verificación estándar"}). El avance está en la pestaña Progreso.` : estado === "otro_proyecto" ? "Este plan era del proyecto de origen de la conversación. Si lo necesitas aquí, vuelve a pedirlo." : "Descartada."}</p>`;
     return d;
   }
   const intensivo = plan.perfil === "intensivo";
-  d.innerHTML = `<h4>Seudonimizar ${n} archivo${n === 1 ? "" : "s"}</h4>
-    <ul class="plan-archivos">${plan.nombres.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+  d.innerHTML = `<h4>${esc(titulo)}</h4>
+    ${pags ? `<p class="nota">El modelo vuelve a buscar datos solo en ${pags.length === 1 ? "esa página" : "esas páginas"}; después la copia se regenera y se verifica entera.</p>`
+      : `<ul class="plan-archivos">${plan.nombres.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`}
     <div class="plan-opciones">
       <label class="opcion"><input type="radio" name="perfil-${mid}" value="estandar"${intensivo ? "" : " checked"}> <span>Verificación estándar</span></label>
       <label class="opcion"><input type="radio" name="perfil-${mid}" value="intensivo"${intensivo ? " checked" : ""}> <span>Verificación intensiva (más lenta)</span></label>
     </div>
     <p class="nota">Se crean copias en la carpeta de resultados del proyecto, separadas en «Aprobados» y «Para revisar». Los originales no se tocan.</p>
     <div class="plan-acciones">
-      <button class="boton boton-principal" data-confirmar>Seudonimizar ${n} archivo${n === 1 ? "" : "s"}</button>
+      <button class="boton boton-principal" data-confirmar>${pags ? "Repasar" : `Seudonimizar ${n} archivo${n === 1 ? "" : "s"}`}</button>
       <button class="boton" data-descartar>Descartar</button>
     </div>`;
   $("[data-confirmar]", d).onclick = async () => {
     const perfil = $(`input[name="perfil-${mid}"]:checked`, d).value;
     try {
-      const r = await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, { archivos: plan.archivos, perfil, conversacion: E.conversacion });
+      const r = await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, { archivos: plan.archivos, perfil, conversacion: E.conversacion, ...(pags ? { paginas: pags } : {}) });
       plan.estado = "confirmado"; plan.perfil = perfil; plan.trabajo = r.id;
       await guardarPlanes(mid, datos);
       d.replaceWith(nodoPlan(plan, mid, datos));
@@ -599,7 +603,7 @@ function pintarOperaciones() {
       ${activo ? `<div class="progreso"><i style="width:${Math.round(t.progreso * 100)}%"></i></div><div class="trabajo-msg">${esc(t.mensaje)}</div>` :
         `<p class="nota">${cuenta("sin_hallazgos")} sin hallazgos · ${cuenta("revision")} para revisar · ${cuenta("error")} con error${cuenta("cancelado") ? ` · ${cuenta("cancelado")} cancelados` : ""}</p>`}
       ${t.docs.map((d) => `<div class="doc">
-        <div class="doc-cab"><span>${esc(d.rel)}</span><span class="chip ${esc(d.estado)}">${esc(ESTADOS[d.estado] || d.estado)}</span></div>
+        <div class="doc-cab"><span>${esc(d.rel)}${d.paginas && d.paginas.length ? ` <span class="nota">· repaso de ${d.paginas.length === 1 ? "la página " + d.paginas[0] : "las páginas " + d.paginas.join(", ")}</span>` : ""}</span><span class="chip ${esc(d.estado)}">${esc(ESTADOS[d.estado] || d.estado)}</span></div>
         <div class="pista">${pistaDoc(d)}</div>
         ${d.motivos && d.motivos.length ? `<ul class="doc-motivos">${d.motivos.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}
       </div>`).join("")}
@@ -979,7 +983,7 @@ function pintarVoz(v) {
 // La copia seudonimizada a pantalla completa: se selecciona con el ratón lo que se ha escapado
 // («Tapar») y se hace clic en un marcador para descartarlo. Los cambios se aplican al rehacer.
 
-const MESA = { copias: [], actual: null, datos: null, registro: null, pendientes: 0, trabajo: null, sondeo: null };
+const MESA = { copias: [], actual: null, datos: null, registro: null, pendientes: 0, trabajo: null, sondeo: null, paginas: new Set() };
 const RE_MARCA = /\[(?:[A-Z_]+_\d{1,4}|LOGO O SELLO)\]/g;
 
 async function abrirMesa(aid) {
@@ -1017,6 +1021,8 @@ function pintarDocsMesa() {
 
 async function verCopia(aid) {
   $("#mesa-pop").hidden = true;
+  MESA.paginas.clear();
+  pintarRepaso();
   MESA.actual = MESA.copias.find((c) => c.id === aid);
   pintarDocsMesa();
   const hoja = $("#mesa-texto");
@@ -1034,20 +1040,42 @@ function pintarHoja() {
   const tramos = d.escapados.map((x) => ({ ini: x.ini, fin: x.fin, tipo: "escapado", marca: x.marcador }));
   for (const m of t.matchAll(RE_MARCA)) tramos.push({ ini: m.index, fin: m.index + m[0].length, tipo: "marca", marca: m[0] });
   tramos.sort((a, b) => a.ini - b.ini || b.fin - a.fin);
-  let html = "", pos = 0;
-  for (const s of tramos) {
-    if (s.ini < pos) continue;
-    html += esc(t.slice(pos, s.ini));
-    const trozo = esc(t.slice(s.ini, s.fin));
-    html += s.tipo === "marca"
-      ? `<button type="button" class="tachon marca" data-marca="${esc(s.marca)}">${trozo}</button>`
-      : `<mark class="escapado" data-marca="${esc(s.marca)}" title="Este dato ya está en la lista de datos tapados (${esc(s.marca)}) pero sigue a la vista en esta copia. Rehaz la copia.">${trozo}</mark>`;
-    pos = s.fin;
-  }
-  html += esc(t.slice(pos));
+  // el texto se pinta por páginas (PDF): cada una con su número y su casilla «Repasar»
+  const cortes = d.paginas && d.paginas.length ? d.paginas : [0];
+  const pintarTramo = (a, b) => {
+    let html = "", pos = a;
+    for (const s of tramos) {
+      if (s.ini < pos || s.ini >= b) continue;
+      html += esc(t.slice(pos, s.ini));
+      const trozo = esc(t.slice(s.ini, Math.min(s.fin, b)));
+      html += s.tipo === "marca"
+        ? `<button type="button" class="tachon marca" data-marca="${esc(s.marca)}">${trozo}</button>`
+        : `<mark class="escapado" data-marca="${esc(s.marca)}" title="Este dato ya está en la lista de datos tapados (${esc(s.marca)}) pero sigue a la vista en esta copia. Rehaz la copia.">${trozo}</mark>`;
+      pos = Math.min(s.fin, b);
+    }
+    return html + esc(t.slice(pos, b));
+  };
+  const enRojo = (a, b) => d.escapados.some((x) => x.ini >= a && x.ini < b);
+  let html = "";
+  cortes.forEach((ini, i) => {
+    const fin = i + 1 < cortes.length ? cortes[i + 1] : t.length;
+    const cuerpo = pintarTramo(ini, fin).replace(/\n+$/, "");
+    if (cortes.length === 1) { html += `<div class="texto-copia">${cuerpo}</div>`; return; }
+    const n = i + 1;
+    html += `<section class="pagina${enRojo(ini, fin) ? " con-restos" : ""}" id="pagina-${n}">
+      <header class="pagina-cab"><span>Página ${n} de ${cortes.length}</span>
+        <label class="opcion repaso"><input type="checkbox" data-repasar-pagina="${n}"${MESA.paginas.has(n) ? " checked" : ""}> <span>Repasar esta página</span></label></header>
+      <div class="texto-copia">${cuerpo || '<span class="nota">Página sin texto legible.</span>'}</div></section>`;
+  });
   const n = d.escapados.length;
   $("#mesa-texto").innerHTML = (n ? `<p class="aviso-hoja">${n} dato${n === 1 ? "" : "s"} conocido${n === 1 ? "" : "s"} sigue${n === 1 ? "" : "n"} a la vista en esta copia (en rojo). Pulsa «Rehacer esta copia».</p>` : "")
-    + `<div class="texto-copia">${html || '<span class="nota">La copia no tiene texto legible.</span>'}</div>`;
+    + (cortes.length > 1 ? `<p class="nota ayuda-repaso">¿Una página con datos sin tapar? Marca «Repasar esta página» y pulsa «Repasar páginas»: el modelo vuelve a leer solo esas páginas.</p>` : "")
+    + (html || '<span class="nota">La copia no tiene texto legible.</span>');
+  $$("[data-repasar-pagina]").forEach((c) => (c.onchange = () => {
+    const p = +c.dataset.repasarPagina;
+    if (c.checked) MESA.paginas.add(p); else MESA.paginas.delete(p);
+    pintarRepaso();
+  }));
   $("#mesa-hoja").scrollTop = 0;
   $("#mesa-rehacer-uno").disabled = !!MESA.trabajo;
 }
@@ -1126,19 +1154,42 @@ function pintarPendientes() {
   el.textContent = MESA.trabajo ? MESA.trabajo : `${MESA.pendientes} cambio${MESA.pendientes === 1 ? "" : "s"} sin aplicar`;
   $("#mesa-rehacer-uno").disabled = !!MESA.trabajo;
   $("#mesa-rehacer-todas").disabled = !!MESA.trabajo;
+  pintarRepaso();
 }
 
-async function rehacer(ids) {
+function pintarRepaso() {
+  const b = $("#mesa-repasar");
+  const n = MESA.paginas.size;
+  b.hidden = !n;
+  b.disabled = !!MESA.trabajo;
+  b.textContent = n === 1 ? `Repasar la página ${[...MESA.paginas][0]}` : `Repasar ${n} páginas`;
+}
+
+async function repasarPaginas() {
+  const pags = [...MESA.paginas].sort((a, b) => a - b);
+  if (!pags.length || !MESA.actual) return;
+  const intensiva = $("#intensiva").checked;
+  const ok = await confirmar(pags.length === 1 ? `Repasar la página ${pags[0]}` : `Repasar las páginas ${pags.join(", ")}`,
+    `El modelo vuelve a buscar datos solo en ${pags.length === 1 ? "esa página" : "esas páginas"}${intensiva ? ", con verificación intensiva" : ""}. Lo que encuentre se añade a los datos del proyecto y la copia se regenera y se verifica entera. Tarda bastante menos que repasar el documento completo.`, "Repasar");
+  if (!ok) return;
+  await rehacer([MESA.actual.id], pags);
+  MESA.paginas.clear();
+}
+
+async function rehacer(ids, paginas) {
   const perfil = $("#intensiva").checked ? "intensivo" : "estandar";
-  const r = await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, { archivos: ids, solo_ciclos: true, perfil, conversacion: E.conversacion });
-  MESA.trabajo = "Rehaciendo…";
+  const cuerpo = paginas ? { archivos: ids, paginas, perfil, conversacion: E.conversacion }
+    : { archivos: ids, solo_ciclos: true, perfil, conversacion: E.conversacion };
+  const r = await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, cuerpo);
+  MESA.trabajo = paginas ? "Repasando…" : "Rehaciendo…";
   pintarPendientes();
   clearTimeout(MESA.sondeo);
   const seguir = async () => {
     let t;
     try { t = await api("GET", `/api/trabajos/${r.id}`); } catch (e) { t = null; }
     if (t && ["pendiente", "procesando"].includes(t.estado)) {
-      MESA.trabajo = `Rehaciendo ${ids.length === 1 ? "la copia" : ids.length + " copias"}… ${Math.round(t.progreso * 100)} %`;
+      MESA.trabajo = paginas ? `Repasando ${paginas.length === 1 ? "la página " + paginas[0] : paginas.length + " páginas"}… ${Math.round(t.progreso * 100)} %`
+        : `Rehaciendo ${ids.length === 1 ? "la copia" : ids.length + " copias"}… ${Math.round(t.progreso * 100)} %`;
       pintarPendientes();
       MESA.sondeo = setTimeout(seguir, 1500);
       return;
@@ -1153,7 +1204,7 @@ async function rehacer(ids) {
     MESA.copias = await api("GET", `/api/proyectos/${E.proyecto.id}/copias`);
     await cargarRegistroMesa();
     await verCopia(MESA.copias.some((c) => c.id === actual) ? actual : MESA.copias[0].id);
-    avisoFlotante("Copias rehechas y verificadas.");
+    avisoFlotante(paginas ? "Páginas repasadas: copia regenerada y verificada." : "Copias rehechas y verificadas.");
   };
   seguir();
 }
@@ -1349,6 +1400,7 @@ function enlazar() {
     ]);
   };
   $("#mesa-cerrar").onclick = cerrarMesa;
+  $("#mesa-repasar").onclick = () => repasarPaginas().catch((e) => alerta(e.message));
   $("#mesa-rehacer-uno").onclick = () => MESA.actual && rehacer([MESA.actual.id]).catch((e) => alerta(e.message));
   $("#mesa-rehacer-todas").onclick = () => rehacer(MESA.copias.map((c) => c.id)).catch((e) => alerta(e.message));
   $("#mesa-abrir").onclick = () => MESA.actual && api("POST", "/api/abrir", { ruta: MESA.actual.ruta }).catch((e) => alerta(e.message));

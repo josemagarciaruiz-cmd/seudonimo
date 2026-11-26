@@ -85,14 +85,16 @@ class Gestor:
         self.meta = {}           # id -> {proyecto, conversacion, creado}
         threading.Thread(target=self._bucle, daemon=True, name="trabajos").start()
 
-    def lanzar(self, proyecto, archivos, perfil, modelo, conversacion=None, solo_ciclos=False):
+    def lanzar(self, proyecto, archivos, perfil, modelo, conversacion=None, solo_ciclos=False, paginas=None):
         """archivos: filas del inventario (con «ruta», «rel», «nombre», «id»)."""
         tid = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
         reg = registro(proyecto["id"], proyecto["tabla"])
         reg.conservar = conservar(proyecto)
         base = proyecto.get("salida") or os.path.join(rutas.SALIDAS, _nombre_carpeta(proyecto["nombre"]))
         destino = os.path.join(base, time.strftime("%Y-%m-%d %H.%M.%S"))
-        docs = [{"id": a["id"], "ruta": a["ruta"], "rel": a["rel"] or a["nombre"], "nombre": a["nombre"]} for a in archivos]
+        paginas = paginas or {}
+        docs = [{"id": a["id"], "ruta": a["ruta"], "rel": a["rel"] or a["nombre"], "nombre": a["nombre"],
+                 "paginas": paginas.get(a["id"])} for a in archivos]
         lote = multipasada.TrabajoLote(tid, docs, reg, perfil=perfil, modelo=modelo, logos=bool(proyecto.get("logos", 1)),
                                        destino=destino, al_terminar=self._terminado)
         lote.ajustes["solo_ciclos"] = solo_ciclos

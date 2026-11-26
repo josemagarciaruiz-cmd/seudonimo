@@ -417,7 +417,20 @@ def lanzar_trabajo(pid):
         return jsonify(error="Estos archivos ya no están en su carpeta: %s" % ", ".join(faltan[:5])), 400
     perfil = d.get("perfil") if d.get("perfil") in multipasada.PERFILES else p["perfil"]
     modelo = d.get("modelo") or p.get("modelo") or ALM.ajuste("modelo_defecto", motor.MODELO)
-    tid = GESTOR.lanzar(p, elegidos, perfil, modelo, d.get("conversacion"), bool(d.get("solo_ciclos")))
+    paginas = {}
+    if d.get("paginas"):
+        try:
+            if isinstance(d["paginas"], dict):
+                paginas = {int(k): sorted({int(x) for x in v})[:300] for k, v in d["paginas"].items() if v}
+            elif len(elegidos) == 1:
+                paginas = {elegidos[0]["id"]: sorted({int(x) for x in d["paginas"]})[:300]}
+            else:
+                return jsonify(error="Para repasar páginas concretas, elige un solo documento."), 400
+        except (TypeError, ValueError):
+            return jsonify(error="Números de página no válidos."), 400
+        if any(x < 1 for v in paginas.values() for x in v):
+            return jsonify(error="Las páginas se numeran desde la 1."), 400
+    tid = GESTOR.lanzar(p, elegidos, perfil, modelo, d.get("conversacion"), bool(d.get("solo_ciclos")) and not paginas, paginas)
     return jsonify(id=tid, estado=GESTOR.estado(tid))
 
 
@@ -562,14 +575,21 @@ def _copias(pid):
     return res
 
 
-def _texto_copia(c):
+def _paginas_copia(c):
     clave = (c["ruta"], os.path.getmtime(c["ruta"]))
     if clave not in _TEXTOS:
         if len(_TEXTOS) > 40:
             _TEXTOS.clear()
         ext = os.path.splitext(c["ruta"])[1].lower()
-        _TEXTOS[clave] = formatos.extraer_texto(c["ruta"], ext, comprobar=False)
+        _TEXTOS[clave] = formatos.extraer_paginas(c["ruta"], ext)
     return _TEXTOS[clave]
+
+
+SEPARADOR_PAGINAS = "\n\n"
+
+
+def _texto_copia(c):
+    return SEPARADOR_PAGINAS.join(_paginas_copia(c))
 
 
 @app.get("/api/proyectos/<int:pid>/copias")
@@ -586,9 +606,14 @@ def texto_copia(pid, aid):
     if not c:
         return jsonify(error="Este archivo todavía no tiene una copia seudonimizada."), 404
     try:
-        texto = _texto_copia(c)
+        paginas = _paginas_copia(c)
     except Exception as e:  # noqa
         return jsonify(error="No he podido leer la copia: %s" % str(e)[:200]), 400
+    texto = SEPARADOR_PAGINAS.join(paginas)
+    cortes, pos = [], 0
+    for pg in paginas:               # dónde empieza cada página dentro del texto
+        cortes.append(pos)
+        pos += len(pg) + len(SEPARADOR_PAGINAS)
     r = _registro(p)
     escapados = []
     for e in r.mapa():
@@ -596,7 +621,7 @@ def texto_copia(pid, aid):
             escapados.append({"ini": m.start(), "fin": m.end(), "marcador": e["marcador"]})
             if len(escapados) > 500:
                 break
-    return jsonify(dict(c, texto=texto, escapados=escapados))
+    return jsonify(dict(c, texto=texto, escapados=escapados, paginas=cortes if len(paginas) > 1 else []))
 
 
 def _texto_para_ia(pid, ids=None):

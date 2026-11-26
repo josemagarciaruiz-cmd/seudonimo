@@ -43,7 +43,9 @@ ESQUEMAS = [
             "archivos": {"type": "array", "items": {"type": "string"},
                          "description": "Nombres de archivo; lista vacía o [\"todos\"] para todos los admitidos del proyecto"},
             "perfil": {"type": "string", "enum": ["estandar", "intensivo"],
-                       "description": "«intensivo» = verificación intensiva: más ciclos y un modelo auditor en cada verificación"}},
+                       "description": "«intensivo» = verificación intensiva: más ciclos y un modelo auditor en cada verificación"},
+            "paginas": {"type": "array", "items": {"type": "integer"},
+                        "description": "Solo si el usuario pide repasar páginas concretas de UN PDF (por ejemplo «repasa las páginas 6 y 7»): números de página, empezando en 1. El modelo vuelve a buscar datos solo en esas páginas y la copia se regenera entera."}},
             "required": ["archivos"]}}},
     {"type": "function", "function": {
         "name": "verificar_documento",
@@ -142,6 +144,19 @@ def ejecutar(nombre, args, ctx):
         if not elegidos:
             raise ErrorHerramienta("El proyecto no tiene archivos admitidos. Pide al usuario que añada una carpeta o archivos.")
         perfil = args.get("perfil") if args.get("perfil") in multipasada.PERFILES else (pr.get("perfil") or "estandar")
+        paginas = []
+        for x in args.get("paginas") or []:
+            try:
+                if int(x) >= 1:
+                    paginas.append(int(x))
+            except (TypeError, ValueError):
+                pass
+        if paginas:
+            if len(elegidos) != 1:
+                raise ErrorHerramienta("Para repasar páginas concretas hay que indicar un solo documento.")
+            return {"plan": True, "accion": "repasar", "perfil": perfil, "archivos": [elegidos[0]["id"]],
+                    "nombres": [elegidos[0]["rel"]], "paginas": sorted(set(paginas)), "parametros": multipasada.PERFILES[perfil],
+                    "mensaje": "Plan preparado para repasar esas páginas: el usuario debe confirmarlo en la aplicación."}
         return {"plan": True, "accion": "seudonimizar", "perfil": perfil, "archivos": [a["id"] for a in elegidos],
                 "nombres": [a["rel"] for a in elegidos], "parametros": multipasada.PERFILES[perfil],
                 "mensaje": "Plan preparado: el usuario debe confirmarlo en la aplicación antes de ejecutarse."}
