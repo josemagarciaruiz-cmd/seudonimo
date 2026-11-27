@@ -44,6 +44,8 @@ Pulsa **«Abrir la mesa de revisión»** (en Documentos o en Datos tapados) o «
 
 **Seudonimizar solo unas páginas.** Pide en el chat «Seudonimiza solo la página 6 del informe»: el plan te deja elegir «Solo esas páginas» (la copia solo tiene esas páginas) o «Documento completo». Vale para PDF, Word (las páginas que Word apuntó al guardar el documento), PowerPoint (diapositivas) y Excel (hojas): «sácame solo la hoja 2 del Excel de nóminas».
 
+**Imágenes y hojas de Excel.** El texto que va dentro de las imágenes se lee y se tapa en los PDF, Word, PowerPoint y Excel. Si el nombre de una hoja de Excel lleva un dato, la hoja se renombra («Nóminas PERSONA_001») y sus fórmulas se ajustan solas.
+
 **Pedir que tape algo que se ha quedado a la vista.** Si al revisar ves un dato sin tapar, sobre todo dentro de una imagen (la firma de un correo, un sello con un nombre), díselo al asistente: «en la página 2 se ve "Rodríguez" en la firma, tápalo». Te enseña una tarjeta con lo que va a tapar; al confirmarla lo añade a los datos del proyecto y rehace la copia, también dentro de las imágenes.
 
 **Repasar solo unas páginas.** En los PDF, la mesa muestra el documento por páginas; las que tienen datos conocidos sin tapar llevan el número en rojo. Si en una o dos páginas se han quedado datos, marca «Repasar esta página» en ellas y pulsa «Repasar»: el modelo vuelve a buscar solo en esas páginas (mucho más rápido que el documento entero) y la copia se regenera y se verifica. También puedes pedirlo en el chat: «Repasa las páginas 6 y 7 del informe del INSS».

@@ -13,6 +13,7 @@ from PIL import Image, ImageOps
 
 import correo
 import motor
+import imagenes_office
 import ocr
 import paginas_office
 import pdfdoc
@@ -23,6 +24,8 @@ W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 XML_SPACE = "{http://www.w3.org/XML/1998/namespace}space"
+CH = "http://schemas.openxmlformats.org/drawingml/2006/chart"
+PML = "http://schemas.openxmlformats.org/presentationml/2006/main"
 
 TEXTO = {".txt", ".csv", ".tsv", ".md"}
 ZIP = {".docx": "docx", ".docm": "docx", ".pptx": "pptx", ".pptm": "pptx",
@@ -35,10 +38,16 @@ if rutas.ES_MAC:
 CORREOS = correo.EXTENSIONES          # .eml, .msg y chats de WhatsApp (.zip): se entregan como .txt
 ADMITIDOS = TEXTO | set(ZIP) | set(CONVERTIBLES) | IMAGENES | CORREOS | {".pdf"}
 
+_DML = r"charts/chart\d+|diagrams/(?:data|drawing)\d+"
 PARTES = {
-    "docx": [(re.compile(r"^word/(document|header\d*|footer\d*|footnotes|endnotes|comments)\.xml$"), "docx")],
-    "pptx": [(re.compile(r"^ppt/(slides/slide\d+|notesSlides/notesSlide\d+)\.xml$"), "pptx")],
+    "docx": [(re.compile(r"^word/(document|header\d*|footer\d*|footnotes|endnotes|comments)\.xml$"), "docx"),
+             (re.compile(r"^word/(%s)\.xml$" % _DML), "dml")],
+    "pptx": [(re.compile(r"^ppt/(slides/slide\d+|notesSlides/notesSlide\d+)\.xml$"), "pptx"),
+             # patrones y diseños: pies de página y textos fijos («Despacho X · confidencial»)
+             (re.compile(r"^ppt/(slideMasters/slideMaster\d+|slideLayouts/slideLayout\d+|notesMasters/notesMaster\d+)\.xml$"), "patron"),
+             (re.compile(r"^ppt/(%s)\.xml$" % _DML), "dml")],
     "xlsx": [(re.compile(r"^xl/sharedStrings\.xml$"), "sst"),
+             (re.compile(r"^xl/(drawings/drawing\d+|%s)\.xml$" % _DML), "dml"),
              (re.compile(r"^xl/comments(/comment)?\d*\.xml$"), "xlcom"),
              (re.compile(r"^xl/threadedComments/threadedComment\d*\.xml$"), "xlhilo"),
              (re.compile(r"^xl/worksheets/sheet\d+\.xml$"), "hoja")],
@@ -177,12 +186,27 @@ def _unidades(root, kind):
             ts = [t for t in p.iter() if t.tag in tags and _ancestro(t, {P}) is p]
             if ts:
                 yield ts
-    elif kind == "pptx":
+    elif kind in ("pptx", "dml", "patron"):
         P, T = "{%s}p" % A, "{%s}t" % A
+        SP, PH = "{%s}sp" % PML, "{%s}ph" % PML
         for p in root.iter(P):
+            if kind == "patron":
+                # en los patrones solo cuenta el texto fijo (un pie, un aviso); el de los marcadores
+                # de posición es «Haga clic para modificar…»
+                sp = _ancestro(p, {SP})
+                ph = next(sp.iter(PH), None) if sp is not None else None
+                if ph is not None and ph.get("type") != "ftr":
+                    continue
             ts = [t for t in p.iter(T) if _ancestro(t, {P}) is p]
             if ts:
                 yield ts
+        if kind == "dml":
+            # valores de texto guardados en los gráficos (etiquetas de categorías y series que
+            # vienen de las celdas: pueden ser nombres)
+            for cache in root.iter("{%s}strCache" % CH, "{%s}multiLvlStrCache" % CH):
+                for v in cache.iter("{%s}v" % CH):
+                    if v.text:
+                        yield [v]
     else:
         T, RPH = "{%s}t" % S, "{%s}rPh" % S
         if kind == "xlhilo":   # comentarios encadenados de Excel 365: <text> sin espacio de nombres de hoja
@@ -252,6 +276,13 @@ def extraer_texto(ruta, ext, comprobar=True, progreso=None, verificar=False, dpi
                 if kind == "hoja":
                     for c, v, _ in _celdas(root):
                         partes.append(v.text)
+            if familia == "xlsx" and "xl/workbook.xml" in z.namelist():
+                partes += [n for n in nombres_hojas(z.read("xl/workbook.xml")) if n.strip()]
+            for nombre in _nombres_ordenados(z):
+                if imagenes_office.es_imagen(nombre):
+                    t = imagenes_office.texto(z.read(nombre))
+                    if t.strip():
+                        partes.append(t)
     except zipfile.BadZipFile:
         raise ErrorFormato("El archivo está dañado o protegido con contraseña.")
     return "\n".join(partes)
@@ -392,8 +423,7 @@ def aplicar(origen, destino, ext, mapa, opciones=None):
         return {}
     if ext == ".pdf":
         return _aplicar_pdf(origen, destino, mapa, logos=bool(opciones.get("logos", True)), extra=opciones.get("extra"))
-    _aplicar_zip(origen, destino, ZIP[ext], mapa)
-    return {}
+    return _aplicar_zip(origen, destino, ZIP[ext], mapa)
 
 
 def _preservar(ts):
@@ -403,10 +433,25 @@ def _preservar(ts):
 
 
 def _aplicar_zip(origen, destino, familia, mapa):
+    info = {"vectoriales": 0, "imagenes_tapadas": 0}
     with zipfile.ZipFile(origen) as zin, zipfile.ZipFile(destino, "w", zipfile.ZIP_DEFLATED) as zout:
+        hojas = {}
+        if familia == "xlsx" and "xl/workbook.xml" in zin.namelist():
+            hojas = renombrar_hojas_plan(zin.read("xl/workbook.xml"), mapa)
         for item in zin.infolist():
             data = zin.read(item.filename)
             kind = _tipo_parte(item.filename, familia)
+            if imagenes_office.es_imagen(item.filename):
+                nueva = imagenes_office.tapar(data, item.filename, mapa)
+                if nueva is not None:
+                    data = nueva
+                    info["imagenes_tapadas"] += 1
+                zout.writestr(item, data)
+                continue
+            if imagenes_office.es_vectorial(item.filename):
+                info["vectoriales"] += 1
+            if hojas and item.filename.endswith(".xml") and (item.filename.startswith("xl/") or item.filename == "docProps/app.xml"):
+                data = _aplicar_hojas(data, hojas)
             if kind:
                 root = etree.fromstring(data, PARSER)
                 for ts in _unidades(root, kind):
@@ -437,6 +482,81 @@ def _aplicar_zip(origen, destino, familia, mapa):
             if item.filename.endswith(".xml"):
                 data = _limpiar_autoria(data)
             zout.writestr(item, data)
+    return info
+
+
+# ---------------------------------------------------------------- nombres de las hojas de Excel
+
+_PROHIBIDOS_HOJA = re.compile(r"[\[\]:*?/\\]")
+
+
+def nombres_hojas(data):
+    root = etree.fromstring(data, PARSER)
+    return [h.get("name") or "" for h in root.iter("{%s}sheet" % S)]
+
+
+def renombrar_hojas_plan(data, mapa):
+    """{nombre viejo: nombre nuevo} de las hojas cuyo nombre lleva algún dato. En un nombre de
+    hoja no caben corchetes, así que el marcador va sin ellos («Nóminas PERSONA_001»)."""
+    viejos = nombres_hojas(data)
+    usados = {v.lower() for v in viejos}
+    plan = {}
+    for v in viejos:
+        nuevo = motor.reemplazar_texto(v, mapa)
+        if nuevo == v:
+            continue
+        nuevo = re.sub(r"\[([A-Z_]+_\d+)\]", r"\1", nuevo)
+        nuevo = _PROHIBIDOS_HOJA.sub(" ", nuevo).strip().strip("'")[:31].strip() or "Hoja"
+        base, n = nuevo, 2
+        while nuevo.lower() in usados:
+            suf = " (%d)" % n
+            nuevo = base[:31 - len(suf)] + suf
+            n += 1
+        usados.add(nuevo.lower())
+        plan[v] = nuevo
+    return plan
+
+
+def _ref_hoja(nombre):
+    return "'%s'" % nombre.replace("'", "''")
+
+
+def _cambiar_refs(texto, plan):
+    """Cambia las referencias a hojas renombradas dentro de una fórmula: 'Ana Ruiz'!A1, Datos!B2."""
+    for viejo, nuevo in plan.items():
+        texto = texto.replace(_ref_hoja(viejo) + "!", _ref_hoja(nuevo) + "!")
+        if re.fullmatch(r"[^\W\d][\w.]*", viejo):
+            texto = re.sub(r"(?<![\w.'])" + re.escape(viejo) + r"!", lambda m: _ref_hoja(nuevo) + "!", texto)
+    return texto
+
+
+_FORMULAS = {"f", "definedName", "formula", "formula1", "formula2"}
+
+
+def _aplicar_hojas(data, plan):
+    """Renombra las hojas en el libro y en todo lo que las nombra: fórmulas, nombres definidos,
+    gráficos, validaciones, hipervínculos internos, tablas dinámicas y propiedades del archivo."""
+    # los nombres pueden ir con referencias de carácter (N&#243;minas): se mira en el texto ya leído
+    try:
+        root = etree.fromstring(data, PARSER)
+    except etree.XMLSyntaxError:
+        return data
+    for el in root.iter():
+        if not isinstance(el.tag, str):
+            continue
+        local = etree.QName(el).localname
+        if local == "sheet" and el.get("name") in plan:
+            el.set("name", plan[el.get("name")])
+        if local in _FORMULAS and el.text:
+            el.text = _cambiar_refs(el.text, plan)
+        if local == "lpstr" and el.text in plan:          # docProps/app.xml
+            el.text = plan[el.text]
+        for atributo in ("location", "ref", "sqref"):
+            if el.get(atributo) and "!" in el.get(atributo):
+                el.set(atributo, _cambiar_refs(el.get(atributo), plan))
+        if local == "worksheetSource" and el.get("sheet") in plan:   # origen de una tabla dinámica
+            el.set("sheet", plan[el.get("sheet")])
+    return etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
 
 
 _AUTORIA = {"author", "initials", "userId", "providerId", "lastModifiedBy", "creator"}

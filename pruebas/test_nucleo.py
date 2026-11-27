@@ -228,3 +228,60 @@ def test_partes_de_office_y_recorte_sin_restos():
         assert len(formatos.extraer_paginas(corte, ext)) == 2
         with zipfile.ZipFile(corte) as z:
             assert not any(b"Pedro" in z.read(n) for n in z.namelist())
+
+
+def test_hojas_de_excel_renombradas_con_sus_formulas():
+    import re
+    import zipfile
+    import pytest
+    openpyxl = pytest.importorskip("openpyxl")
+    import formatos
+    d = tempfile.mkdtemp()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Nóminas Ana Ruiz"
+    ws["B1"] = 1500
+    wb.create_sheet("Resumen")["B1"] = "='Nóminas Ana Ruiz'!B1"
+    ruta, salida = os.path.join(d, "l.xlsx"), os.path.join(d, "s.xlsx")
+    wb.save(ruta)
+    assert "Nóminas Ana Ruiz" in formatos.extraer_texto(ruta, ".xlsx")
+    formatos.aplicar(ruta, salida, ".xlsx", [{"texto": "Ana Ruiz", "tipo": "PERSONA", "marcador": "[PERSONA_001]"}])
+    with zipfile.ZipFile(salida) as z:
+        todo = b"".join(z.read(n) for n in z.namelist()).decode("utf-8", "ignore")
+    assert "Ana Ruiz" not in todo and "N&#243;minas Ana" not in todo
+    assert openpyxl.load_workbook(salida).sheetnames == ["Nóminas PERSONA_001", "Resumen"]
+    assert re.search(r"<f>'N(ó|&#243;)minas PERSONA_001'!B1</f>", todo)
+
+
+def test_texto_en_imagenes_de_office():
+    import io
+    import zipfile
+    import pytest
+    import ocr
+    if not ocr.DISPONIBLE:
+        pytest.skip("sin OCR")
+    docx = pytest.importorskip("docx")
+    from PIL import Image, ImageDraw, ImageFont
+    import formatos
+    try:
+        fuente = ImageFont.truetype("DejaVuSans.ttf", 36)
+    except OSError:
+        try:
+            fuente = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial.ttf", 36)
+        except OSError:
+            pytest.skip("sin fuente para dibujar")
+    im = Image.new("RGB", (900, 180), "white")
+    ImageDraw.Draw(im).text((20, 60), "Firmado: Lucía Ferrer Gil", fill="black", font=fuente)
+    b = io.BytesIO()
+    im.save(b, "PNG")
+    b.seek(0)
+    d = tempfile.mkdtemp()
+    w = docx.Document()
+    w.add_paragraph("Carta.")
+    w.add_picture(b)
+    ruta, salida = os.path.join(d, "f.docx"), os.path.join(d, "s.docx")
+    w.save(ruta)
+    assert "Ferrer" in formatos.extraer_texto(ruta, ".docx")
+    info = formatos.aplicar(ruta, salida, ".docx", [{"texto": "Lucía Ferrer Gil", "tipo": "PERSONA", "marcador": "[PERSONA_001]"}])
+    assert info["imagenes_tapadas"] == 1
+    assert "Ferrer" not in formatos.extraer_texto(salida, ".docx", verificar=True)

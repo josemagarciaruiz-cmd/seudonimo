@@ -1,5 +1,11 @@
 # Cambios
 
+## 0.3.8 · 27 de noviembre de 2026
+
+- **Imágenes dentro de Word, PowerPoint y Excel.** Se leen con el OCR del propio ordenador y los datos que aparecen en ellas (una firma escaneada, una captura con un nombre) se tapan con un recuadro negro sobre la imagen, que se guarda en el mismo formato. Las imágenes vectoriales (EMF/WMF) no se pueden leer: si el documento las lleva, el resultado lo avisa.
+- **Nombres de las hojas de Excel.** Si el nombre de una hoja lleva un dato («Nóminas Ana Ruiz»), se cambia por «Nóminas PERSONA_001» (sin corchetes, que Excel no admite en los nombres de hoja) y se actualizan las fórmulas, los nombres definidos, los gráficos, los hipervínculos internos y las tablas dinámicas que la nombran, para que el libro siga calculando igual.
+- **Más texto de Office que antes no se miraba:** títulos y etiquetas de los gráficos (también los valores de texto que copian de las celdas), SmartArt, cuadros de texto de Excel y el texto fijo de los patrones de PowerPoint (un pie «Despacho X · confidencial»).
+
 ## 0.3.7 · 27 de noviembre de 2026
 
 - **Pedir en el chat que tape algo.** «En la página 2 se ve "Rodríguez" en la firma, tápalo»: el asistente prepara una tarjeta con lo que va a tapar y, al confirmarla, lo añade a los datos del proyecto y rehace la copia con el mismo alcance (entera o solo esas páginas).

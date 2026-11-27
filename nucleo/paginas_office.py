@@ -77,6 +77,30 @@ def _texto(root, ns_t, ns_p):
     return lineas
 
 
+def _texto_imagenes(z, destinos):
+    import imagenes_office
+    res = []
+    for d in destinos:
+        if d in z.namelist() and imagenes_office.es_imagen(d):
+            t = imagenes_office.texto(z.read(d))
+            if t.strip():
+                res.append(t)
+    return res
+
+
+def _imagenes_de(z, parte, profundidad=2):
+    """Imágenes que usa una parte (y los dibujos que cuelgan de ella, como en las hojas de Excel)."""
+    res = []
+    for tipo, destino, ext in _relaciones(z, parte).values():
+        if ext:
+            continue
+        if tipo.endswith("/image"):
+            res.append(destino)
+        elif profundidad and (tipo.endswith("/drawing") or tipo.endswith("/chart")):
+            res += _imagenes_de(z, destino, profundidad - 1)
+    return res
+
+
 # ---------------------------------------------------------------- PowerPoint
 
 def _diapositivas(z):
@@ -93,7 +117,7 @@ def _diapositivas(z):
 
 
 def _texto_pptx(z, parte):
-    lineas = [t for t in _texto(_xml(z, parte), A, A)]
+    lineas = [t for t in _texto(_xml(z, parte), A, A)] + _texto_imagenes(z, _imagenes_de(z, parte))
     for tipo, destino, ext in _relaciones(z, parte).values():
         if not ext and tipo.endswith("/notesSlide") and destino in z.namelist():
             lineas += _texto(_xml(z, destino), A, A)
@@ -131,9 +155,10 @@ def _texto_si(si):
     return "".join(t.text or "" for t in si.iter(_q(S, "t")) if t.getparent().tag != _q(S, "rPh"))
 
 
-def _texto_hoja(z, parte, sis):
+def _texto_hoja(z, parte, sis, nombre=""):
     root = _xml(z, parte)
-    lineas = [_texto_si(sis[i]) for i in sorted(_indices_usados(root)) if i < len(sis)]
+    lineas = [nombre] + [_texto_si(sis[i]) for i in sorted(_indices_usados(root)) if i < len(sis)]
+    lineas += _texto_imagenes(z, _imagenes_de(z, parte))
     for is_ in root.iter(_q(S, "is")):
         lineas.append("".join(t.text or "" for t in is_.iter(_q(S, "t"))))
     for c in root.iter(_q(S, "c")):
@@ -205,6 +230,18 @@ def _textos_por_id(z, parte, tag):
     return {el.get(_q(W, "id")): "\n".join(_texto(el, W, W)) for el in _xml(z, parte).iter(_q(W, tag))}
 
 
+def _imagenes_en(elementos, rels):
+    """Imágenes incrustadas en unos párrafos de Word (a:blip r:embed, v:imagedata r:id)."""
+    ids = set()
+    for h in elementos:
+        for el in h.iter():
+            if isinstance(el.tag, str) and etree.QName(el).localname in ("blip", "imagedata"):
+                for clave in (_q(R, "embed"), _q(R, "id"), _q(R, "link")):
+                    if el.get(clave):
+                        ids.add(el.get(clave))
+    return [rels[i][1] for i in ids if i in rels and not rels[i][2]]
+
+
 def _texto_cuerpo(elementos):
     lineas = []
     for h in elementos:
@@ -224,7 +261,7 @@ def partes(ruta, ext):
         if familia == "xlsx":
             _, sis = _compartidos(z)
             hojas = _hojas(z)
-            res = [_texto_hoja(z, parte, sis) for _, parte in hojas] or [""]
+            res = [_texto_hoja(z, parte, sis, h.get("name") or "") for h, parte in hojas] or [""]
             usados = set()
             for _, parte in hojas:
                 usados |= _indices_usados(_xml(z, parte))
@@ -236,6 +273,7 @@ def partes(ruta, ext):
         body = doc.find(_q(W, "body"))
         asignados, _ = _paginas_word(body)
         n = max([p for _, p in asignados] or [1])
+        rels_doc = _relaciones(z, "word/document.xml")
         notas = _textos_por_id(z, "word/footnotes.xml", "footnote")
         finales = _textos_por_id(z, "word/endnotes.xml", "endnote")
         comentarios = _textos_por_id(z, "word/comments.xml", "comment")
@@ -244,7 +282,7 @@ def partes(ruta, ext):
             els = [h for h, p in asignados if p == k]
             fn, en, cm = _referencias(els)
             lineas = _texto_cuerpo(els) + [notas[i] for i in fn if i in notas] + [finales[i] for i in en if i in finales] + \
-                [comentarios[i] for i in cm if i in comentarios]
+                [comentarios[i] for i in cm if i in comentarios] + _texto_imagenes(z, _imagenes_en(els, rels_doc))
             for a, b in zip(usadas, (fn, en, cm)):
                 a |= b
             res.append("\n".join(x for x in lineas if x.strip()))

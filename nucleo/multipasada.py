@@ -271,6 +271,11 @@ class TrabajoDocumento:
                                                                            "extra": self.zonas_extra})
             self.salida = salida
             self.version_registro = version
+            if (info or {}).get("vectoriales") and "vectorial" not in (self.aviso or ""):
+                n = info["vectoriales"]
+                txt = ("Lleva %d imágenes vectoriales (EMF/WMF) que no se pueden leer: revísalas en la copia." % n if n > 1 else
+                       "Lleva una imagen vectorial (EMF/WMF) que no se puede leer: revísala en la copia.")
+                self.aviso = ((self.aviso + " ") if self.aviso else "") + txt
             self.aplicado = {(e["texto"], e["marcador"]) for e in mapa}
 
             def avance(f, msg):
