@@ -62,6 +62,9 @@ Para cada dato devuelve:
 - "generalizado": una versión más general que conserve lo jurídicamente útil y no identifique
   («Arrecife» → «un municipio de Lanzarote»; «jefa de almacén» → «mando intermedio»;
   «trastorno adaptativo» → «un proceso de salud mental»; «madre de trillizos» → «con hijos a cargo»).
+La versión general tiene que poder sustituir al texto en la MISMA frase sin romper la gramática:
+si el texto es «nacionalidad colombiana», la versión es «nacionalidad extranjera»; si va precedido de
+«un» o «una», no repitas el artículo.
 Responde solo en JSON."""
 
 ESQUEMA = {
@@ -102,8 +105,9 @@ def por_reglas(texto):
     res = []
     for m in RX_EDAD.finditer(texto):
         n = int(m.group(1) or m.group(2))
-        if not 14 <= n <= 99 or RX_NO_EDAD.search(texto[max(0, m.start() - 60):m.start()]):
-            continue
+        if not 14 <= n <= 99 or RX_NO_EDAD.search(texto[max(0, m.start() - 60):m.start()]) or \
+                re.search(r"(?i)entre\s+\d+\s+y\s*$", texto[max(0, m.start() - 20):m.start() + m.group(0).find(str(n))]):
+            continue        # «entre 50 y 59 años» ya es una edad generalizada
         frag = re.search(r"\d{2}\s+años(?:\s+de\s+edad)?", m.group(0)).group(0)
         res.append({"texto": frag, "categoria": "edad", "generalizado": _decada(n), "origen": "regla"})
     for m in RX_FECHA_NUM.finditer(texto):
@@ -147,12 +151,17 @@ def analizar(texto, modelo=None, progreso=None, cancelado=None, aplicadas=()):
     """{"nivel", "puntos", "categorias", "explicacion", "hallazgos": [...]}.
     «aplicadas»: generalizaciones ya puestas en este proyecto (se muestran marcadas)."""
     hall = por_reglas(texto) + por_modelo(texto, modelo, progreso, cancelado)
-    vistos, unicos = set(), []
-    for h in sorted(hall, key=lambda x: (x["origen"] != "regla", -len(x["texto"]))):
+    puestos = [motor.clave(a.get("reemplazo", "")) for a in aplicadas if a.get("reemplazo")]
+    vistos, unicos = {}, []
+    # primero lo de las reglas y lo más corto: «12/02/2026» antes que «desde el 12/02/2026»
+    for h in sorted(hall, key=lambda x: (x["origen"] != "regla", len(x["texto"]))):
         k = motor.clave(h["texto"])
-        if k in vistos:
-            continue
-        vistos.add(k)
+        if any(p and (p in k or k in p) for p in puestos):
+            continue          # es (o contiene) una generalización ya aplicada: no es un dato nuevo
+        if k in vistos or any(v in k for v, cat in vistos.items() if cat == h["categoria"]):
+            continue          # el mismo dato, o uno de la misma clase que ya lo contiene
+        vistos[k] = h["categoria"]
+        h["generalizado"] = _ajustar(texto, h["texto"], h["generalizado"])
         unicos.append(h)
     ya = {motor.clave(a["texto"]): a for a in aplicadas}
     for h in unicos:
@@ -175,6 +184,22 @@ def analizar(texto, modelo=None, progreso=None, cancelado=None, aplicadas=()):
                 "podría reconocerla aunque no aparezca su nombre." % _lista(nombres))
     return {"nivel": nivel, "puntos": puntos, "categorias": cats, "explicacion": expl,
             "hallazgos": sorted(unicos, key=lambda h: (list(CATEGORIAS).index(h["categoria"]), h["texto"].lower()))}
+
+
+_ARTICULOS = ("un", "una", "el", "la", "los", "las", "unos", "unas")
+
+
+def _ajustar(texto, dato, general):
+    """Que la sustitución no rompa la frase: si el dato ya va precedido de artículo («por un
+    trastorno…»), la versión general no lo repite («por un un proceso…»)."""
+    i = texto.find(dato)
+    if i <= 0:
+        return general
+    previa = texto[:i].rstrip().rsplit(None, 1)[-1].lower() if texto[:i].strip() else ""
+    palabras = general.split(None, 1)
+    if previa in _ARTICULOS and len(palabras) == 2 and palabras[0].lower() in _ARTICULOS:
+        return palabras[1]
+    return general
 
 
 def _lista(xs):

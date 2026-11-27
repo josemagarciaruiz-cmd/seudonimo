@@ -416,3 +416,22 @@ def test_riesgo_por_contexto_reglas_modelo_y_generalizacion():
     mapa = contexto.como_mapa([{"texto": "54 años", "reemplazo": "entre 50 y 59 años"},
                                {"texto": "Arrecife", "reemplazo": "un municipio de Lanzarote"}])
     assert motor.reemplazar_texto(texto, mapa).startswith("[PERSONA_001], de entre 50 y 59 años, trabaja como jefa de almacén en el centro de un municipio de Lanzarote")
+
+
+def test_contexto_no_repite_lo_ya_generalizado_ni_duplica():
+    import contexto
+    import proveedores
+
+    class Falso:
+        def estructurado(self, modelo, mensajes, esquema):
+            return {"datos": [{"texto": "un proceso de salud mental", "categoria": "salud", "generalizado": "algo"},
+                              {"texto": "desde el 12/02/2026", "categoria": "fecha", "generalizado": "desde 2026"}]}
+    antes = proveedores.actual
+    proveedores.actual = lambda: Falso()
+    try:
+        a = contexto.analizar("De entre 50 y 59 años, de baja desde el 12/02/2026 por un proceso de salud mental.",
+                              aplicadas=[{"texto": "trastorno adaptativo", "reemplazo": "un proceso de salud mental"},
+                                         {"texto": "54 años", "reemplazo": "entre 50 y 59 años"}])
+    finally:
+        proveedores.actual = antes
+    assert [(h["categoria"], h["texto"]) for h in a["hallazgos"]] == [("fecha", "12/02/2026")]

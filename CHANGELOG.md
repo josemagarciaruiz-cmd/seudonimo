@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.5.1 · 27 de noviembre de 2026
+
+- Riesgo por contexto: las versiones generales encajan en la frase (sin «por un un proceso…»; «nacionalidad colombiana» → «nacionalidad extranjera»), un segundo análisis ya no señala lo que se generalizó antes y no repite el mismo dato con más o menos palabras («12/02/2026» y «desde el 12/02/2026»).
+
 ## 0.5.0 · 27 de noviembre de 2026
 
 - **Riesgo por contexto (opcional, con un botón).** En cada documento seudonimizado (pestaña Resultados, tarjeta «Listo» y mesa de revisión), «Riesgo por contexto» busca en la copia los datos indirectos que, juntos, podrían permitir reconocer a la persona aunque no aparezca su nombre: edad, fechas de hechos personales, salario exacto, municipio, puesto concreto, centro de trabajo, salud, situación familiar, nacionalidad, representación sindical y rasgos singulares (considerando 26 RGPD). Da un nivel de riesgo (bajo, medio o alto) con la explicación y propone una versión más general de cada dato («54 años» → «entre 50 y 59 años»; «Arrecife» → «un municipio de Lanzarote»). El profesional marca lo que quiere generalizar, puede cambiar el texto propuesto y la copia se rehace. Si no se pulsa, no cambia nada.
