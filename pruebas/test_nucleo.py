@@ -285,3 +285,33 @@ def test_texto_en_imagenes_de_office():
     info = formatos.aplicar(ruta, salida, ".docx", [{"texto": "Lucía Ferrer Gil", "tipo": "PERSONA", "marcador": "[PERSONA_001]"}])
     assert info["imagenes_tapadas"] == 1
     assert "Ferrer" not in formatos.extraer_texto(salida, ".docx", verificar=True)
+
+
+def test_copias_junto_a_los_originales_y_anteriores():
+    import multipasada
+    import registro as registro_mod
+    import trabajos
+    d = tempfile.mkdtemp()
+    carpeta = os.path.join(d, "Clientes", "Ana Ruiz")
+    os.makedirs(carpeta)
+    orig = os.path.join(carpeta, "Carta Ana Ruiz.txt")
+    open(orig, "w").write("Ana Ruiz")
+    reg = registro_mod.Registro()
+    reg.incorporar([{"texto": "Ana Ruiz", "tipo": "PERSONA", "origen": "regla"}], 1)
+    docs = [{"id": 1, "ruta": orig, "rel": "Ana Ruiz/Carta Ana Ruiz.txt", "nombre": "Carta Ana Ruiz.txt"}]
+    finales = []
+    for i, estado in enumerate(("sin_hallazgos", "revision")):
+        lote = multipasada.TrabajoLote("t%d" % i, docs, reg, destino=os.path.join(d, "informes", str(i)),
+                                       guardar=trabajos.modo_guardar({"nombre": "P"}))
+        lote.inicio = 0
+        doc = lote.docs[0]
+        doc.estado, doc.ext, doc.ext_original = estado, ".txt", ".txt"
+        doc.salida = os.path.join(d, "copia%d.txt" % i)
+        open(doc.salida, "w").write("[PERSONA_001]")
+        lote.exportar()
+        finales.append(doc.final)
+    sal = os.path.join(carpeta, "Seudonimizados")
+    assert os.path.dirname(finales[0]) == sal and "Ana Ruiz" not in os.path.basename(finales[0])
+    assert finales[1].endswith("(seudonimizado - revisar).txt")
+    assert sorted(os.listdir(sal)) == ["Anteriores", "Carta [PERSONA_001] (seudonimizado - revisar).txt", "Certificados"]
+    assert len(os.listdir(os.path.join(sal, "Anteriores"))) == 1

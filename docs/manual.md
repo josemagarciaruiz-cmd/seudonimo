@@ -23,15 +23,12 @@
 
 ## Trabajar
 
-1. **Crea un proyecto** por asunto. Elige el modelo, la verificación por defecto y si quieres guardar la tabla de correspondencias cifrada. Un proyecto temporal se borra al cerrar la aplicación.
-2. **Añade la carpeta del expediente** o algunos archivos, con los botones o arrastrándolos a la ventana. Los originales nunca se modifican ni se mueven. La pestaña Archivos indica cuáles se pueden tratar y por qué no los demás.
-3. **Pide lo que necesites** en la conversación: «Seudonimiza toda la carpeta y conserva el formato», «¿Qué archivos hay?», «Resume la carta de despido».
-4. Cuando la petición crea archivos, Seudónimo muestra un **plan** con el alcance. Elige la verificación (estándar o intensiva) y pulsa «Seudonimizar».
-5. En **Operaciones** se ve cada archivo con su pista de pasadas: D1 y D2 son las detecciones, V1, V2… las verificaciones. El dorado indica que la pasada encontró datos nuevos; el verde, que no encontró nada; el ámbar, que quedan restos o incidencias.
-6. En **Revisión** están todos los datos con su marcador:
-   - **Descartar** lo que no sea un dato personal: no volverá a proponerse.
-   - **Añadir** a mano lo que se haya escapado.
-   - **Regenerar copias** vuelve a generarlas y verificarlas sin repetir la detección.
+1. **Crea un proyecto** por expediente. Al crearlo eliges dónde se guardan los documentos seudonimizados: junto a los originales (recomendado) o en una carpeta que elijas. El resto (modelo, tipo de revisión, tabla de correspondencias) está en «Opciones avanzadas».
+2. **Añade los documentos**: una carpeta entera o archivos sueltos, con los botones o arrastrándolos a la ventana. Los originales nunca se modifican ni se mueven.
+3. **Pulsa «Seudonimizar»**: el botón grande de la pestaña Documentos trata todos los pendientes. También puedes pedirlo en el chat («seudonimiza solo la página 3 del informe»).
+4. **Al terminar** aparece en el chat una tarjeta «Listo» con cada documento y sus botones: Abrir, Mostrar en el Finder (o en su carpeta en Windows), Guardar en… y Revisar.
+5. La pestaña **Resultados** reúne siempre todos los documentos seudonimizados del proyecto, dónde están, los certificados y, plegado, el detalle técnico de cada seudonimización (D = lectura del documento, V = comprobación de la copia).
+6. En **Datos tapados** están todos los datos con su marcador: descartar lo que no sea un dato personal, añadir a mano lo que se haya escapado o rehacer las copias.
 
 ## Revisar las copias: la mesa de revisión
 
@@ -92,13 +89,18 @@ La voz se transcribe en este ordenador con Whisper y el audio no se guarda. En �
 
 Si en Mac el dictado dice que no hay permiso: Ajustes del Sistema > Privacidad y seguridad > Micrófono, y activa Seudónimo.
 
-## Resultados
+## Dónde quedan los documentos
 
-En la carpeta de resultados del proyecto (por defecto `~/Seudónimo/<proyecto>/<fecha>`):
+Por defecto, **junto a los originales**, en una carpeta **«Seudonimizados»** dentro de la carpeta de cada documento:
 
-- **Aprobados/**: copias sin hallazgos en las comprobaciones configuradas.
-- **Para revisar/**: copias con algún motivo de revisión, que se explica en el informe. Revísalas antes de usarlas.
-- **Informe de verificación** (HTML y JSON), sin datos originales.
+- `Carta de despido (seudonimizado).docx`: copia sin hallazgos en las comprobaciones configuradas.
+- `Nóminas (seudonimizado - revisar).xlsx`: copia con algún motivo de revisión. Revísala antes de usarla.
+- `Certificados/`: el certificado de cada seudonimización, con la fecha.
+- `Anteriores/`: las versiones anteriores de cada copia, con la fecha en el nombre. En la carpeta solo queda la última.
+
+Si eliges otra carpeta en los ajustes del proyecto, la estructura es la misma dentro de esa carpeta. Si la carpeta de un original no admite escritura (una unidad de red de solo lectura), esas copias van a `~/Seudónimo/<proyecto>` y la tarjeta «Listo» lo avisa. La carpeta «Seudonimizados» nunca se vuelve a leer como si fueran originales.
+
+En el chat puedes preguntar «¿dónde está el documento?» (sale una tarjeta con la ruta y botones para abrirlo) o pedir «guárdalo en el Escritorio» (sale una tarjeta para confirmarlo; se copia la versión seudonimizada, nunca el original).
 
 «Sin hallazgos en las comprobaciones configuradas» **no es una garantía**. La seudonimización sigue siendo tratamiento de datos personales, y una persona puede ser identificable por el contexto. Revisa los expedientes de alto riesgo antes de comunicarlos a terceros.
 

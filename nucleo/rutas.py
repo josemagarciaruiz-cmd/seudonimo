@@ -113,6 +113,16 @@ def ejecutar(args, **kw):
     return subprocess.run(args, **kw)
 
 
+def mostrar_en_carpeta(ruta):
+    """Abre la carpeta con el archivo seleccionado (Finder en Mac, Explorador en Windows)."""
+    if ES_WINDOWS:
+        subprocess.run(["explorer", "/select,", os.path.normpath(ruta)], creationflags=SIN_VENTANA)
+    elif ES_MAC:
+        subprocess.run(["open", "-R", ruta])
+    else:
+        subprocess.run(["xdg-open", os.path.dirname(ruta)])
+
+
 def abrir_carpeta(ruta):
     if ES_WINDOWS:
         os.startfile(ruta)  # noqa

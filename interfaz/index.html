@@ -62,7 +62,7 @@
             <span id="dictar-texto">Dictar</span>
           </button>
           <label class="interruptor" title="Más ciclos de verificación y un modelo auditor en cada uno">
-            <input type="checkbox" id="intensiva"> <span>Verificación intensiva</span>
+            <input type="checkbox" id="intensiva"> <span>Revisión a fondo</span>
           </label>
           <button type="submit" class="boton boton-principal" id="enviar">Enviar</button>
         </div>
@@ -76,7 +76,7 @@
     <div class="tirador" id="tirador" role="separator" aria-orientation="vertical" aria-label="Ancho del panel" tabindex="0" title="Arrastra para cambiar el ancho"></div>
     <div class="pestanas" role="tablist">
       <button role="tab" class="pestana" aria-selected="true" data-pestana="archivos">Documentos</button>
-      <button role="tab" class="pestana" aria-selected="false" data-pestana="operaciones">Progreso</button>
+      <button role="tab" class="pestana" aria-selected="false" data-pestana="operaciones">Resultados</button>
       <button role="tab" class="pestana" aria-selected="false" data-pestana="revision">Datos tapados</button>
     </div>
     <div class="panel-cuerpo" id="panel-archivos" role="tabpanel"></div>
@@ -113,46 +113,53 @@
 <dialog id="dlg-proyecto" class="dialogo">
   <form method="dialog" id="form-proyecto">
     <h2 id="dlg-proyecto-titulo">Nuevo proyecto</h2>
+    <p class="nota solo-alta">Un proyecto es como un expediente: reúne sus documentos y las conversaciones sobre él.</p>
     <label class="campo">Nombre
       <input name="nombre" required maxlength="120" placeholder="Por ejemplo: Despido Ferrer — TSJ Canarias">
-    </label>
-    <label class="campo">Modelo
-      <select name="modelo" id="proyecto-modelo"></select>
     </label>
     <label class="campo">Tipo de asunto
       <select name="plantilla" id="proyecto-plantilla"></select>
       <span class="nota" id="plantilla-desc"></span>
     </label>
-    <details class="campo conservar">
-      <summary>Qué datos se dejan a la vista <span id="conservar-resumen" class="nota"></span></summary>
-      <div class="rejilla-tipos" id="conservar-tipos"></div>
-    </details>
     <fieldset class="campo">
-      <legend>Verificación por defecto</legend>
-      <label class="opcion"><input type="radio" name="perfil" value="estandar" checked>
-        <span><b>Estándar.</b> Dos pasadas de detección y verificación determinista (relectura, OCR, reglas y datos conocidos) hasta una comprobación limpia.</span></label>
-      <label class="opcion"><input type="radio" name="perfil" value="intensivo">
-        <span><b>Intensiva.</b> Además, un modelo auditor con otro enfoque en cada ciclo; exige dos verificaciones limpias seguidas, hasta cinco ciclos. Más lenta.</span></label>
-    </fieldset>
-    <fieldset class="campo">
-      <legend>Tabla de correspondencias</legend>
-      <label class="opcion"><input type="radio" name="tabla" value="cifrada" checked>
-        <span><b>Guardar cifrada.</b> Permite deshacer la seudonimización. La clave queda en el almacén de credenciales del sistema.</span></label>
-      <label class="opcion"><input type="radio" name="tabla" value="sin_tabla">
-        <span><b>No guardar.</b> Las etiquetas solo existen durante cada lote. Ojo: la persona puede seguir siendo identificable por el contexto.</span></label>
-    </fieldset>
-    <div class="solo-edicion">
-      <label class="campo">Carpeta de resultados
-        <span class="fila-campo"><input name="salida" readonly placeholder="~/Seudónimo/<proyecto>"><button type="button" class="boton-texto" id="elegir-salida">Cambiar</button></span>
-      </label>
+      <legend>Dónde se guardan los documentos seudonimizados</legend>
+      <label class="opcion"><input type="radio" name="guardar" value="junto" checked>
+        <span><b>Junto a los originales.</b> En una carpeta «Seudonimizados» dentro de la carpeta de cada documento. Los originales no se tocan.</span></label>
+      <label class="opcion"><input type="radio" name="guardar" value="carpeta">
+        <span><b>En una carpeta que elijo.</b>
+          <span class="fila-campo"><input name="salida" readonly placeholder="Elige la carpeta"><button type="button" class="boton-texto" id="elegir-salida">Elegir…</button></span></span></label>
       <p class="aviso-campo" id="aviso-salida" hidden>Esa carpeta parece sincronizada con la nube. Los resultados contienen información del asunto: mejor una carpeta local.</p>
-      <label class="campo">Instrucciones para el asistente en este proyecto
+    </fieldset>
+    <details class="campo avanzadas">
+      <summary>Opciones avanzadas</summary>
+      <label class="campo">Modelo
+        <select name="modelo" id="proyecto-modelo"></select>
+      </label>
+      <details class="campo conservar">
+        <summary>Qué datos se dejan a la vista <span id="conservar-resumen" class="nota"></span></summary>
+        <div class="rejilla-tipos" id="conservar-tipos"></div>
+      </details>
+      <fieldset class="campo">
+        <legend>Revisión por defecto</legend>
+        <label class="opcion"><input type="radio" name="perfil" value="estandar" checked>
+          <span><b>Normal.</b> Dos lecturas del documento y una comprobación final de la copia. Suficiente para la mayoría de los casos.</span></label>
+        <label class="opcion"><input type="radio" name="perfil" value="intensivo">
+          <span><b>A fondo.</b> Además, un segundo modelo revisa cada copia y se exigen dos comprobaciones limpias seguidas. Más lenta; para documentos delicados.</span></label>
+      </fieldset>
+      <fieldset class="campo">
+        <legend>Tabla de correspondencias</legend>
+        <label class="opcion"><input type="radio" name="tabla" value="cifrada" checked>
+          <span><b>Guardar cifrada.</b> Permite volver a poner los nombres (por ejemplo, en la respuesta de otra IA). La clave queda en el almacén de credenciales del sistema.</span></label>
+        <label class="opcion"><input type="radio" name="tabla" value="sin_tabla">
+          <span><b>No guardar.</b> Las etiquetas solo existen durante cada trabajo. Ojo: la persona puede seguir siendo identificable por el contexto.</span></label>
+      </fieldset>
+      <label class="campo solo-edicion">Instrucciones para el asistente en este proyecto
         <textarea name="instrucciones" rows="3" placeholder="Por ejemplo: conserva los nombres de los magistrados; el cliente es la parte actora."></textarea>
       </label>
-      <label class="opcion"><input type="checkbox" name="logos"> <span>Tapar logotipos, sellos y firmas en los PDF</span></label>
-      <label class="opcion"><input type="checkbox" name="vigilar"> <span><b>Carpeta vigilada.</b> Lo que llegue a partir de ahora a las carpetas del proyecto se seudonimiza solo, mientras Seudónimo esté abierto (aunque esté minimizado).</span></label>
-    </div>
-    <label class="opcion solo-alta"><input type="checkbox" name="temporal"> <span>Proyecto temporal: se borra entero al cerrar la aplicación</span></label>
+      <label class="opcion solo-edicion"><input type="checkbox" name="logos"> <span>Tapar logotipos, sellos y firmas en los PDF</span></label>
+      <label class="opcion solo-edicion"><input type="checkbox" name="vigilar"> <span><b>Carpeta vigilada.</b> Lo que llegue a partir de ahora a las carpetas del proyecto se seudonimiza solo, mientras Seudónimo esté abierto (aunque esté minimizado).</span></label>
+      <label class="opcion solo-alta"><input type="checkbox" name="temporal"> <span>Proyecto temporal: se borra entero al cerrar la aplicación</span></label>
+    </details>
     <div class="dialogo-pie">
       <button type="button" class="boton-texto peligro solo-edicion" id="borrar-proyecto">Borrar proyecto</button>
       <span class="hueco"></span>

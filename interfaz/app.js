@@ -90,6 +90,7 @@ async function iniciar() {
     // arrastrar archivos o carpetas sobre la ventana los añade al proyecto
     try {
       T.webview.getCurrentWebview().onDragDropEvent((ev) => {
+        document.body.classList.toggle("soltando", ["enter", "over"].includes(ev.payload.type) && !!E.proyecto);
         if (ev.payload.type === "drop" && ev.payload.paths?.length && E.proyecto) anadirRutas(ev.payload.paths);
       });
     } catch (e) { /* versión sin soporte */ }
@@ -326,7 +327,8 @@ function pintarBienvenida() {
   $("#otra-ia").hidden = true;
   $("#hilo").innerHTML = `<div class="vacio">
     <h2>Tus expedientes, sin salir de este ordenador</h2>
-    <p>Un proyecto reúne las carpetas de un asunto y sus conversaciones. Añade la carpeta del expediente y pídele a Seudónimo que la seudonimice: el modelo local hace varias pasadas y se comprueba a sí mismo antes de dar nada por bueno.</p>
+    <p>Seudónimo cambia los nombres, DNI, direcciones y demás datos de tus documentos por marcadores ([PERSONA_001]…) para que puedas usarlos con otra IA sin que salgan datos de tus clientes. Todo ocurre en este ordenador.</p>
+    <p>Crea un proyecto por expediente, añade sus documentos y pulsa «Seudonimizar». Las copias quedan junto a los originales, en una carpeta «Seudonimizados».</p>
     <button class="boton boton-principal" data-accion="nuevo-proyecto">Crear el primer proyecto</button>
   </div>`;
   $("#panel-archivos").innerHTML = `<p class="nota">Crea un proyecto para añadir carpetas y archivos.</p>`;
@@ -334,16 +336,28 @@ function pintarBienvenida() {
   $("#panel-revision").innerHTML = "";
 }
 
+function pendientes() {
+  return (E.proyecto?.archivos || []).filter((a) => a.admitido && ["nuevo", "error", "cancelado", "interrumpido"].includes(a.estado));
+}
+
 function pintarVacioProyecto() {
-  const n = (E.proyecto.archivos || []).filter((a) => a.admitido).length;
-  const sug = n
-    ? ["Seudonimiza todos los archivos del proyecto y conserva el formato", "¿Qué archivos hay y cuáles no se pueden tratar?", "Resume el primer documento"]
-    : [];
-  $("#hilo").innerHTML = `<div class="vacio">
+  const adm = (E.proyecto.archivos || []).filter((a) => a.admitido);
+  const pend = pendientes();
+  const hechos = adm.filter((a) => ["sin_hallazgos", "revision", "parcial"].includes(a.estado)).length;
+  const paso = (n, hecho, titulo, cuerpo) => `<li class="paso-guia${hecho ? " hecho" : ""}"><span class="num">${hecho ? "✓" : n}</span><div><b>${titulo}</b>${cuerpo}</div></li>`;
+  $("#hilo").innerHTML = `<div class="vacio guia">
     <h2>${esc(E.proyecto.nombre)}</h2>
-    <p>${n ? `${n} archivo${n === 1 ? "" : "s"} listo${n === 1 ? "" : "s"} para trabajar. Escribe qué necesitas.` : "Añade la carpeta del expediente o algunos archivos para empezar. Los originales nunca se modifican."}</p>
-    ${n ? "" : `<div class="plan-acciones" style="justify-content:center"><button class="boton boton-principal" data-accion="adjuntar-carpeta">Añadir carpeta</button><button class="boton" data-accion="adjuntar-archivos">Añadir archivos</button></div>`}
-    <div class="sugerencias">${sug.map((s) => `<button class="sugerencia" data-sugerencia="${esc(s)}">${esc(s)}</button>`).join("")}</div>
+    <ol class="pasos-guia">
+      ${paso(1, adm.length > 0, "Añade los documentos", adm.length
+        ? `<p>${adm.length} documento${adm.length === 1 ? "" : "s"} en el proyecto.</p><div class="plan-acciones"><button class="boton-texto" data-accion="adjuntar-archivos">Añadir más</button></div>`
+        : `<p>Una carpeta entera o archivos sueltos. También puedes arrastrarlos a esta ventana. Los originales nunca se modifican.</p><div class="plan-acciones"><button class="boton boton-principal" data-accion="adjuntar-carpeta">Añadir carpeta</button><button class="boton" data-accion="adjuntar-archivos">Añadir archivos</button></div>`)}
+      ${paso(2, adm.length > 0 && !pend.length && hechos > 0, "Seudonimízalos", pend.length
+        ? `<p>${pend.length === 1 ? "Un documento pendiente" : pend.length + " documentos pendientes"}.</p><div class="plan-acciones"><button class="boton boton-principal" data-accion="seudonimizar-pendientes">Seudonimizar ${pend.length === 1 ? "el documento" : "los " + pend.length + " documentos"}</button></div>`
+        : `<p>${adm.length ? "No queda ninguno pendiente." : "Cuando añadas documentos, un botón los seudonimiza todos."} También puedes pedirlo abajo, en el chat.</p>`)}
+      ${paso(3, false, "Revisa y guarda", `<p>Las copias quedan ${E.proyecto.guardar_efectivo === "carpeta" ? "en la carpeta que elegiste" : "junto a los originales, en una carpeta «Seudonimizados»"}. En la pestaña <b>Resultados</b> las abres, las ves en ${EXPLORADOR} o las guardas donde quieras.</p>
+        ${hechos ? `<div class="plan-acciones"><button class="boton" data-accion="ver-resultados">Ver los resultados</button><button class="boton-texto" data-accion="abrir-mesa">Revisar las copias</button></div>` : ""}`)}
+    </ol>
+    <p class="nota">En el chat puedes pedir, por ejemplo: «seudonimiza solo la página 3 del informe», «en la página 2 se ve "Rodríguez", tápalo», «¿dónde está el documento?» o «guárdalo en el Escritorio».</p>
   </div>`;
 }
 
@@ -363,12 +377,101 @@ function nodoAsistente(m) {
   const herr = (datos.herramientas || []).map((h) => `<div class="herramienta${h.ok ? "" : " error"}">${esc(nombreHerramienta(h.nombre))}${h.resumen ? ": " + esc(h.resumen) : ""}</div>`).join("");
   d.innerHTML = `${herr}<div class="prosa">${markdown(m.contenido || "")}</div>`;
   for (const plan of datos.planes || []) d.append(nodoPlan(plan, m.id, datos));
+  if (datos.resultado) d.append(nodoResultado(datos.resultado));
   return d;
 }
 
 function nombreHerramienta(n) {
   return { inspeccionar_carpeta: "Inventario del proyecto", inspeccionar_documento: "Ficha del documento", extraer_texto: "Lectura del documento",
-    seudonimizar: "Plan de seudonimización", estado_trabajos: "Estado de los trabajos", verificar_documento: "Auditoría del documento" }[n] || n;
+    seudonimizar: "Plan de seudonimización", estado_trabajos: "Estado de los trabajos", verificar_documento: "Auditoría del documento",
+    tapar: "Datos para tapar", donde_esta: "Dónde están", guardar_copia: "Guardar en otra carpeta" }[n] || n;
+}
+
+// ------------------------------------------------------------------ resultados: componentes
+
+const EN_MAC = /Mac/i.test(navigator.platform || navigator.userAgent);
+const EXPLORADOR = EN_MAC ? "Finder" : "su carpeta";
+
+function filaResultado(c) {
+  // c: {id, original, nombre, ruta, estado}
+  const nombre = c.nombre || (c.ruta || "").split(/[\\/]/).pop();
+  const estado = c.estado === "sin_hallazgos" ? "Lista" : c.estado === "revision" ? "Revísala antes de usarla" : c.estado === "parcial" ? "Solo unas páginas" : ESTADOS[c.estado] || c.estado;
+  return `<div class="resultado-doc">
+    <span class="punto ${esc(c.estado)}" aria-hidden="true"></span>
+    <div class="resultado-info"><b title="${esc(c.ruta || "")}">${esc(nombre)}</b><span class="nota">${esc(estado)} · original: ${esc(c.original || "")}</span></div>
+    <div class="botones-fila">
+      <button class="boton-texto" data-abrir="${esc(c.ruta)}">Abrir</button>
+      <button class="boton-texto" data-mostrar="${esc(c.ruta)}">Mostrar en ${EXPLORADOR}</button>
+      <button class="boton-texto" data-guardar-en="${esc(c.ruta)}">Guardar en…</button>
+      ${c.id ? `<button class="boton-texto" data-revisar="${c.id}">Revisar</button>` : ""}
+    </div></div>`;
+}
+
+function bloqueCarpetas(carpetas, certificado) {
+  if (!carpetas.length && !certificado) return "";
+  return `<div class="resultado-donde">
+    ${carpetas.map((c) => `<div class="donde-fila"><span class="nota">Guardados en</span> <code title="${esc(c)}">${esc(c)}</code> <button class="boton-texto" data-abrir="${esc(c)}">Abrir la carpeta</button></div>`).join("")}
+    ${certificado ? `<div class="donde-fila"><span class="nota">Certificado de la seudonimización</span> <button class="boton-texto" data-abrir="${esc(certificado)}">Abrir</button> <button class="boton-texto" data-guardar-en="${esc(certificado)}">Guardar en…</button></div>` : ""}
+  </div>`;
+}
+
+function nodoResultado(res) {
+  // tarjeta «Listo» al terminar una seudonimización pedida desde el chat
+  const d = document.createElement("div");
+  d.className = "plan tarjeta-listo";
+  const hechos = (res.documentos || []).filter((x) => x.copia);
+  const fallos = (res.documentos || []).filter((x) => !x.copia);
+  const rev = hechos.filter((x) => x.estado === "revision").length;
+  d.innerHTML = `<h4>${hechos.length ? (rev ? `Listo · ${rev === 1 ? "una copia necesita" : rev + " copias necesitan"} revisión` : `Listo · ${hechos.length === 1 ? "documento seudonimizado" : hechos.length + " documentos seudonimizados"}`) : "No se ha podido generar ninguna copia"}</h4>
+    ${hechos.map((x) => filaResultado({ id: x.id, original: x.original, ruta: x.copia, estado: x.estado })).join("")}
+    ${fallos.length ? `<ul class="doc-motivos">${fallos.map((x) => `<li>${esc(x.original)}: ${esc(ESTADOS[x.estado] || x.estado)}${x.motivos && x.motivos.length ? " — " + esc(x.motivos[0]) : ""}</li>`).join("")}</ul>` : ""}
+    ${bloqueCarpetas(res.carpeta ? [res.carpeta] : [], res.certificado)}
+    ${res.aviso ? `<p class="aviso-campo">${esc(res.aviso)}</p>` : ""}
+    ${hechos.length > 1 ? `<div class="plan-acciones"><button class="boton" data-guardar-en="${esc(hechos.map((x) => x.copia).join("\n"))}">Guardar todos en…</button></div>` : ""}`;
+  return d;
+}
+
+function nodoUbicacion(plan) {
+  const d = document.createElement("div");
+  d.className = "plan tarjeta-listo";
+  d.innerHTML = `<h4>Dónde ${plan.documentos.length === 1 ? "está" : "están"}</h4>
+    ${plan.documentos.map((x) => filaResultado({ id: x.id, original: x.original, nombre: x.nombre, ruta: x.copia, estado: x.estado })).join("")}
+    ${bloqueCarpetas(plan.carpetas || [], plan.certificado)}`;
+  return d;
+}
+
+function nodoGuardar(plan, mid, datos) {
+  const d = document.createElement("div");
+  d.className = "plan";
+  const n = plan.documentos.length;
+  const titulo = `Guardar ${n === 1 ? "una copia" : n + " copias"} en ${plan.destino}`;
+  if (plan.estado) {
+    d.classList.add("cerrado");
+    d.innerHTML = `<h4>${esc(titulo)}</h4><p class="resultado">${plan.estado === "confirmado" ? "Hecho: copiadas en esa carpeta. Los originales y las copias del proyecto siguen donde estaban." : "Descartado."}</p>
+      ${plan.estado === "confirmado" ? `<div class="plan-acciones"><button class="boton-texto" data-abrir="${esc(plan.destino)}">Abrir la carpeta</button></div>` : ""}`;
+    return d;
+  }
+  d.innerHTML = `<h4>${esc(titulo)}</h4>
+    <ul class="plan-archivos">${plan.documentos.map((x) => `<li>${esc(x.nombre)}</li>`).join("")}</ul>
+    <p class="nota">Se copia la versión seudonimizada; si ya hay un archivo con ese nombre, no se sobrescribe.</p>
+    <div class="plan-acciones"><button class="boton boton-principal" data-confirmar>Guardar</button><button class="boton" data-descartar>Descartar</button></div>`;
+  $("[data-confirmar]", d).onclick = async () => {
+    try {
+      await api("POST", "/api/guardar_en", { rutas: plan.documentos.map((x) => x.copia), destino: plan.destino });
+      plan.estado = "confirmado";
+      await guardarPlanes(mid, datos);
+      d.replaceWith(nodoGuardar(plan, mid, datos));
+    } catch (e) { alerta(e.message); }
+  };
+  $("[data-descartar]", d).onclick = async () => { plan.estado = "descartado"; await guardarPlanes(mid, datos); d.replaceWith(nodoGuardar(plan, mid, datos)); };
+  return d;
+}
+
+async function guardarEn(rutas) {
+  const r = await elegir("carpeta_salida");
+  if (!r[0]) return;
+  const res = await api("POST", "/api/guardar_en", { rutas, destino: r[0] });
+  avisoFlotante(`${res.copiados.length === 1 ? "Guardado" : res.copiados.length + " archivos guardados"} en ${res.carpeta}`);
 }
 
 function nodoTapar(plan, mid, datos) {
@@ -411,6 +514,8 @@ function nodoTapar(plan, mid, datos) {
 
 function nodoPlan(plan, mid, datos) {
   if (plan.accion === "tapar") return nodoTapar(plan, mid, datos);
+  if (plan.accion === "ubicacion") return nodoUbicacion(plan);
+  if (plan.accion === "guardar") return nodoGuardar(plan, mid, datos);
   const d = document.createElement("div");
   d.className = "plan";
   const n = plan.archivos.length;
@@ -580,7 +685,9 @@ function pintarArchivos() {
       ${p.archivos.some((a) => ["sin_hallazgos", "revision", "parcial"].includes(a.estado)) ? `<button class="boton boton-principal ancho" data-accion="abrir-mesa">Abrir la mesa de revisión</button>` : ""}
       ${p.archivos.map((a) => `<div class="archivo"><span class="nombre">${esc(a.rel)}</span><span class="chip ${esc(a.estado)}">${esc(ESTADOS[a.estado] || a.estado)}</span>${a.motivo ? `<span class="motivo">${esc(a.motivo)}</span>` : ""}${["sin_hallazgos", "revision", "parcial"].includes(a.estado) ? `<button class="boton-texto revisar" data-revisar="${a.id}">Revisar la copia</button>` : ""}</div>`).join("")}` : ""}
     ${p.vigilar ? `<p class="nota vigilada">Carpeta vigilada: lo que llegue a las carpetas del proyecto se seudonimiza solo.</p>` : ""}
-    ${p.salida_efectiva ? `<h3>Resultados</h3><div class="carpeta"><span>${esc(p.salida_efectiva)}</span></div>${p.salida_sincronizada ? `<p class="aviso-campo" style="margin:4px 0">Esta carpeta parece sincronizada con la nube.</p>` : ""}` : ""}`;
+    <div class="zona-soltar">Arrastra aquí archivos o carpetas</div>`;
+  const pend = pendientes();
+  if (pend.length) el.insertAdjacentHTML("afterbegin", `<button class="boton boton-principal boton-grande ancho" data-accion="seudonimizar-pendientes">Seudonimizar ${pend.length === 1 ? "el documento pendiente" : "los " + pend.length + " documentos pendientes"}</button>`);
 }
 
 async function anadirRutas(rutas) {
@@ -599,6 +706,7 @@ async function anadirRutas(rutas) {
 async function refrescarOperaciones() {
   if (!E.proyecto) return;
   const r = await api("GET", `/api/proyectos/${E.proyecto.id}/trabajos`);
+  try { E.resultados = await api("GET", `/api/proyectos/${E.proyecto.id}/resultados`); } catch (e) { E.resultados = null; }
   E.historial = r.historial;
   for (const t of r.activos) E.trabajos[t.id] = t;
   // los trabajos vivos de este proyecto, con su detalle
@@ -617,6 +725,10 @@ async function refrescarOperaciones() {
       E.proyecto = await api("GET", `/api/proyectos/${E.proyecto.id}`);
       pintarArchivos();
       if (!$("#panel-revision").hidden) pintarRevision();
+      // la tarjeta «Listo» llega como mensaje a la conversación desde la que se pidió
+      if (E.conversacion && !E.enviando) await abrirConversacion(E.conversacion);
+      avisoFlotante("Seudonimización terminada: los documentos están en la pestaña Resultados.");
+      mostrarPestana("operaciones");
     }
   }, 2000);
 }
@@ -636,27 +748,43 @@ function pistaDoc(d) {
 function pintarOperaciones() {
   const el = $("#panel-operaciones");
   const vivos = Object.values(E.trabajos).filter(Boolean).filter((t) => (E.historial || []).some((h) => h.id === t.id));
-  const terminados = (E.historial || []).filter((h) => !vivos.some((v) => v.id === h.id));
-  if (!vivos.length && !terminados.length) {
-    el.innerHTML = `<p class="nota">Aquí verás cada seudonimización: el avance por archivo, cada pasada de detección (D) y de verificación (V), y dónde quedan las copias.</p>`;
-    return;
+  const activos = vivos.filter((t) => ["pendiente", "procesando"].includes(t.estado));
+  const terminados = (E.historial || []).filter((h) => !activos.some((v) => v.id === h.id));
+  const R = E.resultados || { copias: [], carpetas: [], certificados: [] };
+  const p = E.proyecto;
+  let html = "";
+  // 1 · lo que está en marcha
+  html += activos.sort((a, b) => b.id.localeCompare(a.id)).map((t) => `<div class="trabajo">
+      <div class="trabajo-cab"><b>Seudonimizando ${t.docs.length === 1 ? "un documento" : t.docs.length + " documentos"}</b><button class="boton-texto peligro" data-cancelar="${t.id}">Cancelar</button></div>
+      <div class="progreso"><i style="width:${Math.round(t.progreso * 100)}%"></i></div><div class="trabajo-msg">${esc(t.mensaje)}</div></div>`).join("");
+  // 2 · los documentos seudonimizados
+  html += `<h3>Documentos seudonimizados</h3>`;
+  html += R.copias.length ? R.copias.map((c) => filaResultado(c)).join("")
+    + (R.copias.length > 1 ? `<div class="plan-acciones"><button class="boton" data-guardar-en="${esc(R.copias.map((c) => c.ruta).join("\n"))}">Guardar todos en…</button></div>` : "")
+    : `<p class="nota">Aquí aparecerán los documentos seudonimizados, con botones para abrirlos, verlos en ${EXPLORADOR} o guardarlos donde quieras.</p>`;
+  // 3 · dónde se guardan
+  const donde = p.guardar_efectivo === "carpeta"
+    ? `En la carpeta <code>${esc(p.salida_efectiva)}</code>.`
+    : `Junto a los originales, en una carpeta <b>«Seudonimizados»</b> dentro de la carpeta de cada documento. Los originales no se tocan.`;
+  html += `<h3>Dónde se guardan</h3><p class="nota">${donde} Cada copia lleva el nombre del original con «(seudonimizado)»; si hay que revisarla, «(seudonimizado - revisar)». Las versiones anteriores pasan a «Anteriores».</p>
+    <div class="plan-acciones">${R.carpetas.slice(0, 4).map((c) => `<button class="boton-texto" data-abrir="${esc(c)}" title="${esc(c)}">Abrir ${R.carpetas.length > 1 ? esc(c.split(/[\\/]/).slice(-2).join("/")) : "la carpeta"}</button>`).join("")}
+    <button class="boton-texto" data-accion="cambiar-destino">Cambiar dónde se guardan</button></div>
+    ${p.salida_sincronizada ? `<p class="aviso-campo">Esa carpeta parece sincronizada con la nube: mejor una carpeta local.</p>` : ""}`;
+  // 4 · certificados
+  if (R.certificados.length) html += `<h3>Certificados</h3>` + R.certificados.slice(0, 5).map((c) => `<div class="archivo"><span class="nombre">${esc(c.nombre)}</span><span class="botones-fila"><button class="boton-texto" data-abrir="${esc(c.ruta)}">Abrir</button><button class="boton-texto" data-guardar-en="${esc(c.ruta)}">Guardar en…</button></span></div>`).join("");
+  // 5 · el detalle técnico, plegado
+  if (terminados.length) {
+    html += `<details class="tecnico"><summary>Detalle técnico de cada seudonimización</summary>` + terminados.map((h) => {
+      const t = E.trabajos[h.id];
+      return `<div class="trabajo">
+        <div class="trabajo-cab"><b>${esc(new Date((h.terminado || h.creado) * 1000).toLocaleString("es-ES"))} · revisión ${h.perfil === "intensivo" ? "a fondo" : "normal"}</b>${h.certificado ? `<button class="boton-texto" data-abrir="${esc(h.certificado)}">Certificado</button>` : ""}</div>
+        ${h.resumen ? `<p class="nota">${h.resumen.recuento.sin_hallazgos} listos · ${h.resumen.recuento.revision} para revisar · ${h.resumen.recuento.error} con error</p>` : `<p class="nota">${esc(ESTADOS[h.estado] || h.estado)}</p>`}
+        ${t && t.docs ? t.docs.map((d) => `<div class="doc"><div class="doc-cab"><span>${esc(d.rel)}${d.paginas && d.paginas.length ? ` <span class="nota">· ${d.solo_paginas ? "solo" : "repaso de"} ${d.paginas.join(", ")}</span>` : ""}</span><span class="chip ${esc(d.estado)}">${esc(ESTADOS[d.estado] || d.estado)}</span></div>
+          <div class="pista">${pistaDoc(d)}</div>${d.motivos && d.motivos.length ? `<ul class="doc-motivos">${d.motivos.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}</div>`).join("") : ""}
+      </div>`;
+    }).join("") + `<p class="leyenda">D = lectura del documento · V = comprobación de la copia. Dorado: encontró datos nuevos; verde: limpia; ámbar: quedan restos.</p></details>`;
   }
-  el.innerHTML = vivos.sort((a, b) => b.id.localeCompare(a.id)).map((t) => {
-    const activo = ["pendiente", "procesando"].includes(t.estado);
-    const cuenta = (k) => t.docs.filter((d) => d.estado === k).length;
-    return `<div class="trabajo">
-      <div class="trabajo-cab"><b>${activo ? "En curso" : t.estado === "terminado" ? "Terminado" : esc(t.estado)} · ${t.perfil === "intensivo" ? "verificación intensiva" : "verificación estándar"}</b>
-        ${activo ? `<button class="boton-texto peligro" data-cancelar="${t.id}">Cancelar</button>` : t.destino ? `<span>${certificadoDe(t.id) ? `<button class="boton-texto" data-abrir="${esc(certificadoDe(t.id))}">Certificado</button>` : ""}<button class="boton-texto" data-abrir="${esc(t.destino)}">Abrir carpeta</button></span>` : ""}</div>
-      ${activo ? `<div class="progreso"><i style="width:${Math.round(t.progreso * 100)}%"></i></div><div class="trabajo-msg">${esc(t.mensaje)}</div>` :
-        `<p class="nota">${cuenta("sin_hallazgos")} sin hallazgos · ${cuenta("revision")} para revisar · ${cuenta("error")} con error${cuenta("cancelado") ? ` · ${cuenta("cancelado")} cancelados` : ""}</p>`}
-      ${t.docs.map((d) => `<div class="doc">
-        <div class="doc-cab"><span>${esc(d.rel)}${d.paginas && d.paginas.length ? ` <span class="nota">· ${d.solo_paginas ? "solo" : "repaso de"} ${d.paginas.length === 1 ? "la página " + d.paginas[0] : "las páginas " + d.paginas.join(", ")}</span>` : ""}</span><span class="chip ${esc(d.estado)}">${esc(ESTADOS[d.estado] || d.estado)}</span></div>
-        <div class="pista">${pistaDoc(d)}</div>
-        ${d.motivos && d.motivos.length ? `<ul class="doc-motivos">${d.motivos.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}
-      </div>`).join("")}
-      ${!activo ? `<p class="leyenda">D = detección · V = verificación. Dorado: encontró datos nuevos; verde: limpia; ámbar: quedan restos o incidencias.</p>` : ""}
-    </div>`;
-  }).join("") + (terminados.length ? `<h3>Anteriores</h3>` + terminados.map((h) => `<div class="archivo"><span class="nombre">${esc(new Date(h.creado * 1000).toLocaleString("es-ES"))} · ${h.perfil === "intensivo" ? "intensiva" : "estándar"}${h.resumen ? ` · ${h.resumen.recuento.sin_hallazgos} sin hallazgos, ${h.resumen.recuento.revision} para revisar, ${h.resumen.recuento.error} con error` : ""}</span>${h.destino ? `<span class="botones-fila">${h.certificado ? `<button class="boton-texto" data-abrir="${esc(h.certificado)}">Certificado</button>` : ""}<button class="boton-texto" data-abrir="${esc(h.destino)}">Abrir</button></span>` : `<span class="chip">${esc(h.estado)}</span>`}</div>`).join("") : "");
+  el.innerHTML = html;
 }
 
 // ------------------------------------------------------------------ panel: revisión
@@ -766,7 +894,7 @@ function abrirDialogoProyecto(editar) {
   f.perfil.value = p.perfil;
   f.tabla.value = p.tabla;
   f.salida.value = editar ? (p.salida || "") : "";
-  f.salida.placeholder = editar ? p.salida_efectiva : "";
+  f.guardar.value = editar ? (p.guardar_efectivo || "junto") : "junto";
   f.instrucciones.value = p.instrucciones || "";
   f.logos.checked = !!p.logos;
   f.vigilar.checked = !!p.vigilar;
@@ -776,15 +904,16 @@ function abrirDialogoProyecto(editar) {
   d.onclose = async () => {
     if (d.returnValue !== "aceptar") return;
     const datos = { nombre: f.nombre.value.trim(), modelo: sel.value, perfil: f.perfil.value, tabla: f.tabla.value,
-      plantilla: f.plantilla.value, conservar: $$("#conservar-tipos input:checked").map((x) => x.value) };
+      plantilla: f.plantilla.value, conservar: $$("#conservar-tipos input:checked").map((x) => x.value),
+      guardar: f.guardar.value, salida: f.guardar.value === "carpeta" ? (f.salida.value || null) : null };
+    if (datos.guardar === "carpeta" && !datos.salida) { alerta("Elige la carpeta donde quieres guardar las copias, o marca «Junto a los originales».", "Falta la carpeta"); return; }
     try {
       if (editar) {
         if (E.proyecto.tabla === "cifrada" && datos.tabla === "sin_tabla") {
           const ok = await confirmar("Dejar de guardar la tabla", "Se destruirá la tabla de correspondencias cifrada de este proyecto. No se podrá deshacer la seudonimización de las copias ya generadas.", "Destruir la tabla");
           if (!ok) return;
         }
-        Object.assign(datos, { salida: f.salida.value || null, instrucciones: f.instrucciones.value, logos: f.logos.checked ? 1 : 0,
-          vigilar: f.vigilar.checked });
+        Object.assign(datos, { instrucciones: f.instrucciones.value, logos: f.logos.checked ? 1 : 0, vigilar: f.vigilar.checked });
         await api("PATCH", `/api/proyectos/${E.proyecto.id}`, datos);
         await refrescarProyectos();
         await abrirProyecto(E.proyecto.id, E.conversacion);
@@ -1542,7 +1671,7 @@ function enlazar() {
   $("#adjuntar-carpeta").onclick = async () => anadirRutas(await elegir("carpeta"));
   $("#elegir-salida").onclick = async () => {
     const r = await elegir("carpeta_salida");
-    if (r[0]) $("#form-proyecto").salida.value = r[0];
+    if (r[0]) { $("#form-proyecto").salida.value = r[0]; $("#form-proyecto").guardar.value = "carpeta"; }
   };
   $("#borrar-proyecto").onclick = () => eliminarProyecto(E.proyecto.id);
   $("#descargar-libre").onclick = async () => {
@@ -1575,6 +1704,8 @@ function enlazar() {
       else if (d.quitarCarpeta) { await api("DELETE", `/api/proyectos/${E.proyecto.id}/carpetas/${d.quitarCarpeta}`); E.proyecto = await api("GET", `/api/proyectos/${E.proyecto.id}`); pintarArchivos(); }
       else if (d.cancelar) { if (await confirmar("Cancelar la seudonimización", "Los documentos ya terminados se exportan; el resto queda cancelado.", "Cancelar el trabajo")) { await api("POST", `/api/trabajos/${d.cancelar}/cancelar`); refrescarOperaciones(); } }
       else if (d.abrir) await api("POST", "/api/abrir", { ruta: d.abrir });
+      else if (d.mostrar) await api("POST", "/api/mostrar", { ruta: d.mostrar });
+      else if (d.guardarEn) await guardarEn(d.guardarEn.split("\n"));
       else if (d.descartarEnt || d.reactivarEnt) {
         await api("POST", `/api/proyectos/${E.proyecto.id}/registro/${d.descartarEnt || d.reactivarEnt}/${d.descartarEnt ? "descartar" : "reactivar"}`);
         if (!$("#mesa").hidden) { MESA.pendientes++; pintarPendientes(); $("#mesa-pop").hidden = true; await cargarRegistroMesa(); }
@@ -1616,6 +1747,27 @@ async function accion(a) {
     seguir();
   }
   else if (a === "abrir-mesa") await abrirMesa();
+  else if (a === "ver-resultados") { await refrescarOperaciones(); mostrarPestana("operaciones"); }
+  else if (a === "cambiar-destino") abrirDialogoProyecto(true);
+  else if (a === "seudonimizar-pendientes") {
+    const pend = pendientes();
+    if (!pend.length) return;
+    const fondo = $("#intensiva").checked;
+    const ok = await confirmar(pend.length === 1 ? "Seudonimizar el documento" : `Seudonimizar ${pend.length} documentos`,
+      `Revisión ${fondo ? "a fondo (más lenta)" : "normal"}. Las copias se guardan ${E.proyecto.guardar_efectivo === "carpeta" ? "en " + E.proyecto.salida_efectiva : "junto a los originales, en una carpeta «Seudonimizados»"}; los originales no se tocan.`, "Seudonimizar");
+    if (!ok) return;
+    if (!E.conversacion) {
+      const c = await api("POST", `/api/proyectos/${E.proyecto.id}/conversaciones`);
+      E.conversacion = c.id;
+    }
+    await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, { archivos: pend.map((x) => x.id), perfil: fondo ? "intensivo" : "estandar", conversacion: E.conversacion });
+    E.proyecto = await api("GET", `/api/proyectos/${E.proyecto.id}`);
+    pintarArchivos();
+    await refrescarConversaciones();
+    mostrarPestana("operaciones");
+    await refrescarOperaciones();
+    avisoFlotante("Seudonimizando… al terminar verás aquí los documentos, y un resumen en el chat.");
+  }
   else if (a === "regenerar") {
     const ultimos = (E.proyecto.archivos || []).filter((x) => ["sin_hallazgos", "revision"].includes(x.estado));
     if (!ultimos.length) { alerta("Todavía no hay copias generadas en este proyecto.", "Nada que regenerar"); return; }

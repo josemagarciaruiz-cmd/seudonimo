@@ -51,7 +51,8 @@ class Almacen:
             c.executescript(ESQUEMA)
             # columnas añadidas en la 0.3.0 (bases de datos creadas con versiones anteriores)
             for tabla, col, defin in (("proyectos", "conservar", "TEXT DEFAULT '[]'"), ("proyectos", "plantilla", "TEXT"),
-                                      ("proyectos", "vigilar", "REAL DEFAULT 0"), ("archivos", "visto", "REAL")):
+                                      ("proyectos", "vigilar", "REAL DEFAULT 0"), ("archivos", "visto", "REAL"),
+                                      ("proyectos", "guardar", "TEXT")):
                 if col not in [r[1] for r in c.execute("PRAGMA table_info(%s)" % tabla)]:
                     c.execute("ALTER TABLE %s ADD COLUMN %s %s" % (tabla, col, defin))
 
@@ -94,7 +95,7 @@ class Almacen:
                        "VALUES (?,?,?,?,?,?,?)", (nombre, ahora, ahora, int(temporal), modelo, perfil, tabla))
 
     CAMPOS_PROYECTO = ("nombre", "modelo", "perfil", "tabla", "salida", "instrucciones", "logos", "temporal",
-                       "conservar", "plantilla", "vigilar")
+                       "conservar", "plantilla", "vigilar", "guardar")
 
     def actualizar_proyecto(self, pid, **campos):
         campos = {k: v for k, v in campos.items() if k in self.CAMPOS_PROYECTO}

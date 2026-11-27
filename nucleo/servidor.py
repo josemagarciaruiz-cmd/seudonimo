@@ -251,6 +251,8 @@ def crear_proyecto():
     if d.get("plantilla") or d.get("conservar"):
         ALM.actualizar_proyecto(pid, plantilla=d.get("plantilla"),
                                 conservar=json.dumps([t for t in (d.get("conservar") or []) if t in motor.TIPOS]))
+    guardar = "carpeta" if d.get("guardar") == "carpeta" and d.get("salida") else "junto"
+    ALM.actualizar_proyecto(pid, guardar=guardar, salida=d.get("salida") if guardar == "carpeta" else None)
     return jsonify(ALM.proyecto(pid))
 
 
@@ -260,8 +262,10 @@ def ver_proyecto(pid):
     p["carpetas"] = ALM.carpetas(pid)
     p["archivos"] = ALM.archivos(pid)
     p["trabajos_activos"] = GESTOR.activos(pid)
-    p["salida_efectiva"] = p.get("salida") or os.path.join(rutas.SALIDAS, trabajos._nombre_carpeta(p["nombre"]))
-    p["salida_sincronizada"] = rutas.sincronizada(p["salida_efectiva"])
+    g = trabajos.modo_guardar(p)
+    p["guardar_efectivo"] = g["modo"]
+    p["salida_efectiva"] = g["base"] if g["modo"] == "carpeta" else None
+    p["salida_sincronizada"] = bool(p["salida_efectiva"]) and rutas.sincronizada(p["salida_efectiva"])
     p["conservar"] = sorted(trabajos.conservar(p))
     return jsonify(p)
 
@@ -278,6 +282,10 @@ def editar_proyecto(pid):
         trabajos.olvidar_registro(pid, borrar=True)
     if "conservar" in d:
         d["conservar"] = json.dumps([t for t in (d["conservar"] or []) if t in motor.TIPOS])
+    if "guardar" in d:
+        d["guardar"] = "carpeta" if d["guardar"] == "carpeta" and (d.get("salida") or _proyecto(pid).get("salida")) else "junto"
+        if d["guardar"] == "junto":
+            d["salida"] = None
     if "vigilar" in d:          # se guarda desde cuándo: solo se trata lo que llegue después
         d["vigilar"] = (_proyecto(pid).get("vigilar") or time.time()) if d["vigilar"] else 0
     ALM.actualizar_proyecto(pid, **d)
@@ -386,7 +394,8 @@ def enviar_mensaje(cid):
     if not texto:
         return jsonify(error="Mensaje vacío."), 400
     modelo = d.get("modelo") or pr.get("modelo") or ALM.ajuste("modelo_defecto", motor.MODELO)
-    ctx = {"almacen": ALM, "gestor": GESTOR, "proyecto": pr, "trabajo": rutas.TRABAJO}
+    ctx = {"almacen": ALM, "gestor": GESTOR, "proyecto": pr, "trabajo": rutas.TRABAJO, "resultados": resultados_de,
+           "destino": _destino}
 
     def flujo():
         alm_hilo = almacen_mod.Almacen()          # conexión propia de este hilo
@@ -503,8 +512,11 @@ def historial(pid):
     import certificado
     hist = ALM.trabajos(pid)
     for h in hist:
-        c = os.path.join(h["destino"], certificado.NOMBRE) if h.get("destino") else None
+        c = (h.get("resumen") or {}).get("certificado")
+        if not isinstance(c, str):
+            c = os.path.join(h["destino"], certificado.NOMBRE) if h.get("destino") else None
         h["certificado"] = c if c and os.path.isfile(c) else None
+        h["carpeta"] = (h.get("resumen") or {}).get("carpeta") or h.get("destino")
     return jsonify(activos=GESTOR.activos(pid), historial=hist)
 
 
@@ -605,9 +617,10 @@ def _copias(pid):
         d = next((x for x in docs if x.get("id") == a["id"]), None)
         if not d:
             continue
-        ruta = os.path.join(t["destino"], d["rel"])
+        ruta = d.get("copia") or os.path.join(t["destino"], d["rel"])
         if os.path.isfile(ruta):
-            res[a["id"]] = {"id": a["id"], "original": a["rel"], "copia": d["rel"], "ruta": ruta,
+            res[a["id"]] = {"id": a["id"], "original": a["rel"], "copia": os.path.basename(ruta) if d.get("copia") else d["rel"],
+                            "ruta": ruta, "carpeta": os.path.dirname(ruta),
                             "estado": a["estado"], "trabajo": t["id"], "fecha": t.get("terminado") or t.get("creado")}
     return res
 
@@ -816,7 +829,8 @@ def _vigilancia():
                           if a["admitido"] and a["estado"] == "nuevo" and (a.get("visto") or 0) > desde
                           and ahora - (a.get("visto") or 0) > 15 and a["id"] not in ocupados
                           and not os.path.abspath(a["ruta"]).startswith(salida + os.sep)
-                          and "(seudonimizado)" not in a["nombre"]]
+                          and "(seudonimizado" not in a["nombre"]
+                          and os.sep + "Seudonimizados" + os.sep not in a["ruta"]]
                 if nuevos:
                     modelo = p.get("modelo") or ALM.ajuste("modelo_defecto", motor.MODELO)
                     GESTOR.lanzar(p, nuevos, p["perfil"], modelo, None)
@@ -898,14 +912,107 @@ def descargar_actualizacion():
 
 # ---------------------------------------------------------------- sistema
 
+GUARDADOS = set()      # carpetas a las que el usuario ha copiado resultados en esta sesión
+
+
+def _resultados_conocidos():
+    """Carpetas y archivos de resultados que la aplicación ha creado: lo único que se puede abrir,
+    mostrar o copiar desde la interfaz o el chat."""
+    bases = [rutas.SALIDAS] + [p["salida"] for p in ALM.proyectos() if p.get("salida")]
+    for p in ALM.proyectos():
+        for t in ALM.trabajos(p["id"]):
+            r = t.get("resumen") or {}
+            if r.get("carpeta"):
+                bases.append(r["carpeta"])
+            if isinstance(r.get("certificado"), str):
+                bases.append(os.path.dirname(r["certificado"]))
+            for d in r.get("documentos") or []:
+                if d.get("copia"):
+                    bases.append(os.path.dirname(d["copia"]))
+            if t.get("destino"):
+                bases.append(t["destino"])
+    return [os.path.abspath(b) for b in bases + sorted(GUARDADOS) if b]
+
+
+def _permitida(ruta):
+    ruta = os.path.abspath(ruta or "")
+    return os.path.exists(ruta) and any(ruta == b or ruta.startswith(b + os.sep) for b in _resultados_conocidos())
+
+
 @app.post("/api/abrir")
 def abrir():
     ruta = os.path.abspath(_json().get("ruta") or "")
-    permitidas = [rutas.SALIDAS] + [p["salida"] for p in ALM.proyectos() if p.get("salida")]
-    if not any(ruta == b or ruta.startswith(os.path.abspath(b) + os.sep) for b in permitidas) or not os.path.exists(ruta):
-        return jsonify(error="Solo se pueden abrir las carpetas de resultados."), 403
+    if not _permitida(ruta):
+        return jsonify(error="Solo se pueden abrir los resultados de Seudónimo."), 403
     rutas.abrir_carpeta(ruta)
     return jsonify(ok=True)
+
+
+@app.post("/api/mostrar")
+def mostrar():
+    """Muestra el archivo seleccionado en el Finder o en el Explorador de archivos."""
+    ruta = os.path.abspath(_json().get("ruta") or "")
+    if not _permitida(ruta):
+        return jsonify(error="Solo se pueden mostrar los resultados de Seudónimo."), 403
+    rutas.mostrar_en_carpeta(ruta)
+    return jsonify(ok=True)
+
+
+DESTINOS_COMUNES = {"escritorio": ("Desktop", "Escritorio"), "documentos": ("Documents", "Documentos"),
+                    "descargas": ("Downloads", "Descargas")}
+
+
+def _destino(texto):
+    """«Escritorio», «Documentos», «Descargas» o una carpeta que exista en este ordenador."""
+    t = (texto or "").strip()
+    clave = motor.clave(t).strip()
+    if clave in DESTINOS_COMUNES:
+        for n in DESTINOS_COMUNES[clave]:
+            r = os.path.join(os.path.expanduser("~"), n)
+            if os.path.isdir(r):
+                return r
+    r = os.path.abspath(os.path.expanduser(t)) if t else ""
+    return r if r and os.path.isdir(r) else None
+
+
+@app.post("/api/guardar_en")
+def guardar_en():
+    """Copia resultados (copias seudonimizadas o certificados) a una carpeta que elige el usuario."""
+    d = _json()
+    destino = _destino(d.get("destino"))
+    if not destino:
+        return jsonify(error="No encuentro esa carpeta en este ordenador."), 400
+    hechos = []
+    for r in d.get("rutas") or []:
+        r = os.path.abspath(r)
+        if not os.path.isfile(r) or not _permitida(r):
+            return jsonify(error="Solo se pueden copiar los resultados de Seudónimo."), 403
+        final = multipasada._ruta_libre(os.path.join(destino, os.path.basename(r)))
+        shutil.copyfile(r, final)
+        hechos.append(final)
+    GUARDADOS.add(destino)
+    return jsonify(copiados=hechos, carpeta=destino)
+
+
+def resultados_de(pid):
+    """Lo que el usuario necesita saber de un proyecto: sus copias, dónde están y los certificados."""
+    p = _proyecto(pid)
+    copias = sorted(_copias(pid).values(), key=lambda c: c["original"].lower())
+    certificados = []
+    for t in ALM.trabajos(pid):
+        r = t.get("resumen") or {}
+        c = r.get("certificado") if isinstance(r.get("certificado"), str) else None
+        if c and os.path.isfile(c):
+            certificados.append({"ruta": c, "nombre": os.path.basename(c), "fecha": t.get("terminado") or t.get("creado")})
+    carpetas = sorted({c["carpeta"] for c in copias})
+    g = trabajos.modo_guardar(p)
+    return {"copias": copias, "carpetas": carpetas, "certificados": certificados[:20], "modo": g["modo"],
+            "base": g["base"] if g["modo"] == "carpeta" else None}
+
+
+@app.get("/api/proyectos/<int:pid>/resultados")
+def resultados(pid):
+    return jsonify(resultados_de(pid))
 
 
 @app.post("/api/sistema/elegir")

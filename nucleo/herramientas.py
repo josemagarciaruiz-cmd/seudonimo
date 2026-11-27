@@ -51,6 +51,18 @@ ESQUEMAS = [
                              "description": "true si quiere una copia con SOLO esas páginas («seudonimiza solo la página 6», «sácame la página 6 seudonimizada»); false si quiere repasar esas páginas dentro del documento completo ya seudonimizado («repasa la página 6»)."}},
             "required": ["archivos"]}}},
     {"type": "function", "function": {
+        "name": "donde_esta",
+        "description": "Cuando el usuario pregunta dónde está o dónde se ha guardado un documento seudonimizado, el certificado o la carpeta de resultados, o pide abrirlos. Devuelve una tarjeta con la ruta y botones para abrir el documento o mostrarlo en su carpeta.",
+        "parameters": {"type": "object", "properties": {
+            "archivo": {"type": "string", "description": "Documento por el que pregunta; vacío si pregunta por todos"}}}}},
+    {"type": "function", "function": {
+        "name": "guardar_copia",
+        "description": "Cuando el usuario pide guardar o copiar documentos seudonimizados en otra carpeta («guárdalo en el Escritorio», «cópialos a Descargas»). Prepara un plan que el usuario confirma; los originales no se tocan.",
+        "parameters": {"type": "object", "properties": {
+            "archivo": {"type": "string", "description": "Documento a copiar; vacío para todos los del proyecto"},
+            "carpeta": {"type": "string", "description": "Escritorio, Documentos, Descargas o la ruta completa de una carpeta"}},
+            "required": ["carpeta"]}}},
+    {"type": "function", "function": {
         "name": "tapar",
         "description": "Cuando el usuario dice que en una copia ya seudonimizada se ha quedado a la vista algún dato y pide taparlo («en la página 2 se ve el apellido Rodríguez, tápalo», «tapa también josemaria.ai»). Prepara un plan que añade esos datos al registro del proyecto y rehace la copia tapándolos en todo el documento, también dentro de las imágenes. NO lo ejecuta: el usuario lo confirma.",
         "parameters": {"type": "object", "properties": {
@@ -74,7 +86,7 @@ ESQUEMAS = [
 ]
 
 NOMBRES = {e["function"]["name"] for e in ESQUEMAS}
-CONFIRMACION = {"seudonimizar", "tapar"}
+CONFIRMACION = {"seudonimizar", "tapar", "guardar_copia", "donde_esta"}
 
 
 class ErrorHerramienta(Exception):
@@ -206,6 +218,28 @@ def ejecutar(nombre, args, ctx):
                 "nombres": [a["rel"] for a in elegidos], "parametros": multipasada.PERFILES[perfil],
                 "mensaje": "Plan preparado: el usuario debe confirmarlo en la aplicación antes de ejecutarse."}
 
+    if nombre in ("donde_esta", "guardar_copia"):
+        res = ctx["resultados"](pr["id"])
+        copias = res["copias"]
+        if not copias:
+            raise ErrorHerramienta("Todavía no hay documentos seudonimizados en este proyecto.")
+        ref = (args.get("archivo") or "").strip()
+        if ref and not re.search(r"\b(todos|todas|todo)\b", ref.lower()):
+            a = _resolver([x for x in admitidos if any(c["id"] == x["id"] for c in copias)], ref)
+            copias = [c for c in copias if c["id"] == a["id"]]
+        docs = [{"id": c["id"], "original": c["original"], "copia": c["ruta"], "nombre": c["copia"], "estado": c["estado"]}
+                for c in copias]
+        if nombre == "donde_esta":
+            return {"plan": True, "accion": "ubicacion", "documentos": docs, "carpetas": sorted({os.path.dirname(d["copia"]) for d in docs}),
+                    "certificado": res["certificados"][0]["ruta"] if res["certificados"] else None,
+                    "mensaje": "Tarjeta con la ubicación mostrada al usuario: %s. Dile la ruta en una frase; no inventes otras." %
+                               "; ".join(sorted({os.path.dirname(d["copia"]) for d in docs}))}
+        destino = ctx["destino"](args.get("carpeta"))
+        if not destino:
+            raise ErrorHerramienta("No encuentro la carpeta «%s» en este ordenador. Di Escritorio, Documentos, Descargas o la ruta completa." % (args.get("carpeta") or ""))
+        return {"plan": True, "accion": "guardar", "documentos": docs, "destino": destino,
+                "mensaje": "Plan preparado: copiar %d documento(s) a %s. El usuario debe confirmarlo en la aplicación." % (len(docs), destino)}
+
     if nombre == "tapar":
         a = _resolver(admitidos, args.get("archivo"))
         crudos = args.get("datos") or []
@@ -282,7 +316,8 @@ def inventariar(raiz, tipo="carpeta"):
         rutas_ = []
         base = raiz
         for dirpath, dirnames, filenames in os.walk(raiz, followlinks=False):
-            dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
+            # «Seudonimizados» es donde la aplicación deja las copias: nunca se vuelve a leer como original
+            dirnames[:] = sorted(d for d in dirnames if not d.startswith(".") and d.lower() != "seudonimizados")
             for f in sorted(filenames):
                 rutas_.append(os.path.join(dirpath, f))
                 if len(rutas_) >= LIMITE_ARCHIVOS:

@@ -91,14 +91,17 @@ class Gestor:
         tid = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
         reg = registro(proyecto["id"], proyecto["tabla"])
         reg.conservar = conservar(proyecto)
-        base = proyecto.get("salida") or os.path.join(rutas.SALIDAS, _nombre_carpeta(proyecto["nombre"]))
-        destino = os.path.join(base, time.strftime("%Y-%m-%d %H.%M.%S"))
+        # dónde quedan las copias: junto a los originales (subcarpeta «Seudonimizados») o en una
+        # carpeta elegida; los informes internos de cada trabajo, en la carpeta de datos
+        guardar = modo_guardar(proyecto)
+        destino = os.path.join(rutas.DATOS, "informes", str(proyecto["id"]), time.strftime("%Y-%m-%d %H.%M.%S"))
         paginas = paginas or {}
         docs = [{"id": a["id"], "ruta": a["ruta"], "rel": a["rel"] or a["nombre"], "nombre": a["nombre"],
                  "paginas": paginas.get(a["id"]), "solo_paginas": bool(solo_paginas and paginas.get(a["id"])),
                  "previo": a.get("estado")} for a in archivos]
         lote = multipasada.TrabajoLote(tid, docs, reg, perfil=perfil, modelo=modelo, logos=bool(proyecto.get("logos", 1)),
-                                       destino=destino, al_terminar=self._terminado)
+                                       destino=destino, al_terminar=self._terminado, guardar=guardar,
+                                       proyecto=proyecto["nombre"])
         lote.ajustes["solo_ciclos"] = solo_ciclos
         self.vivos[tid] = lote
         self.meta[tid] = {"proyecto": proyecto["id"], "conversacion": conversacion, "creado": time.time(),
@@ -143,10 +146,19 @@ class Gestor:
                                       "resumen": lote.informe and {"recuento": lote.informe["recuento"],
                                                                    "registro": lote.informe["registro"],
                                                                    "duracion_s": lote.informe["duracion_s"],
-                                                                   "documentos": [{"id": d["id"], "rel": d["rel"], "estado": d["estado"], "paginas": d.get("paginas")}
+                                                                   "documentos": [{"id": d["id"], "rel": d["rel"], "estado": d["estado"], "paginas": d.get("paginas"),
+                                                                                   "copia": d.get("copia")}
                                                                                   for d in lote.informe["documentos"]],
-                                                                   "certificado": bool(getattr(lote, "certificado", None))},
+                                                                   "certificado": getattr(lote, "certificado", None),
+                                                                   "carpeta": getattr(lote, "carpeta_resultados", None),
+                                                                   "aviso_guardar": getattr(lote, "aviso_guardar", None)},
                                       "creado": m.get("creado"), "terminado": time.time()})
+        if m.get("conversacion") and lote.informe and lote.estado != "cancelado":
+            try:
+                self.almacen.anadir_mensaje(m["conversacion"], "asistente", texto_listo(lote),
+                                            {"resultado": resultado_de(lote)})
+            except Exception:
+                traceback.print_exc()
 
     def estado(self, tid):
         lote = self.vivos.get(tid)
@@ -163,6 +175,42 @@ class Gestor:
     def activos(self, pid=None):
         return [l.estado_publico() for t, l in self.vivos.items()
                 if l.estado in ("pendiente", "procesando") and (pid is None or self.meta[t]["proyecto"] == pid)]
+
+
+def resultado_de(lote):
+    """Tarjeta «Listo» del chat: cada copia con su ruta, la carpeta y el certificado."""
+    docs = []
+    for d in lote.docs:
+        docs.append({"id": d.doc["id"], "original": d.doc["rel"], "estado": d.estado,
+                     "copia": getattr(d, "final", None), "motivos": d.motivos[:3]})
+    return {"trabajo": lote.id, "documentos": docs, "carpeta": lote.carpeta_resultados,
+            "certificado": getattr(lote, "certificado", None), "aviso": lote.aviso_guardar}
+
+
+def texto_listo(lote):
+    n_ok = sum(1 for d in lote.docs if d.estado == "sin_hallazgos")
+    n_rev = sum(1 for d in lote.docs if d.estado == "revision")
+    n_err = sum(1 for d in lote.docs if d.estado == "error")
+    partes = []
+    if n_ok:
+        partes.append("%d listo%s" % (n_ok, "s" if n_ok > 1 else ""))
+    if n_rev:
+        partes.append("%d para revisar" % n_rev)
+    if n_err:
+        partes.append("%d con error" % n_err)
+    return "**Seudonimización terminada:** %s." % (", ".join(partes) or "sin documentos")
+
+
+def modo_guardar(proyecto):
+    """{"modo": "junto"} o {"modo": "carpeta", "base": ruta}. Un proyecto con carpeta de resultados
+    elegida guarda allí; si no, las copias van junto a los originales."""
+    modo = proyecto.get("guardar") or ("carpeta" if proyecto.get("salida") else "junto")
+    if modo == "carpeta":
+        return {"modo": "carpeta", "base": proyecto.get("salida") or os.path.join(rutas.SALIDAS, _nombre_carpeta(proyecto["nombre"]))}
+    return {"modo": "junto", "base": os.path.join(rutas.SALIDAS, _nombre_carpeta(proyecto["nombre"]))}
+
+
+SUBCARPETA = "Seudonimizados"
 
 
 def _nombre_carpeta(nombre):

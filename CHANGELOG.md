@@ -1,5 +1,15 @@
 # Cambios
 
+## 0.4.0 · 27 de noviembre de 2026
+
+Más fácil de usar: se ve qué hacer y dónde queda cada documento.
+
+- **Las copias se guardan junto a los originales**, en una carpeta «Seudonimizados» dentro de la carpeta de cada documento, sin subcarpetas por fecha. Cada copia lleva el nombre del original con «(seudonimizado)» o «(seudonimizado - revisar)»; la versión anterior pasa a «Anteriores» y los certificados a «Certificados». Al crear el proyecto se puede elegir otra carpeta.
+- **Tarjeta «Listo»** en el chat al terminar: cada documento con «Abrir», «Mostrar en el Finder», «Guardar en…» y «Revisar», la carpeta donde están y el certificado.
+- **Pestaña «Resultados»** (antes «Progreso»): todos los documentos seudonimizados del proyecto con sus botones, dónde se guardan, los certificados y, plegado, el detalle técnico.
+- **Pedirlo en el chat:** «¿dónde está el documento?» muestra la ruta con botones para abrirlo; «guárdalo en el Escritorio» (o en Documentos, Descargas o cualquier carpeta) lo copia tras confirmarlo.
+- **Primer uso guiado** en tres pasos (añadir, seudonimizar, revisar y guardar), un **botón grande «Seudonimizar»** para los documentos pendientes sin pasar por el chat, una zona para **arrastrar archivos** y las opciones técnicas del proyecto en «Opciones avanzadas». «Verificación intensiva» pasa a llamarse «Revisión a fondo».
+
 ## 0.3.8 · 27 de noviembre de 2026
 
 - **Imágenes dentro de Word, PowerPoint y Excel.** Se leen con el OCR del propio ordenador y los datos que aparecen en ellas (una firma escaneada, una captura con un nombre) se tapan con un recuadro negro sobre la imagen, que se guarda en el mismo formato. Las imágenes vectoriales (EMF/WMF) no se pueden leer: si el documento las lleva, el resultado lo avisa.

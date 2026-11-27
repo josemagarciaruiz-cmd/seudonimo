@@ -133,6 +133,7 @@ class TrabajoDocumento:
     def resumen(self):
         """Sin datos originales: apto para el informe exportable."""
         return {"id": self.doc["id"], "rel": self.doc.get("rel_salida") or self.doc["rel"], "estado": self.estado,
+                "copia": getattr(self, "final", None),
                 "estado_texto": ESTADOS[self.estado], "motivos": self.motivos, "pasadas": [
                     {k: v for k, v in p.items() if k != "detalle"} for p in self.pasadas],
                 "incidencias": [{k: v for k, v in i.items()} for i in self.incidencias],
@@ -385,8 +386,13 @@ class TrabajoLote:
     """Seudonimización de un conjunto de archivos con un registro compartido."""
 
     def __init__(self, id_trabajo, documentos, registro, perfil="estandar", modelo=None, logos=True,
-                 destino=None, al_terminar=None):
+                 destino=None, al_terminar=None, guardar=None, proyecto=""):
         self.id = id_trabajo
+        # guardar: {"modo": "junto" | "carpeta", "base": carpeta de resultados (o de respaldo)}
+        self.guardar = guardar or {"modo": "carpeta", "base": destino}
+        self.proyecto = proyecto
+        self.carpeta_resultados = None
+        self.aviso_guardar = None
         self.registro = registro
         self.ajustes = dict(PERFILES[perfil], modelo=modelo, logos=logos, perfil=perfil)
         self.destino = destino
@@ -464,29 +470,58 @@ class TrabajoLote:
 
     # ------------------------------------------------------------ exportación
     def exportar(self):
-        """Copias aprobadas y copias para revisión en carpetas separadas, nunca mezcladas.
-        Los archivos con error no se exportan. El informe no contiene datos originales."""
+        """Copias en la carpeta «Seudonimizados» junto a cada original (o en la carpeta elegida para
+        el proyecto). Sin subcarpetas por fecha: cada copia lleva el nombre del original seudonimizado
+        y, si hay que revisarla, «(seudonimizado - revisar)». La versión anterior de una copia pasa a
+        «Anteriores». Los archivos con error no se exportan. El informe no contiene datos originales."""
         mapa = self.registro.mapa()
         os.makedirs(self.destino, exist_ok=True)
+        marca = time.strftime("%Y-%m-%d %H.%M")
+        respaldo = False
         for d in self.docs:
             if d.estado not in ("sin_hallazgos", "revision") or not d.salida:
                 continue
-            sub = "Aprobados" if d.estado == "sin_hallazgos" else "Para revisar"
-            partes = [motor.reemplazar_texto(p, mapa) for p in os.path.dirname(d.doc["rel"]).replace("\\", "/").split("/") if p]
-            carpeta = os.path.join(self.destino, sub, *partes)
-            os.makedirs(carpeta, exist_ok=True)
+            carpeta = self._carpeta_de(d, mapa)
+            try:
+                os.makedirs(carpeta, exist_ok=True)
+                prueba = os.path.join(carpeta, ".seudonimo-prueba")
+                open(prueba, "w").close()
+                os.remove(prueba)
+            except OSError:
+                # carpeta de solo lectura (una unidad de red, un CD…): a la carpeta de respaldo
+                partes = [motor.reemplazar_texto(p, mapa) for p in os.path.dirname(d.doc["rel"]).replace("\\", "/").split("/") if p]
+                carpeta = os.path.join(self.guardar["base"], *partes)
+                os.makedirs(carpeta, exist_ok=True)
+                respaldo = True
             nombre = nombre_salida(os.path.splitext(d.doc["nombre"])[0] + d.ext, mapa)
             if d.doc.get("solo_paginas") and d.doc.get("paginas"):
                 abrev = {"pptx": "diap.", "xlsx": "hoja"}.get(formatos.ZIP.get(d.ext), "pag.")
                 nombre = nombre.replace(" (seudonimizado)", " (%s %s) (seudonimizado)" % (abrev, "-".join(map(str, d.doc["paginas"]))[:60]), 1)
-            final = _ruta_libre(os.path.join(carpeta, nombre))
+            if d.estado == "revision":
+                nombre = nombre.replace(" (seudonimizado)", " (seudonimizado - revisar)", 1)
+            _a_anteriores(carpeta, nombre, marca)
+            final = os.path.join(carpeta, nombre)
             shutil.copyfile(d.salida, final)
             d.final = final
-            d.doc["rel_salida"] = os.path.relpath(final, self.destino)
+            d.doc["rel_salida"] = nombre
+            if self.carpeta_resultados is None:
+                self.carpeta_resultados = carpeta
             if d.ext_original in formatos.IMAGENES:
                 # llegó como foto: también la imagen, re-renderizada y sin metadatos EXIF
                 base = os.path.splitext(final)[0]
                 formatos.pdf_a_imagenes(final, base)
+        if respaldo:
+            self.aviso_guardar = ("No se ha podido escribir junto a algún original (carpeta de solo lectura): "
+                                  "esas copias están en %s." % self.guardar["base"])
+        self._informes()
+
+    def _carpeta_de(self, d, mapa):
+        if self.guardar.get("modo") == "junto":
+            return os.path.join(os.path.dirname(d.doc["ruta"]), "Seudonimizados")
+        partes = [motor.reemplazar_texto(p, mapa) for p in os.path.dirname(d.doc["rel"]).replace("\\", "/").split("/") if p]
+        return os.path.join(self.guardar["base"], *partes)
+
+    def _informes(self):
         resumen = [d.resumen() for d in self.docs]
         cuenta = {k: sum(1 for d in self.docs if d.estado == k) for k in ESTADOS}
         self.informe = {
@@ -514,9 +549,31 @@ class TrabajoLote:
                                  "ciclos": sum(1 for p in d.pasadas if p["tipo"] == "verificacion"),
                                  "sha_original": certificado.huella(d.doc["ruta"]) if os.path.isfile(d.doc["ruta"]) else "—",
                                  "sha_copia": certificado.huella(d.final)})
-            self.certificado = certificado.generar(self.informe, self.destino, docs)
+            interno = certificado.generar(self.informe, self.destino, docs)
+            self.certificado = interno
+            if self.carpeta_resultados:
+                # una copia del certificado junto a las copias, en «Certificados», con la fecha
+                carpeta = os.path.join(self.carpeta_resultados, "Certificados")
+                os.makedirs(carpeta, exist_ok=True)
+                visible = _ruta_libre(os.path.join(carpeta, "Certificado de seudonimización %s.pdf" % time.strftime("%Y-%m-%d %H.%M")))
+                shutil.copyfile(interno, visible)
+                self.certificado = visible
         except Exception:
             traceback.print_exc()        # el certificado no debe impedir la entrega de las copias
+
+
+def _a_anteriores(carpeta, nombre, marca):
+    """Antes de dejar una copia nueva, la versión anterior del mismo documento (aprobada o para
+    revisar) pasa a «Anteriores» con la fecha, para que en la carpeta solo esté la última."""
+    base, ext = os.path.splitext(nombre)
+    raiz = re.sub(r" \(seudonimizado( - revisar)?\)$", "", base)
+    for previo in (raiz + " (seudonimizado)" + ext, raiz + " (seudonimizado - revisar)" + ext):
+        ruta = os.path.join(carpeta, previo)
+        if os.path.isfile(ruta):
+            ant = os.path.join(carpeta, "Anteriores")
+            os.makedirs(ant, exist_ok=True)
+            b, e = os.path.splitext(previo)
+            shutil.move(ruta, _ruta_libre(os.path.join(ant, "%s %s%s" % (b, marca, e))))
 
 
 def _ruta_libre(ruta):
