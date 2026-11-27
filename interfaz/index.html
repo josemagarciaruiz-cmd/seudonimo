@@ -76,6 +76,9 @@
     </div>
     <div class="mesa-acciones">
       <span class="pendientes" id="mesa-estado-trabajo" hidden></span>
+      <div class="segmentos" id="mesa-vista" role="group" aria-label="Cómo ver la copia" hidden>
+        <button type="button" data-vista="pagina" aria-pressed="true">Página</button><button type="button" data-vista="texto" aria-pressed="false">Texto</button>
+      </div>
       <button class="boton boton-principal" id="mesa-repasar" hidden>Volver a leer</button>
       <button class="boton" id="mesa-contexto" title="¿Se podría reconocer a la persona por la suma de datos indirectos?">Comprobar riesgo</button>
       <button class="boton-texto" id="mesa-abrir" title="Abrir la copia con su programa">Abrir la copia</button>
@@ -85,7 +88,7 @@
   </header>
   <div class="mesa-cuerpo">
     <nav class="mesa-docs" id="mesa-docs" aria-label="Documentos" hidden></nav>
-    <article class="mesa-hoja" id="mesa-hoja"><div class="mesa-texto" id="mesa-texto"></div></article>
+    <article class="mesa-hoja" id="mesa-hoja"><div class="mesa-paginas" id="mesa-paginas" hidden></div><div class="mesa-texto" id="mesa-texto"></div></article>
     <aside class="mesa-datos" id="mesa-datos" aria-label="Datos tapados"></aside>
   </div>
   <div class="mesa-pop" id="mesa-pop" hidden></div>

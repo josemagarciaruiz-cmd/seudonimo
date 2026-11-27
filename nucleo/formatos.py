@@ -309,6 +309,11 @@ def texto_paginas(paginas):
 def recortar_pdf(ruta, paginas, carpeta):
     """Copia del PDF con solo esas páginas (numeradas desde 1), en ese orden."""
     import pypdfium2 as pdfium
+    with pdfdoc.CERROJO:
+        return _recortar_pdf(ruta, paginas, carpeta, pdfium)
+
+
+def _recortar_pdf(ruta, paginas, carpeta, pdfium):
     src = pdfium.PdfDocument(ruta)
     try:
         n = len(src)
@@ -333,11 +338,12 @@ def _abrir_pdf(ruta):
         raise ErrorFormato(str(e))
 
 
-def extraer_paginas(ruta, ext, progreso=None, verificar=False, dpi=None):
+def extraer_paginas(ruta, ext, progreso=None, verificar=False, dpi=None, mostrar=False):
     """Texto de cada página (PDF y Word), diapositiva (PowerPoint) u hoja (Excel); para el resto
-    de formatos, una sola «página» con todo el texto."""
+    de formatos, una sola «página» con todo el texto. «mostrar»: para enseñar una copia ya tachada
+    (sus páginas son una imagen con capa de texto): no se repite el texto leyendo la imagen con OCR."""
     if ext == ".pdf":
-        return _paginas_pdf(ruta, progreso, verificar, dpi)
+        return _paginas_pdf(ruta, progreso, verificar, dpi, mostrar)
     if ext in ZIP:
         completo = extraer_texto(ruta, ext, comprobar=False)
         try:
@@ -389,7 +395,7 @@ def _extraer_pdf(ruta, comprobar=True, progreso=None, verificar=False, dpi=None)
     return texto
 
 
-def _paginas_pdf(ruta, progreso=None, verificar=False, dpi=None):
+def _paginas_pdf(ruta, progreso=None, verificar=False, dpi=None, mostrar=False):
     with _abrir_pdf(ruta) as doc:
         escaneadas = [p.number for p in doc if necesita_ocr(p, verificar)]
         if escaneadas and not ocr.DISPONIBLE:
@@ -406,7 +412,7 @@ def _paginas_pdf(ruta, progreso=None, verificar=False, dpi=None):
             else:
                 # una firma en banda, un pie legal o una foto con texto dentro de una página con
                 # texto: no se tapan enteras como los logos, así que se leen con OCR
-                lineas = _ocr_imagenes(page, None if verificar else (ruta, page.number), dpi=dpi)
+                lineas = _ocr_imagenes(page, None if verificar else (ruta, page.number), dpi=dpi, sin_pagina_completa=mostrar)
                 if lineas:
                     t = t + "\n" + "\n".join(l["texto"] for l in lineas)
             partes.append(t)
@@ -860,13 +866,14 @@ def _imagenes_contenido(page):
             (r.get_area() > 0.12 * W * H or r.width > 0.6 * W or r.height > 0.45 * H)]
 
 
-def _ocr_imagenes(page, clave=None, dpi=None):
+def _ocr_imagenes(page, clave=None, dpi=None, sin_pagina_completa=False):
     """Líneas de OCR que caen dentro de las imágenes grandes de una página que tiene texto:
     la firma de un correo hecha imagen, el pie legal, una foto con un nombre. Sin esto, lo
     que pone en ellas no lo ve ni la detección ni la verificación."""
     if not ocr.DISPONIBLE:
         return []
-    rects = [r.ampliar(2, 2) for r in _imagenes_contenido(page)]
+    rects = [r.ampliar(2, 2) for r in _imagenes_contenido(page)
+             if not (sin_pagina_completa and r.get_area() > 0.9 * page.width * page.height)]
     if not rects:
         return []
     try:

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Cola de trabajos: una inferencia cada vez (16 GB de memoria), un registro de entidades por
 proyecto cargado y guardado cifrado, y estado en vivo para la interfaz."""
+import json
 import os
 import queue
 import threading
@@ -104,6 +105,7 @@ class Gestor:
                                        proyecto=proyecto["nombre"])
         lote.ajustes["solo_ciclos"] = solo_ciclos
         lote.ajustes["generalizaciones"] = generalizaciones(proyecto)
+        lote.ajustes["zonas"] = zonas_manuales(proyecto)
         self.vivos[tid] = lote
         self.meta[tid] = {"proyecto": proyecto["id"], "conversacion": conversacion, "creado": time.time(),
                           "tabla": proyecto["tabla"]}
@@ -202,9 +204,18 @@ def texto_listo(lote):
     return "**Seudonimización terminada:** %s." % (", ".join(partes) or "sin documentos")
 
 
+def zonas_manuales(proyecto):
+    """Zonas que el profesional ha tapado con el rotulador en el visor de páginas:
+    {id de archivo (str): [{"id", "pagina" (desde 1), "rect": [x0, y0, x1, y1] en puntos}]}."""
+    try:
+        z = json.loads(proyecto.get("zonas") or "{}")
+        return z if isinstance(z, dict) else {}
+    except (TypeError, ValueError):
+        return {}
+
+
 def generalizaciones(proyecto):
     """Datos indirectos que el profesional ha decidido generalizar en este proyecto (riesgo por contexto)."""
-    import json
     try:
         return [g for g in json.loads(proyecto.get("generalizaciones") or "[]") if g.get("texto") and g.get("reemplazo")]
     except ValueError:

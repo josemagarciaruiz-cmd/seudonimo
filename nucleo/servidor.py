@@ -10,6 +10,7 @@ Seguridad:
 Uso: python servidor.py [--puerto 0] [--navegador]
 Imprime «SEUDONIMO_LISTO <puerto>» cuando está preparado (lo lee la ventana de Tauri)."""
 import argparse
+import io
 import json
 import os
 import re
@@ -43,6 +44,7 @@ import instalacion  # noqa: E402
 import motor  # noqa: E402
 import multipasada  # noqa: E402
 import ocr  # noqa: E402
+import pdfdoc  # noqa: E402
 import proveedores  # noqa: E402
 import registro as registro_mod  # noqa: E402
 import trabajos  # noqa: E402
@@ -699,7 +701,7 @@ def _paginas_copia(c):
         if len(_TEXTOS) > 40:
             _TEXTOS.clear()
         ext = os.path.splitext(c["ruta"])[1].lower()
-        _TEXTOS[clave] = formatos.extraer_paginas(c["ruta"], ext)
+        _TEXTOS[clave] = formatos.extraer_paginas(c["ruta"], ext, mostrar=True)
     return _TEXTOS[clave]
 
 
@@ -742,6 +744,95 @@ def texto_copia(pid, aid):
     ext = os.path.splitext(c["ruta"])[1].lower()
     return jsonify(dict(c, texto=texto, escapados=escapados, paginas=cortes if len(paginas) > 1 else [],
                         unidad=formatos.unidad(ext), unidades=formatos.unidad(ext, True)))
+
+
+_PAGINAS = {}         # (ruta, mtime, n, dpi) -> PNG de la página de la copia (en memoria)
+
+
+def _pdf_copia(pid, aid):
+    c = _copias(pid).get(aid)
+    if not c or os.path.splitext(c["ruta"])[1].lower() != ".pdf":
+        return None
+    return c
+
+
+@app.get("/api/proyectos/<int:pid>/copias/<int:aid>/paginas")
+def paginas_copia(pid, aid):
+    """Para el visor: cuántas páginas tiene la copia (PDF) y el tamaño de cada una en puntos."""
+    p = _proyecto(pid)
+    c = _pdf_copia(pid, aid)
+    if not c:
+        return jsonify(visor=False)
+    try:
+        with pdfdoc.abrir(c["ruta"]) as doc:
+            tam = [[round(pg.width, 2), round(pg.height, 2)] for pg in doc]
+    except Exception as e:  # noqa
+        return jsonify(error="No he podido abrir la copia: %s" % str(e)[:200]), 400
+    zonas = trabajos.zonas_manuales(p).get(str(aid), [])
+    return jsonify(visor=True, paginas=tam, zonas=zonas, version=int(os.path.getmtime(c["ruta"])))
+
+
+@app.get("/api/proyectos/<int:pid>/copias/<int:aid>/pagina/<int:n>.png")
+def imagen_pagina(pid, aid, n):
+    """La página n (desde 1) de la copia seudonimizada, como imagen. Solo copias conocidas del
+    expediente; nunca el original."""
+    _proyecto(pid)
+    c = _pdf_copia(pid, aid)
+    if not c:
+        abort(404)
+    try:
+        dpi = max(50, min(200, int(request.args.get("dpi", 110))))
+    except ValueError:
+        dpi = 110
+    clave = (c["ruta"], os.path.getmtime(c["ruta"]), n, dpi)
+    if clave not in _PAGINAS:
+        try:
+            with pdfdoc.abrir(c["ruta"]) as doc:
+                if not 1 <= n <= len(doc):
+                    abort(404)
+                img = doc[n - 1].renderizar(dpi)
+        except Exception:  # noqa
+            abort(404)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG", optimize=True)
+        if len(_PAGINAS) > 60:
+            _PAGINAS.clear()
+        _PAGINAS[clave] = buf.getvalue()
+    return Response(_PAGINAS[clave], mimetype="image/png", headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/proyectos/<int:pid>/zonas")
+def zonas_manuales(pid):
+    """El rotulador del visor: tapar una zona de una página (poner) o quitar una zona tapada a mano
+    (quitar). Se guarda en el expediente y la copia se rehace en el acto."""
+    p = _proyecto(pid)
+    d = _json()
+    a = next((x for x in ALM.archivos(pid) if x["id"] == d.get("archivo") and x["admitido"]), None)
+    if not a:
+        return jsonify(error="Ese documento ya no está en el expediente."), 400
+    zonas = trabajos.zonas_manuales(p)
+    lista = zonas.setdefault(str(a["id"]), [])
+    if d.get("accion") == "quitar":
+        lista[:] = [z for z in lista if z.get("id") != d.get("id")]
+        nueva = None
+    else:
+        try:
+            pagina = int(d.get("pagina"))
+            r = [float(v) for v in d.get("rect")]
+            assert len(r) == 4 and pagina >= 1
+        except (TypeError, ValueError, AssertionError):
+            return jsonify(error="Zona no válida."), 400
+        x0, y0, x1, y1 = min(r[0], r[2]), min(r[1], r[3]), max(r[0], r[2]), max(r[1], r[3])
+        if x1 - x0 < 2 or y1 - y0 < 2:
+            return jsonify(error="La zona es demasiado pequeña."), 400
+        nueva = {"id": secrets.token_hex(4), "pagina": pagina, "rect": [round(x0, 2), round(y0, 2), round(x1, 2), round(y1, 2)]}
+        lista.append(nueva)
+    if not lista:
+        zonas.pop(str(a["id"]), None)
+    ALM.actualizar_proyecto(pid, zonas=json.dumps(zonas, ensure_ascii=False))
+    p = _proyecto(pid)
+    tid = _rehacer(p, a, None, d.get("conversacion"))
+    return jsonify(zona=nueva, trabajo=tid, estado=GESTOR.estado(tid))
 
 
 def _texto_para_ia(pid, ids=None):
@@ -1139,6 +1230,7 @@ def _limpiar_temporales():
 
 def _puerto_libre(preferido):
     s = socket.socket()
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)   # conexiones en TIME_WAIT de la sesión anterior no bloquean el puerto
     try:
         s.bind(("127.0.0.1", preferido))
     except OSError:

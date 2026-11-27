@@ -1,5 +1,11 @@
 # Cambios
 
+## 0.8.0 · 27 de noviembre de 2026
+
+- **Visor de páginas con rotulador.** La revisión de un PDF (también las fotos y los escaneos, que se convierten a PDF) enseña la página tal como ha quedado, con los tachones. Para tapar algo que falta, se arrastra el ratón por encima, como con un rotulador: la zona se tapa en el acto con un recuadro «Tapado», se puede quitar (✕ al pasar el ratón) y queda guardada en el expediente, de modo que se mantiene si la copia se vuelve a generar. El texto que había debajo desaparece del archivo. Un selector «Página | Texto» permite seguir viendo el texto con las etiquetas; los documentos de Office se ven en texto.
+- La vista de texto de una copia ya no repite el contenido de las páginas tachadas (antes se leía dos veces: la capa de texto y la imagen).
+- Robustez: la biblioteca de PDF ya no se usa desde dos hilos a la vez (podía cerrar la aplicación al abrir varias páginas mientras un trabajo tachaba otro documento). Y si la aplicación se cierra y se abre enseguida, vuelve a usar el mismo puerto.
+
 ## 0.7.0 · 27 de noviembre de 2026
 
 Menos pasos y palabras más claras, para que se use sin explicaciones.

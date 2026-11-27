@@ -746,7 +746,7 @@ function inline(s) {
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>")
-    .replace(/\[([A-Z_]+_\d{1,4}|LOGO O SELLO)\]/g, '<span class="tachon">[$1]</span>');
+    .replace(/\[([A-Z_]+_\d{1,4}|LOGO O SELLO|CARA|TAPADO)\]/g, '<span class="tachon">[$1]</span>');
 }
 
 // ------------------------------------------------------------------ panel: archivos
@@ -1326,13 +1326,15 @@ function pintarVoz(v) {
 // la copia se rehace en el acto, con «Deshacer». Clic en una etiqueta para ver qué tapa y dejarla a
 // la vista si no es un dato personal (también en el acto). Nada queda «pendiente».
 
-const MESA = { copias: [], actual: null, datos: null, registro: null, trabajo: null, sondeo: null, paginas: new Set(), datosAbiertos: false };
-const RE_MARCA = /\[(?:[A-Z_]+_\d{1,4}|LOGO O SELLO|CARA)\]/g;
+const MESA = { copias: [], actual: null, datos: null, registro: null, trabajo: null, sondeo: null, paginas: new Set(), datosAbiertos: false,
+  visor: null, vista: "pagina" };
+const RE_MARCA = /\[(?:[A-Z_]+_\d{1,4}|LOGO O SELLO|CARA|TAPADO)\]/g;
 
 function etiquetaMarca(m) {
   // [PERSONA_001] → «Persona 1»: lo que ve quien revisa; el archivo conserva el marcador
   if (m === "[LOGO O SELLO]") return "Logo o sello";
   if (m === "[CARA]") return "Cara";
+  if (m === "[TAPADO]") return "Tapado a mano";
   const x = /^\[([A-Z_]+)_(\d{1,4})\]$/.exec(m);
   if (!x) return m;
   const etq = (MESA.registro?.etiquetas || E.etiquetas || {})[x[1]] || x[1].charAt(0) + x[1].slice(1).toLowerCase().replace(/_/g, " ");
@@ -1385,7 +1387,99 @@ async function verCopia(aid) {
   try {
     MESA.datos = await api("GET", `/api/proyectos/${E.proyecto.id}/copias/${aid}`);
   } catch (e) { hoja.innerHTML = `<p class="nota">${esc(e.message)}</p>`; return; }
+  try { MESA.visor = await api("GET", `/api/proyectos/${E.proyecto.id}/copias/${aid}/paginas`); } catch (e) { MESA.visor = { visor: false }; }
   pintarHoja();
+  pintarVisor();
+}
+
+// ---- visor de páginas: la página tal como ha quedado y el rotulador para tapar una zona
+function pintarVisor() {
+  const v = MESA.visor;
+  const hay = !!(v && v.visor);
+  $("#mesa-vista").hidden = !hay;
+  const vista = hay ? MESA.vista : "texto";
+  $$("#mesa-vista button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.vista === vista)));
+  $("#mesa-texto").hidden = vista !== "texto";
+  const cont = $("#mesa-paginas");
+  cont.hidden = vista !== "pagina";
+  if (!hay || vista !== "pagina") { cont.innerHTML = ""; return; }
+  const zonas = v.zonas || [];
+  cont.innerHTML = `<p class="nota ayuda-rotulador">Arrastra el ratón sobre lo que quieras tapar, como con un rotulador. Se tapa en el acto y se puede quitar.${v.paginas.length > 1 ? ` ${v.paginas.length} páginas.` : ""}</p>` +
+    v.paginas.map(([w, h], i) => {
+      const n = i + 1;
+      const zs = zonas.filter((z) => z.pagina === n).map((z) => `<div class="zona-manual" style="left:${(z.rect[0] / w * 100).toFixed(3)}%;top:${(z.rect[1] / h * 100).toFixed(3)}%;width:${((z.rect[2] - z.rect[0]) / w * 100).toFixed(3)}%;height:${((z.rect[3] - z.rect[1]) / h * 100).toFixed(3)}%" title="Tapado a mano"><button type="button" class="quitar-zona" data-quitar-zona="${esc(z.id)}" title="Quitar este tapado">✕</button></div>`).join("");
+      return `<figure class="pag-vista" data-n="${n}" data-w="${w}" data-h="${h}">
+        ${v.paginas.length > 1 ? `<figcaption>Página ${n} de ${v.paginas.length}</figcaption>` : ""}
+        <div class="pag-marco" style="aspect-ratio:${w} / ${h}"><img data-src="${E.conexion.base}/api/proyectos/${E.proyecto.id}/copias/${MESA.actual.id}/pagina/${n}.png?dpi=120&v=${v.version}" alt="Página ${n}" draggable="false"><div class="capa">${zs}<div class="dibujo" hidden></div></div></div>
+      </figure>`;
+    }).join("");
+  // las imágenes se piden con el token: se cargan a mano
+  $$("img", cont).forEach(async (img) => {
+    try {
+      const r = await fetch(img.dataset.src, { headers: { "X-Seudonimo-Token": E.conexion.token } });
+      if (r.ok) img.src = URL.createObjectURL(await r.blob());
+    } catch (e) { /* se queda en blanco */ }
+  });
+  $$(".capa", cont).forEach(enlazarRotulador);
+}
+
+function enlazarRotulador(capa) {
+  let ini = null;
+  const dib = $(".dibujo", capa);
+  const pct = (ev) => {
+    const r = capa.getBoundingClientRect();
+    return [Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height))];
+  };
+  const pintar = (a, b) => {
+    dib.hidden = false;
+    dib.style.left = Math.min(a[0], b[0]) * 100 + "%"; dib.style.top = Math.min(a[1], b[1]) * 100 + "%";
+    dib.style.width = Math.abs(a[0] - b[0]) * 100 + "%"; dib.style.height = Math.abs(a[1] - b[1]) * 100 + "%";
+  };
+  capa.addEventListener("pointerdown", (ev) => {
+    if (MESA.trabajo || ev.button !== 0 || ev.target.closest(".quitar-zona")) return;
+    ev.preventDefault();
+    $("#mesa-pop").hidden = true;
+    ini = pct(ev);
+    capa.setPointerCapture(ev.pointerId);
+    pintar(ini, ini);
+  });
+  capa.addEventListener("pointermove", (ev) => { if (ini) pintar(ini, pct(ev)); });
+  capa.addEventListener("pointerup", (ev) => {
+    if (!ini) return;
+    const fin = pct(ev);
+    const a = ini; ini = null;
+    const fig = capa.closest(".pag-vista");
+    const w = +fig.dataset.w, h = +fig.dataset.h;
+    const rect = [Math.min(a[0], fin[0]) * w, Math.min(a[1], fin[1]) * h, Math.max(a[0], fin[0]) * w, Math.max(a[1], fin[1]) * h];
+    if (rect[2] - rect[0] < 4 || rect[3] - rect[1] < 4) { dib.hidden = true; return; }
+    $("#mesa-pop").innerHTML = `<div class="pop-titulo">Tapar esta zona</div>
+      <p class="nota">Se tapa con un recuadro «Tapado» en esta página. Si tapa texto, ese texto desaparece del archivo.</p>
+      <div class="plan-acciones"><button type="button" class="boton boton-principal" id="pop-zona">Tapar</button><button type="button" class="boton" id="pop-zona-no">Cancelar</button></div>`;
+    situarPop(dib.getBoundingClientRect());
+    $("#pop-zona-no").onclick = () => { dib.hidden = true; $("#mesa-pop").hidden = true; };
+    $("#pop-zona").onclick = async () => {
+      $("#mesa-pop").hidden = true;
+      try {
+        const r = await api("POST", `/api/proyectos/${E.proyecto.id}/zonas`, { archivo: MESA.actual.id, pagina: +fig.dataset.n, rect, conversacion: E.conversacion });
+        dib.classList.add("fijado");
+        const id = r.zona?.id;
+        seguirTrabajoMesa(r.trabajo, "Tapando la zona…", { texto: "Zona tapada.", etiqueta: "Deshacer", accion: () => quitarZona(id) });
+      } catch (e) { dib.hidden = true; alerta(e.message); }
+    };
+  });
+  capa.addEventListener("pointercancel", () => { ini = null; dib.hidden = true; });
+}
+
+async function quitarZona(id) {
+  if (!id || !MESA.actual) return;
+  const r = await api("POST", `/api/proyectos/${E.proyecto.id}/zonas`, { archivo: MESA.actual.id, accion: "quitar", id, conversacion: E.conversacion });
+  seguirTrabajoMesa(r.trabajo, "Quitando el tapado…", { texto: "Tapado quitado: vuelve a verse." });
+}
+
+function cambiarVistaMesa(v) {
+  MESA.vista = v;
+  try { localStorage.setItem("seudonimo.vistaMesa", v); } catch (e) { /* sin almacenamiento */ }
+  pintarVisor();
 }
 
 function pintarHoja() {
@@ -1829,6 +1923,8 @@ function enlazar() {
   $("#mesa-cerrar").onclick = cerrarMesa;
   $("#mesa-repasar").onclick = () => repasarPaginas().catch((e) => alerta(e.message));
   $("#mesa-datos-toggle").onclick = () => alternarDatosMesa();
+  $$("#mesa-vista button").forEach((b) => (b.onclick = () => cambiarVistaMesa(b.dataset.vista)));
+  try { MESA.vista = localStorage.getItem("seudonimo.vistaMesa") || "pagina"; } catch (e) { /* sin almacenamiento */ }
   try { MESA.datosAbiertos = !!localStorage.getItem("seudonimo.datosMesa"); } catch (e) { /* sin almacenamiento */ }
   $("#mesa-contexto").onclick = () => MESA.actual && riesgoContexto(MESA.actual.id).catch((e) => alerta(e.message));
   $("#mesa-abrir").onclick = () => MESA.actual && api("POST", "/api/abrir", { ruta: MESA.actual.ruta }).catch((e) => alerta(e.message));
@@ -1875,7 +1971,7 @@ function enlazar() {
   });
   document.addEventListener("click", async (ev) => {
     if (!ev.target.closest("#menu")) cerrarMenu();
-    if (!ev.target.closest("#mesa-pop") && !ev.target.closest(".marca") && !getSelection().toString()) $("#mesa-pop").hidden = true;
+    if (!ev.target.closest("#mesa-pop") && !ev.target.closest(".marca") && !ev.target.closest(".capa") && !getSelection().toString()) $("#mesa-pop").hidden = true;
     const b = ev.target.closest("button, [data-proyecto]");
     if (!b) return;
     const d = b.dataset;
@@ -1899,6 +1995,7 @@ function enlazar() {
         await cambiarEntidadMesa(+(d.descartarEnt || d.reactivarEnt), d.descartarEnt ? "descartar" : "reactivar");
       }
       else if ("actualizarCopia" in d) { if (MESA.actual && !MESA.trabajo) await rehacer([MESA.actual.id]); }
+      else if (d.quitarZona) { if (!MESA.trabajo) await quitarZona(d.quitarZona); }
       else if (d.marca) popMarca(b);
       else if (d.mesaDoc) await verCopia(+d.mesaDoc);
       else if (d.revisar) await abrirMesa(+d.revisar);

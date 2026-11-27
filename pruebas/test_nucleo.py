@@ -482,3 +482,33 @@ def test_tapar_a_mano_dentro_de_una_generalizacion():
     original = "Está de baja por un trastorno adaptativo derivado del conflicto."
     assert motor.reemplazar_texto(original.replace("un trastorno", "trastorno"), mapa) == \
         "Está de baja por un [OTRO_001] de salud mental derivado del conflicto."
+
+
+def test_zona_manual_del_rotulador_se_tapa_en_la_copia(tmp_path):
+    import formatos
+    from reportlab.pdfgen import canvas
+    import multipasada
+    import pdfdoc
+    ruta = str(tmp_path / "doc.pdf")
+    c = canvas.Canvas(ruta, pagesize=(595, 842))
+    c.drawString(72, 760, "Cabecera de la empresa")
+    c.drawString(72, 700, "Texto que se queda a la vista")
+    c.save()
+    # el rotulador tapa la cabecera (coordenadas de pantalla: origen arriba a la izquierda)
+    doc = multipasada.TrabajoDocumento({"id": 7, "ruta": ruta, "rel": "doc.pdf", "nombre": "doc.pdf"}, None,
+                                       {"zonas": {"7": [{"id": "a1", "pagina": 1, "rect": [60, 842 - 775, 300, 842 - 750]}]}}, str(tmp_path))
+    doc._sembrar_zonas_manuales()
+    assert 0 in doc.zonas_extra and doc.zonas_extra[0][0][1] == multipasada.MARCA_MANUAL
+    salida = str(tmp_path / "copia.pdf")
+    formatos.aplicar(ruta, salida, ".pdf", [], {"logos": False, "extra": doc.zonas_extra})
+    texto = formatos.extraer_paginas(salida, ".pdf")[0]
+    assert "Cabecera" not in texto and "a la vista" in texto and "[TAPADO]" in texto
+    with pdfdoc.abrir(salida) as d:
+        assert len(d) == 1 and d[0].renderizar(50).size[0] > 0
+
+
+def test_zonas_manuales_del_proyecto():
+    import trabajos
+    assert trabajos.zonas_manuales({"zonas": None}) == {}
+    assert trabajos.zonas_manuales({"zonas": "no es json"}) == {}
+    assert trabajos.zonas_manuales({"zonas": '{"7": [{"id": "a", "pagina": 1, "rect": [1, 2, 3, 4]}]}'})["7"][0]["pagina"] == 1

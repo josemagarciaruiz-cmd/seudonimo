@@ -36,9 +36,13 @@ import traceback
 import contexto
 import formatos
 import motor
+import pdfdoc
 import registro as registro_mod
 import rutas
 import verificacion
+
+
+MARCA_MANUAL = "[TAPADO]"
 
 
 def mapa_completo(base, generalizaciones):
@@ -131,6 +135,7 @@ class TrabajoDocumento:
         self.texto_original = None  # solo en memoria; nunca se guarda en disco
         self.paginas_texto = None   # texto por página (PDF, Word), diapositiva u hoja, para repasar solo unas
         self.zonas_extra = {}       # {página: [(Rect, marcador)]}: restos localizados en la copia por la verificación
+        self._zonas_sembradas = False
         self.medios_extra = {}      # {imagen interna de Office: [caja]}: caras que la verificación vio en la copia
         self.version_registro = -1
         self.aplicado = set()       # (forma, marcador) aplicados en el último ciclo
@@ -270,9 +275,22 @@ class TrabajoDocumento:
             nuevas = self.registro.incorporar(motor.filtrar_fechas(ents, texto), self.doc["id"])
             self.pasadas.append({"tipo": "deteccion", "n": n, "nuevos": len(nuevas), "tiempo": round(time.time() - self.t0, 1)})
 
+    def _sembrar_zonas_manuales(self):
+        """Zonas tapadas a mano con el rotulador (visor de páginas): se tapan en todos los ciclos.
+        Se leen aquí y no al crear el documento porque los ajustes del lote se completan después."""
+        if self._zonas_sembradas:
+            return
+        self._zonas_sembradas = True
+        for z in (self.ajustes.get("zonas") or {}).get(str(self.doc.get("id")), []):
+            try:
+                self.zonas_extra.setdefault(int(z["pagina"]) - 1, []).append((pdfdoc.Rect(*[float(v) for v in z["rect"]]), MARCA_MANUAL))
+            except (KeyError, TypeError, ValueError):
+                continue
+
     def _ciclos(self, ciclo0=0):
         """Transformación desde el original + verificación independiente, hasta converger."""
         lim = self.ajustes
+        self._sembrar_zonas_manuales()
         limpias = 0
         ciclo = ciclo0
         while ciclo < ciclo0 + lim["max_ciclos"]:

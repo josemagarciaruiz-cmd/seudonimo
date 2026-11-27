@@ -10,7 +10,7 @@ import proveedores
 MODELO = "gemma4:12b"     # modelo por defecto; cada proyecto puede elegir otro
 TAM_FRAGMENTO = 2500
 # Marcadores ya insertados: se reconocen como tales y nunca como datos nuevos
-MARCADOR = re.compile(r"\[(?:[A-Z_]+_\d{1,4}|LOGO O SELLO)\]")
+MARCADOR = re.compile(r"\[(?:[A-Z_]+_\d{1,4}|LOGO O SELLO|CARA|TAPADO)\]")
 # MARCADOR_OCR (más abajo): los marcadores como los lee a veces el OCR, con los corchetes
 # perdidos o cambiados por «t», «l», «|» o «(»
 

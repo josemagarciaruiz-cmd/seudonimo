@@ -137,25 +137,26 @@ def _estructura_pdf(ruta, mapa):
                     "detalle": "El PDF conserva revisiones anteriores que podrían contener el texto original."})
     import pypdfium2 as pdfium
     import pypdfium2.raw as praw
-    doc = pdfium.PdfDocument(ruta)
-    try:
-        meta = doc.get_metadata_dict(skip_empty=True)
-        texto_meta = " ".join(str(v) for v in meta.values())
-        if texto_meta and _hay_conocido(texto_meta, mapa):
-            inc.append({"tipo": "dato_en_metadatos", "grave": True, "detalle": "Los metadatos del PDF contienen datos originales."})
-        n_adj = praw.FPDFDoc_GetAttachmentCount(doc.raw)
-        if n_adj:
-            inc.append({"tipo": "adjuntos_pdf", "grave": True, "detalle": "El PDF lleva %d archivo(s) adjunto(s) sin revisar." % n_adj})
-        anot = 0
-        for i in range(len(doc)):
-            pag = doc[i]
-            anot += praw.FPDFPage_GetAnnotCount(pag.raw)
-            pag.close()
-        if anot:
-            inc.append({"tipo": "anotaciones", "grave": False,
-                        "detalle": "El PDF tiene %d anotación(es); su texto se ha revisado con la extracción." % anot})
-    finally:
-        doc.close()
+    with pdfdoc.CERROJO:
+        doc = pdfium.PdfDocument(ruta)
+        try:
+            meta = doc.get_metadata_dict(skip_empty=True)
+            texto_meta = " ".join(str(v) for v in meta.values())
+            if texto_meta and _hay_conocido(texto_meta, mapa):
+                inc.append({"tipo": "dato_en_metadatos", "grave": True, "detalle": "Los metadatos del PDF contienen datos originales."})
+            n_adj = praw.FPDFDoc_GetAttachmentCount(doc.raw)
+            if n_adj:
+                inc.append({"tipo": "adjuntos_pdf", "grave": True, "detalle": "El PDF lleva %d archivo(s) adjunto(s) sin revisar." % n_adj})
+            anot = 0
+            for i in range(len(doc)):
+                pag = doc[i]
+                anot += praw.FPDFPage_GetAnnotCount(pag.raw)
+                pag.close()
+            if anot:
+                inc.append({"tipo": "anotaciones", "grave": False,
+                            "detalle": "El PDF tiene %d anotación(es); su texto se ha revisado con la extracción." % anot})
+        finally:
+            doc.close()
     return inc
 
 

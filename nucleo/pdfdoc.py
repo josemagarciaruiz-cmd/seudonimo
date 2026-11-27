@@ -12,9 +12,11 @@ los datos con un recuadro blanco y su marcador, y se le añade una capa de texto
 dato original desaparece de verdad del archivo: no queda debajo del recuadro. Las páginas
 sin datos se copian tal cual, sin perder calidad."""
 import ctypes
+import functools
 import io
 import math
 import re
+import threading
 
 import pypdfium2 as pdfium
 import pypdfium2.raw as raw
@@ -24,6 +26,19 @@ DPI_TEXTO = 200        # resolución de las páginas tachadas que eran texto
 DPI_ESCANEO = 300      # resolución de las páginas tachadas que eran escaneos
 CALIDAD_JPEG = 88
 _ESPACIOS = re.compile(r"[\s  -​　]")
+
+
+# PDFium no admite llamadas desde varios hilos a la vez (la interfaz pide páginas mientras un
+# trabajo tacha otro documento): toda llamada a la biblioteca pasa por este cerrojo.
+CERROJO = threading.RLock()
+
+
+def _serializado(f):
+    @functools.wraps(f)
+    def envoltura(*a, **k):
+        with CERROJO:
+            return f(*a, **k)
+    return envoltura
 
 
 class ErrorPDF(Exception):
@@ -78,6 +93,7 @@ class Rect:
 # ---------------------------------------------------------------- lectura
 
 class Documento:
+    @_serializado
     def __init__(self, ruta):
         try:
             self.pdf = pdfium.PdfDocument(ruta)
@@ -94,6 +110,10 @@ class Documento:
     def __iter__(self):
         return iter(self.paginas)
 
+    def __getitem__(self, i):
+        return self.paginas[i]
+
+    @_serializado
     def close(self):
         for p in self.paginas:
             p.cerrar()
@@ -107,6 +127,7 @@ class Documento:
 
 
 class Pagina:
+    @_serializado
     def __init__(self, doc, idx):
         self.doc, self.number = doc, idx
         self.page = doc.pdf[idx]
@@ -121,6 +142,7 @@ class Pagina:
     def rect(self):
         return Rect(0, 0, self.width, self.height)
 
+    @_serializado
     def cerrar(self):
         if self._tp is not None:
             self._tp.close()
@@ -134,11 +156,13 @@ class Pagina:
         return Rect(min(xa, xb) / 10, min(ya, yb) / 10, max(xa, xb) / 10, max(ya, yb) / 10)
 
     @property
+    @_serializado
     def tp(self):
         if self._tp is None:
             self._tp = self.page.get_textpage()
         return self._tp
 
+    @_serializado
     def get_text(self):
         if self._texto is None:
             n = self.tp.count_chars()
@@ -146,6 +170,7 @@ class Pagina:
             self._texto = t.replace("\r\n", "\n").replace("\r", "\n").replace("\u00a0", " ")
         return self._texto
 
+    @_serializado
     def palabras(self):
         """Lista de palabras: (x0, y0, x1, y1, texto, bloque, línea, n.º de palabra)."""
         if self._palabras is not None:
@@ -194,6 +219,7 @@ class Pagina:
         self._palabras = res
         return res
 
+    @_serializado
     def buscar(self, texto):
         """Cada aparición literal de *texto* (sin distinguir mayúsculas), como lista de
         rectángulos: uno por cada renglón que ocupa."""
@@ -222,6 +248,7 @@ class Pagina:
                 res.append(renglones)
         return res
 
+    @_serializado
     def cobertura_imagen(self):
         """Parte de la página tapada por imágenes (0 a 1)."""
         total = 0.0
@@ -233,6 +260,7 @@ class Pagina:
             pass
         return min(1.0, total / (self.rect.get_area() or 1))
 
+    @_serializado
     def imagenes(self):
         """Rectángulos (en pantalla) de las imágenes incrustadas en la página."""
         res = []
@@ -246,6 +274,7 @@ class Pagina:
             pass
         return res
 
+    @_serializado
     def renderizar(self, dpi):
         """Imagen RGB de la página tal y como se ve."""
         bm = self.page.render(scale=dpi / 72.0, may_draw_forms=True)
@@ -253,6 +282,7 @@ class Pagina:
         bm.close()
         return img
 
+    @_serializado
     def enlaces_mailto(self):
         """Índices de las anotaciones de enlace que apuntan a una dirección de correo."""
         res = []
@@ -345,6 +375,7 @@ def _en_orden_de_lectura(items):
     return [v for r in renglones for v in sorted(r, key=lambda v: v[0].x0)]
 
 
+@_serializado
 def guardar_tachado(origen, destino, tachones_por_pagina, texto_por_pagina=None, escaneadas=()):
     """Escribe el PDF anonimizado.
 
@@ -402,6 +433,7 @@ def imagen_a_pdf(img, destino):
     img.save(destino, "PDF", resolution=resolucion, quality=92)
 
 
+@_serializado
 def a_imagenes(ruta_pdf, base, dpi=200):
     rutas = []
     with Documento(ruta_pdf) as doc:
