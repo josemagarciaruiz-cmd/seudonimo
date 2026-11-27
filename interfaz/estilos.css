@@ -362,3 +362,4 @@ details.conservar summary { cursor: pointer; font-weight: 600; }
 .act-progreso i { background: var(--sobre-amarillo); }
 .actualizacion { background: var(--amarillo); border-color: var(--amarillo-hondo); color: var(--sobre-amarillo); }
 .actualizacion span { color: var(--sobre-amarillo); opacity: .8; }
+.plan-alcance { border: 0; padding: 0; margin: 0 0 10px; display: grid; gap: 6px; }

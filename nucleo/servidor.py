@@ -431,7 +431,8 @@ def lanzar_trabajo(pid):
             return jsonify(error="Números de página no válidos."), 400
         if any(x < 1 for v in paginas.values() for x in v):
             return jsonify(error="Las páginas se numeran desde la 1."), 400
-    tid = GESTOR.lanzar(p, elegidos, perfil, modelo, d.get("conversacion"), bool(d.get("solo_ciclos")) and not paginas, paginas)
+    tid = GESTOR.lanzar(p, elegidos, perfil, modelo, d.get("conversacion"), bool(d.get("solo_ciclos")) and not paginas, paginas,
+                        solo_paginas=bool(d.get("solo_paginas")) and bool(paginas))
     return jsonify(id=tid, estado=GESTOR.estado(tid))
 
 
@@ -552,7 +553,7 @@ def _copias(pid):
     por_id = {t["id"]: t for t in ALM.trabajos(pid)}
     informes = {}
     for a in ALM.archivos(pid):
-        if a["estado"] not in ("sin_hallazgos", "revision") or not a.get("ultimo_trabajo"):
+        if a["estado"] not in ("sin_hallazgos", "revision", "parcial") or not a.get("ultimo_trabajo"):
             continue
         t = por_id.get(a["ultimo_trabajo"])
         if not t or not t.get("destino"):

@@ -1,5 +1,10 @@
 # Cambios
 
+## 0.3.5 · 27 de noviembre de 2026
+
+- **Seudonimizar solo unas páginas.** Si pides «seudonimiza solo la página 6», la copia es un PDF con únicamente esa página, seudonimizada y verificada. El plan del chat deja elegir entre «Solo esas páginas» y «Documento completo» (repasar esas páginas dentro del documento ya seudonimizado). En la lista de documentos, el archivo aparece como «Copia de algunas páginas».
+- **El resultado dice lo que se ha hecho.** Si se repasan unas páginas dentro de un documento que nunca se había seudonimizado entero, la copia queda en «Requiere revisión» y explica que el resto de páginas no lo ha leído el modelo, en lugar de mostrar «Sin hallazgos».
+
 ## 0.3.4 · 26 de noviembre de 2026
 
 - Primera actualización instalada con el botón «Actualizar» de la 0.3.3 (comprobación del actualizador). Sin otros cambios.

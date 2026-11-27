@@ -24,7 +24,7 @@ const E = {
 const ESTADOS = {
   nuevo: "Sin tratar", no_admitido: "No admitido", en_cola: "En cola", procesando: "Procesando",
   sin_hallazgos: "Sin hallazgos", revision: "Requiere revisión", error: "Error", cancelado: "Cancelado", pendiente: "Pendiente",
-  interrumpido: "Interrumpido (se cerró la aplicación)",
+  interrumpido: "Interrumpido (se cerró la aplicación)", parcial: "Copia de algunas páginas",
 };
 
 // ------------------------------------------------------------------ conexión
@@ -377,7 +377,8 @@ function nodoPlan(plan, mid, datos) {
   const n = plan.archivos.length;
   const estado = plan.estado;   // confirmado | descartado | undefined
   const pags = plan.paginas && plan.paginas.length ? plan.paginas : null;
-  const titulo = pags ? `Repasar ${pags.length === 1 ? "la página " + pags[0] : "las páginas " + pags.join(", ")} de ${plan.nombres[0]}`
+  const textoPags = pags ? (pags.length === 1 ? "la página " + pags[0] : "las páginas " + pags.join(", ")) : "";
+  const titulo = pags ? `${plan.solo_paginas ? "Seudonimizar solo" : "Repasar"} ${textoPags} de ${plan.nombres[0]}`
     : `Seudonimizar ${n} archivo${n === 1 ? "" : "s"}`;
   if (estado) {
     d.classList.add("cerrado");
@@ -387,7 +388,10 @@ function nodoPlan(plan, mid, datos) {
   }
   const intensivo = plan.perfil === "intensivo";
   d.innerHTML = `<h4>${esc(titulo)}</h4>
-    ${pags ? `<p class="nota">El modelo vuelve a buscar datos solo en ${pags.length === 1 ? "esa página" : "esas páginas"}; después la copia se regenera y se verifica entera.</p>`
+    ${pags ? `<fieldset class="plan-perfil plan-alcance">
+        <label class="opcion"><input type="radio" name="alcance-${mid}" value="solo"${plan.solo_paginas ? " checked" : ""}> <span><b>Solo ${esc(textoPags)}.</b> La copia tendrá únicamente ${pags.length === 1 ? "esa página" : "esas páginas"}, seudonimizada${pags.length === 1 ? "" : "s"} y verificada${pags.length === 1 ? "" : "s"}.</span></label>
+        <label class="opcion"><input type="radio" name="alcance-${mid}" value="completo"${plan.solo_paginas ? "" : " checked"}> <span><b>Documento completo.</b> Repasa ${esc(textoPags)} dentro del documento ya seudonimizado; la copia sale con todas las páginas.</span></label>
+      </fieldset>`
       : `<ul class="plan-archivos">${plan.nombres.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`}
     <div class="plan-opciones">
       <label class="opcion"><input type="radio" name="perfil-${mid}" value="estandar"${intensivo ? "" : " checked"}> <span>Verificación estándar</span></label>
@@ -395,14 +399,15 @@ function nodoPlan(plan, mid, datos) {
     </div>
     <p class="nota">Se crean copias en la carpeta de resultados del proyecto, separadas en «Aprobados» y «Para revisar». Los originales no se tocan.</p>
     <div class="plan-acciones">
-      <button class="boton boton-principal" data-confirmar>${pags ? "Repasar" : `Seudonimizar ${n} archivo${n === 1 ? "" : "s"}`}</button>
+      <button class="boton boton-principal" data-confirmar>${pags ? "Confirmar" : `Seudonimizar ${n} archivo${n === 1 ? "" : "s"}`}</button>
       <button class="boton" data-descartar>Descartar</button>
     </div>`;
   $("[data-confirmar]", d).onclick = async () => {
     const perfil = $(`input[name="perfil-${mid}"]:checked`, d).value;
     try {
-      const r = await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, { archivos: plan.archivos, perfil, conversacion: E.conversacion, ...(pags ? { paginas: pags } : {}) });
-      plan.estado = "confirmado"; plan.perfil = perfil; plan.trabajo = r.id;
+      const solo = pags ? ($(`input[name="alcance-${mid}"]:checked`, d) || {}).value === "solo" : false;
+      const r = await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, { archivos: plan.archivos, perfil, conversacion: E.conversacion, ...(pags ? { paginas: pags, solo_paginas: solo } : {}) });
+      plan.estado = "confirmado"; plan.perfil = perfil; plan.trabajo = r.id; if (pags) plan.solo_paginas = solo;
       await guardarPlanes(mid, datos);
       d.replaceWith(nodoPlan(plan, mid, datos));
       E.trabajos[r.id] = r.estado;
@@ -532,8 +537,8 @@ function pintarArchivos() {
     </div>
     ${p.carpetas.length ? `<h3>Carpetas y archivos autorizados</h3>${p.carpetas.map((c) => `<div class="carpeta"><span>${esc(c.ruta)}</span><button class="boton-texto" data-quitar-carpeta="${c.id}" title="Quitar del proyecto (no borra nada del disco)">Quitar</button></div>`).join("")}` : `<p class="nota">Los archivos que añadas se leen desde su sitio; nunca se modifican ni se mueven. También puedes arrastrarlos a la ventana.</p>`}
     ${p.archivos.length ? `<h3>${adm.length} de ${p.archivos.length} archivo${p.archivos.length === 1 ? "" : "s"} admitido${adm.length === 1 ? "" : "s"}</h3>
-      ${p.archivos.some((a) => ["sin_hallazgos", "revision"].includes(a.estado)) ? `<button class="boton boton-principal ancho" data-accion="abrir-mesa">Abrir la mesa de revisión</button>` : ""}
-      ${p.archivos.map((a) => `<div class="archivo"><span class="nombre">${esc(a.rel)}</span><span class="chip ${esc(a.estado)}">${esc(ESTADOS[a.estado] || a.estado)}</span>${a.motivo ? `<span class="motivo">${esc(a.motivo)}</span>` : ""}${["sin_hallazgos", "revision"].includes(a.estado) ? `<button class="boton-texto revisar" data-revisar="${a.id}">Revisar la copia</button>` : ""}</div>`).join("")}` : ""}
+      ${p.archivos.some((a) => ["sin_hallazgos", "revision", "parcial"].includes(a.estado)) ? `<button class="boton boton-principal ancho" data-accion="abrir-mesa">Abrir la mesa de revisión</button>` : ""}
+      ${p.archivos.map((a) => `<div class="archivo"><span class="nombre">${esc(a.rel)}</span><span class="chip ${esc(a.estado)}">${esc(ESTADOS[a.estado] || a.estado)}</span>${a.motivo ? `<span class="motivo">${esc(a.motivo)}</span>` : ""}${["sin_hallazgos", "revision", "parcial"].includes(a.estado) ? `<button class="boton-texto revisar" data-revisar="${a.id}">Revisar la copia</button>` : ""}</div>`).join("")}` : ""}
     ${p.vigilar ? `<p class="nota vigilada">Carpeta vigilada: lo que llegue a las carpetas del proyecto se seudonimiza solo.</p>` : ""}
     ${p.salida_efectiva ? `<h3>Resultados</h3><div class="carpeta"><span>${esc(p.salida_efectiva)}</span></div>${p.salida_sincronizada ? `<p class="aviso-campo" style="margin:4px 0">Esta carpeta parece sincronizada con la nube.</p>` : ""}` : ""}`;
 }
@@ -605,7 +610,7 @@ function pintarOperaciones() {
       ${activo ? `<div class="progreso"><i style="width:${Math.round(t.progreso * 100)}%"></i></div><div class="trabajo-msg">${esc(t.mensaje)}</div>` :
         `<p class="nota">${cuenta("sin_hallazgos")} sin hallazgos · ${cuenta("revision")} para revisar · ${cuenta("error")} con error${cuenta("cancelado") ? ` · ${cuenta("cancelado")} cancelados` : ""}</p>`}
       ${t.docs.map((d) => `<div class="doc">
-        <div class="doc-cab"><span>${esc(d.rel)}${d.paginas && d.paginas.length ? ` <span class="nota">· repaso de ${d.paginas.length === 1 ? "la página " + d.paginas[0] : "las páginas " + d.paginas.join(", ")}</span>` : ""}</span><span class="chip ${esc(d.estado)}">${esc(ESTADOS[d.estado] || d.estado)}</span></div>
+        <div class="doc-cab"><span>${esc(d.rel)}${d.paginas && d.paginas.length ? ` <span class="nota">· ${d.solo_paginas ? "solo" : "repaso de"} ${d.paginas.length === 1 ? "la página " + d.paginas[0] : "las páginas " + d.paginas.join(", ")}</span>` : ""}</span><span class="chip ${esc(d.estado)}">${esc(ESTADOS[d.estado] || d.estado)}</span></div>
         <div class="pista">${pistaDoc(d)}</div>
         ${d.motivos && d.motivos.length ? `<ul class="doc-motivos">${d.motivos.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}
       </div>`).join("")}

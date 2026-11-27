@@ -134,3 +134,24 @@ def test_sin_pensamiento_del_modelo():
     assert salida == "El plan está listo."
     assert "".join(t.get("contenido", "") for t in _sin_pensamiento(flujo(["Hola, ", "qué tal"]))) == "Hola, qué tal"
     assert limpiar_pensamiento("thought\n<channel|>Texto") == "Texto"
+
+
+def test_recortar_pdf_solo_unas_paginas():
+    import formatos
+    from reportlab.pdfgen import canvas
+    d = tempfile.mkdtemp()
+    ruta = os.path.join(d, "doc.pdf")
+    c = canvas.Canvas(ruta)
+    for i in range(1, 8):
+        c.drawString(60, 780, "Contenido de la pagina %d" % i)
+        c.showPage()
+    c.save()
+    salida = formatos.recortar_pdf(ruta, [6], d)
+    paginas = formatos.extraer_paginas(salida, ".pdf")
+    assert len(paginas) == 1 and "pagina 6" in paginas[0]
+    assert formatos.texto_paginas([6, 7]) == "las páginas 6 y 7"
+    try:
+        formatos.recortar_pdf(ruta, [9], d)
+        assert False, "debería fallar"
+    except formatos.ErrorFormato as e:
+        assert "7 páginas" in str(e)

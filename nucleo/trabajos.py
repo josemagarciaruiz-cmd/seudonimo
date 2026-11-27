@@ -85,7 +85,8 @@ class Gestor:
         self.meta = {}           # id -> {proyecto, conversacion, creado}
         threading.Thread(target=self._bucle, daemon=True, name="trabajos").start()
 
-    def lanzar(self, proyecto, archivos, perfil, modelo, conversacion=None, solo_ciclos=False, paginas=None):
+    def lanzar(self, proyecto, archivos, perfil, modelo, conversacion=None, solo_ciclos=False, paginas=None,
+               solo_paginas=False):
         """archivos: filas del inventario (con «ruta», «rel», «nombre», «id»)."""
         tid = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
         reg = registro(proyecto["id"], proyecto["tabla"])
@@ -94,7 +95,8 @@ class Gestor:
         destino = os.path.join(base, time.strftime("%Y-%m-%d %H.%M.%S"))
         paginas = paginas or {}
         docs = [{"id": a["id"], "ruta": a["ruta"], "rel": a["rel"] or a["nombre"], "nombre": a["nombre"],
-                 "paginas": paginas.get(a["id"])} for a in archivos]
+                 "paginas": paginas.get(a["id"]), "solo_paginas": bool(solo_paginas and paginas.get(a["id"])),
+                 "previo": a.get("estado")} for a in archivos]
         lote = multipasada.TrabajoLote(tid, docs, reg, perfil=perfil, modelo=modelo, logos=bool(proyecto.get("logos", 1)),
                                        destino=destino, al_terminar=self._terminado)
         lote.ajustes["solo_ciclos"] = solo_ciclos
@@ -132,7 +134,9 @@ class Gestor:
         if m.get("tabla") == "sin_tabla":
             olvidar_registro(pid)     # sin tabla persistente: nada sobrevive al lote
         for d in lote.docs:
-            self.almacen.marcar_archivo(d.doc["id"], d.estado, lote.id)
+            # una copia de solo unas páginas no dice nada del documento entero
+            parcial = d.doc.get("solo_paginas") and d.estado in ("sin_hallazgos", "revision")
+            self.almacen.marcar_archivo(d.doc["id"], "parcial" if parcial else d.estado, lote.id)
         self.almacen.guardar_trabajo({"id": lote.id, "proyecto": pid, "conversacion": m.get("conversacion"),
                                       "estado": lote.estado, "perfil": lote.ajustes["perfil"],
                                       "modelo": lote.ajustes.get("modelo"), "destino": lote.destino,

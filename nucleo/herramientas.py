@@ -45,7 +45,9 @@ ESQUEMAS = [
             "perfil": {"type": "string", "enum": ["estandar", "intensivo"],
                        "description": "«intensivo» = verificación intensiva: más ciclos y un modelo auditor en cada verificación"},
             "paginas": {"type": "array", "items": {"type": "integer"},
-                        "description": "Solo si el usuario pide repasar páginas concretas de UN PDF (por ejemplo «repasa las páginas 6 y 7»): números de página, empezando en 1. El modelo vuelve a buscar datos solo en esas páginas y la copia se regenera entera."}},
+                        "description": "Solo si el usuario se refiere a páginas concretas de UN PDF: números de página, empezando en 1."},
+            "solo_paginas": {"type": "boolean",
+                             "description": "true si quiere una copia con SOLO esas páginas («seudonimiza solo la página 6», «sácame la página 6 seudonimizada»); false si quiere repasar esas páginas dentro del documento completo ya seudonimizado («repasa la página 6»)."}},
             "required": ["archivos"]}}},
     {"type": "function", "function": {
         "name": "verificar_documento",
@@ -154,9 +156,15 @@ def ejecutar(nombre, args, ctx):
         if paginas:
             if len(elegidos) != 1:
                 raise ErrorHerramienta("Para repasar páginas concretas hay que indicar un solo documento.")
-            return {"plan": True, "accion": "repasar", "perfil": perfil, "archivos": [elegidos[0]["id"]],
-                    "nombres": [elegidos[0]["rel"]], "paginas": sorted(set(paginas)), "parametros": multipasada.PERFILES[perfil],
-                    "mensaje": "Plan preparado para repasar esas páginas: el usuario debe confirmarlo en la aplicación."}
+            a = elegidos[0]
+            tratado = a.get("estado") in ("sin_hallazgos", "revision", "parcial")
+            solo = bool(args["solo_paginas"]) if isinstance(args.get("solo_paginas"), bool) else not tratado
+            return {"plan": True, "accion": "paginas", "perfil": perfil, "archivos": [a["id"]],
+                    "nombres": [a["rel"]], "paginas": sorted(set(paginas)), "solo_paginas": solo,
+                    "parametros": multipasada.PERFILES[perfil],
+                    "mensaje": ("Plan preparado: copia con solo esas páginas." if solo else
+                                "Plan preparado: repasar esas páginas dentro del documento completo.")
+                               + " El usuario debe confirmarlo en la aplicación."}
         return {"plan": True, "accion": "seudonimizar", "perfil": perfil, "archivos": [a["id"] for a in elegidos],
                 "nombres": [a["rel"] for a in elegidos], "parametros": multipasada.PERFILES[perfil],
                 "mensaje": "Plan preparado: el usuario debe confirmarlo en la aplicación antes de ejecutarse."}
@@ -261,7 +269,8 @@ def resumen_para_prompt(almacen, pid):
     adm = [a for a in archivos if a["admitido"]]
     lineas = ["- %s (%s)" % (a["rel"], {"nuevo": "sin tratar", "sin_hallazgos": "seudonimizado, sin hallazgos",
                                          "revision": "seudonimizado, requiere revisión", "error": "error",
-                                         "en_cola": "en cola", "cancelado": "cancelado"}.get(a["estado"], a["estado"]))
+                                         "en_cola": "en cola", "cancelado": "cancelado",
+                                         "parcial": "copia de solo algunas páginas"}.get(a["estado"], a["estado"]))
               for a in adm[:60]]
     if len(adm) > 60:
         lineas.append("- … y %d más" % (len(adm) - 60))

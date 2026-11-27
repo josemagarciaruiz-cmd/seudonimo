@@ -265,6 +265,34 @@ def necesita_ocr(page, verificar=False):
     return verificar and cobertura > 0.4
 
 
+def texto_paginas(paginas):
+    """«la página 6», «las páginas 6 y 7», «las páginas 3, 6 y 9»."""
+    p = [str(x) for x in paginas]
+    if len(p) == 1:
+        return "la página %s" % p[0]
+    return "las páginas %s y %s" % (", ".join(p[:-1]), p[-1])
+
+
+def recortar_pdf(ruta, paginas, carpeta):
+    """Copia del PDF con solo esas páginas (numeradas desde 1), en ese orden."""
+    import pypdfium2 as pdfium
+    src = pdfium.PdfDocument(ruta)
+    try:
+        n = len(src)
+        malas = [p for p in paginas if not 1 <= p <= n]
+        if malas:
+            raise ErrorFormato("El documento tiene %d páginas: no existe %s." % (n, texto_paginas(malas)))
+        nuevo = pdfium.PdfDocument.new()
+        nuevo.import_pages(src, [p - 1 for p in paginas])
+        base = os.path.splitext(os.path.basename(ruta))[0]
+        salida = os.path.join(carpeta, "%s (pag. %s).pdf" % (base, "-".join(map(str, paginas))[:60]))
+        nuevo.save(salida)
+        nuevo.close()
+        return salida
+    finally:
+        src.close()
+
+
 def _abrir_pdf(ruta):
     try:
         return pdfdoc.abrir(ruta)
