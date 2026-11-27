@@ -131,6 +131,17 @@ _NO_PERSONA = re.compile(r"(?i)^(?:prueba|dato|documento|vez|forma|manera|motivo
 _PREP_FINAL = re.compile(r"(?i)\s+(?:de|del|en|a|al|con|para|por|y)$")
 
 
+def _sin_unicidad(frase):
+    """Quita «único/única» de una versión general propuesta por el modelo y el entorno que la acota."""
+    m = re.match(r"(?i)\s*(?:(el|la|los|las)\s+)?([uú]nic[oa]s?)\s+(.*)", frase)
+    if not m:
+        return re.sub(r"(?i)\b[uú]nic[oa]s?\s+", "", frase).strip()
+    masc = motor.clave(m.group(2)).startswith("unico")
+    plural = m.group(2).lower().endswith("s")
+    art = ("unos" if masc else "unas") if plural else ("un" if masc else "una")
+    return art + " " + _sin_entorno(m.group(3).strip())
+
+
 def _unicidad(texto):
     res = []
     for m in RX_UNICO.finditer(texto):
@@ -222,6 +233,8 @@ def por_modelo(texto, modelo=None, progreso=None, cancelado=None):
                 continue          # inventado, reescrito o encima de un marcador: fuera
             if motor.PUBLICO.search(t) or not gen or motor.clave(gen) == motor.clave(t):
                 continue
+            if cat == "unico" and re.search(r"(?i)\b[uú]nic[oa]s?\b", gen):
+                gen = _sin_unicidad(gen)      # «única persona… en la zona» sigue siendo única
             res.append({"texto": t, "categoria": cat, "generalizado": gen[:120], "origen": "modelo"})
     return res
 
@@ -246,8 +259,8 @@ def analizar(texto, modelo=None, progreso=None, cancelado=None, aplicadas=()):
         k = motor.clave(h["texto"])
         if ya_generalizado(k):
             continue          # es una generalización ya aplicada: no es un dato nuevo
-        if k in vistos or any(v in k for v, cat in vistos.items() if cat == h["categoria"]):
-            continue          # el mismo dato, o uno de la misma clase que ya lo contiene
+        if k in vistos or any(v in k or k in v for v, cat in vistos.items() if cat == h["categoria"]):
+            continue          # el mismo dato, o uno de la misma clase que lo contiene o está dentro
         vistos[k] = h["categoria"]
         h["generalizado"] = _ajustar(texto, h["texto"], h["generalizado"])
         unicos.append(h)

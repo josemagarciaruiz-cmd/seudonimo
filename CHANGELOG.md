@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.6.1 · 27 de noviembre de 2026
+
+- Riesgo por contexto: si el modelo señala un trozo de una frase de unicidad que ya ha encontrado la regla («única mujer… en la isla» dentro de «la única mujer… dentro del grupo empresarial»), se muestra una sola vez, con la propuesta de la regla. Y si el modelo propone una versión que sigue siendo única («única persona… en la zona»), se corrige a «una persona…».
+
 ## 0.6.0 · 27 de noviembre de 2026
 
 Más sencilla: el chat en el centro y una sola lista de documentos.

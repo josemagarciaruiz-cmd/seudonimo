@@ -452,7 +452,10 @@ def test_contexto_unicidad_por_regla_y_con_generalizaciones_previas():
 
     class Falso:
         def estructurado(self, modelo, mensajes, esquema):
-            return {"datos": []}
+            # el modelo señala un trozo de la misma frase y propone algo que sigue siendo único
+            return {"datos": [{"texto": "única mujer con categoría de mando intermedio en la isla", "categoria": "unico",
+                               "generalizado": "única persona con categoría de mando intermedio en la zona"}]}
+    assert contexto._sin_unicidad("única persona con categoría de mando intermedio en la zona") == "una persona con categoría de mando intermedio"
     antes = proveedores.actual
     proveedores.actual = lambda: Falso()
     try:
@@ -463,7 +466,8 @@ def test_contexto_unicidad_por_regla_y_con_generalizaciones_previas():
     finally:
         proveedores.actual = antes
     h = [x for x in a["hallazgos"] if x["categoria"] == "unico"]
-    assert h and h[0]["recomendado"] and h[0]["generalizado"] == "una mujer con categoría de mando intermedio"
+    assert len(h) == 1            # el trozo que señala el modelo está dentro de la frase de la regla
+    assert h[0]["recomendado"] and h[0]["generalizado"] == "una mujer con categoría de mando intermedio"
     assert h[0]["original"] == "la única mujer con categoría de jefa de almacén en la isla dentro del grupo empresarial"
     original = "Es la única mujer con categoría de jefa de almacén en la isla dentro del grupo empresarial."
     mapa = contexto.como_mapa([{"texto": "jefa de almacén", "reemplazo": "mando intermedio"},
