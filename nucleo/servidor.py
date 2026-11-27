@@ -624,12 +624,16 @@ def _rehacer_si_piden(p, d):
 def anadir_entidad(pid):
     p = _proyecto(pid)
     d = _json()
-    texto = (d.get("texto") or "").strip()
-    if len(texto) < 2:
+    # «textos»: varios trozos de una misma selección (una frase partida por una etiqueta, o línea a línea)
+    textos = [re.sub(r"\s+", " ", str(x or "")).strip() for x in (d.get("textos") or [d.get("texto")])]
+    textos = [x for x in textos if len(x) >= 2][:40]
+    if not textos:
         return jsonify(error="Escribe el dato que quieres seudonimizar."), 400
     doc = d.get("doc") if isinstance(d.get("doc"), int) else None
     r = trabajos.registro(pid, p["tabla"])
-    nuevas = r.anadir_manual(texto, d.get("tipo") or "OTRO", doc)
+    nuevas = []
+    for texto in textos:
+        nuevas += r.anadir_manual(texto, d.get("tipo") or "OTRO", doc)
     trabajos.guardar_registro(pid, p["tabla"])
     ids = [r.entidades.index(n) for n in nuevas if n in r.entidades]
     return jsonify(nuevas=[{"marcador": n["marcador"], "tipo": n["tipo"]} for n in nuevas], ids=ids,
@@ -829,27 +833,34 @@ def zonas_manuales(pid):
         return jsonify(error="Ese documento ya no está en el expediente."), 400
     zonas = trabajos.zonas_manuales(p)
     lista = zonas.setdefault(str(a["id"]), [])
+    nuevas = []
     if d.get("accion") == "quitar":
-        lista[:] = [z for z in lista if z.get("id") != d.get("id")]
-        nueva = None
+        quitar = set(d.get("ids") or [d.get("id")])
+        lista[:] = [z for z in lista if z.get("id") not in quitar]
     else:
-        try:
-            pagina = int(d.get("pagina"))
-            r = [float(v) for v in d.get("rect")]
-            assert len(r) == 4 and pagina >= 1
-        except (TypeError, ValueError, AssertionError):
-            return jsonify(error="Zona no válida."), 400
-        x0, y0, x1, y1 = min(r[0], r[2]), min(r[1], r[3]), max(r[0], r[2]), max(r[1], r[3])
-        if x1 - x0 < 2 or y1 - y0 < 2:
+        # una zona (rotulador) o varias (un párrafo seleccionado: una por línea), en la misma petición
+        piezas = d.get("rects") or [{"pagina": d.get("pagina"), "rect": d.get("rect")}]
+        for pz in piezas[:200]:
+            try:
+                pagina = int(pz.get("pagina"))
+                r = [float(v) for v in pz.get("rect")]
+                assert len(r) == 4 and pagina >= 1
+            except (TypeError, ValueError, AssertionError, AttributeError):
+                return jsonify(error="Zona no válida."), 400
+            x0, y0, x1, y1 = min(r[0], r[2]), min(r[1], r[3]), max(r[0], r[2]), max(r[1], r[3])
+            if x1 - x0 < 2 or y1 - y0 < 2:
+                continue
+            nuevas.append({"id": secrets.token_hex(4), "pagina": pagina, "rect": [round(x0, 2), round(y0, 2), round(x1, 2), round(y1, 2)]})
+        if not nuevas:
             return jsonify(error="La zona es demasiado pequeña."), 400
-        nueva = {"id": secrets.token_hex(4), "pagina": pagina, "rect": [round(x0, 2), round(y0, 2), round(x1, 2), round(y1, 2)]}
-        lista.append(nueva)
+        lista.extend(nuevas)
+    nueva = nuevas[0] if nuevas else None
     if not lista:
         zonas.pop(str(a["id"]), None)
     ALM.actualizar_proyecto(pid, zonas=json.dumps(zonas, ensure_ascii=False))
     p = _proyecto(pid)
     tid = _rehacer(p, a, None, d.get("conversacion"))
-    return jsonify(zona=nueva, trabajo=tid, estado=GESTOR.estado(tid))
+    return jsonify(zona=nueva, ids=[z["id"] for z in nuevas], trabajo=tid, estado=GESTOR.estado(tid))
 
 
 def _texto_para_ia(pid, ids=None):

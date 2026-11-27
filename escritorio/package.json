@@ -2,7 +2,7 @@
   "name": "seudonimo",
   "private": true,
   "license": "SEE LICENSE IN ../LICENSE.md",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "scripts": {
     "tauri": "tauri"
   },

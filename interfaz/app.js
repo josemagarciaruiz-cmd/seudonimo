@@ -1416,14 +1416,14 @@ function pintarVisor() {
     + `<p class="nota ayuda-rotulador">${ayuda}</p>`
     + v.paginas.map(([w, h], i) => {
       const num = i + 1;
-      const zs = zonas.filter((z) => z.pagina === num).map((z) => `<div class="zona-manual" style="left:${(z.rect[0] / w * 100).toFixed(3)}%;top:${(z.rect[1] / h * 100).toFixed(3)}%;width:${((z.rect[2] - z.rect[0]) / w * 100).toFixed(3)}%;height:${((z.rect[3] - z.rect[1]) / h * 100).toFixed(3)}%" title="Tapado a mano"><button type="button" class="quitar-zona" data-quitar-zona="${esc(z.id)}" title="Quitar este tapado">✕</button></div>`).join("");
-      const pals = ((v.palabras || [])[i] || []).map(([x0, y0, x1, y1, t]) => {
+      const zs = zonas.filter((z) => z.pagina === num).map((z) => `<div class="zona-manual" style="left:${(z.rect[0] / w * 100).toFixed(3)}%;top:${(z.rect[1] / h * 100).toFixed(3)}%;width:${((z.rect[2] - z.rect[0]) / w * 100).toFixed(3)}%;height:${((z.rect[3] - z.rect[1]) / h * 100).toFixed(3)}%" title="Tapado a mano"><span>Tapado a mano</span><button type="button" class="quitar-zona" data-quitar-zona="${esc(z.id)}" title="Quitar este tapado">✕</button></div>`).join("");
+      const pals = ((v.palabras || [])[i] || []).filter((p) => p[4] !== "[TAPADO]").map(([x0, y0, x1, y1, t]) => {
         const caja = `left:${(x0 / w * 100).toFixed(3)}%;top:${(y0 / h * 100).toFixed(3)}%;width:${((x1 - x0) / w * 100).toFixed(3)}%;height:${((y1 - y0) / h * 100).toFixed(3)}%`;
         const alto = ((y1 - y0) / h * 100).toFixed(3);
         const st = `${caja};font-size:${alto}cqh`;
         return RE_MARCA.test(t) && (RE_MARCA.lastIndex = 0, true)
           ? `<button type="button" class="tachon marca pal-marca" data-marca="${esc(t)}" style="${caja};font-size:clamp(7px, ${alto}cqh * 0.72, 12px)" title="En el archivo: ${esc(t)}. Clic para ver qué tapa.">${esc(etiquetaMarca(t))}</button>`
-          : `<span class="pal" style="${st}">${esc(t)} </span>`;
+          : `<span class="pal" style="${st}" data-b="${x0},${y0},${x1},${y1}">${esc(t)} </span>`;
       }).join("");
       return `<figure class="pag-vista" data-n="${num}" data-w="${w}" data-h="${h}">
         ${v.paginas.length > 1 ? `<figcaption><span>${U} ${num} de ${v.paginas.length}</span><label class="opcion repaso" title="El modelo vuelve a leer solo esta ${u} buscando datos que se le escaparan"><input type="checkbox" data-repasar-pagina="${num}"${MESA.paginas.has(num) ? " checked" : ""}> <span>Volver a leer esta ${u}</span></label></figcaption>` : ""}
@@ -1571,32 +1571,110 @@ function situarPop(rect) {
   pop.style.top = Math.max(8, y) + "px";
 }
 
+// Lo seleccionado, siempre en palabras enteras (al arrastrar sobre la página es fácil empezar a mitad
+// de una). Devuelve {piezas: [frase…], lineas: [{pagina, rect}], palabras: n, muestra}.
+function seleccionMesa() {
+  const sel = getSelection();
+  if (!sel.rangeCount || sel.isCollapsed) return null;
+  const rango = sel.getRangeAt(0);
+  const enVisor = $("#mesa-paginas").contains(rango.commonAncestorContainer) || $("#mesa-paginas").contains(sel.anchorNode);
+  if (enVisor) {
+    const nodos = $$("#mesa-paginas .pal, #mesa-paginas .pal-marca").filter((n) => rango.intersectsNode(n));
+    if (!nodos.length) return null;
+    // se ve elegido exactamente lo que se va a tapar: palabras enteras
+    $$("#mesa-paginas .pal.elegida").forEach((n) => n.classList.remove("elegida"));
+    nodos.forEach((n) => n.classList.add("elegida"));
+    const piezas = [], lineas = {}, porLinea = {};
+    let actual = [];
+    for (const n of nodos) {
+      if (n.classList.contains("pal-marca")) { if (actual.length) piezas.push(actual); actual = []; continue; }
+      actual.push(n.textContent.trim());
+      const fig = n.closest(".pag-vista");
+      const [x0, y0, x1, y1] = n.dataset.b.split(",").map(Number);
+      const k = fig.dataset.n + ":" + Math.round((y0 + y1) / 2 / 3);
+      (porLinea[k] = porLinea[k] || []).push(n.textContent.trim());
+      const l = lineas[k] || (lineas[k] = { pagina: +fig.dataset.n, rect: [x0, y0, x1, y1] });
+      l.rect = [Math.min(l.rect[0], x0), Math.min(l.rect[1], y0), Math.max(l.rect[2], x1), Math.max(l.rect[3], y1)];
+    }
+    if (actual.length) piezas.push(actual);
+    const palabras = piezas.reduce((a, p) => a + p.length, 0);
+    if (!palabras) return null;
+    const texto = piezas.map((p) => p.join(" ")).join(" … ");
+    return { piezas: piezas.map((p) => p.join(" ")), lineas: Object.values(lineas), porLinea: Object.values(porLinea).map((w) => w.join(" ")),
+      palabras, muestra: texto, visor: true, rect: rango.getBoundingClientRect() };
+  }
+  if (!$("#mesa-texto").contains(sel.anchorNode)) return null;
+  // vista de texto: se amplía a palabras enteras dentro de cada nodo de texto
+  let t = sel.toString();
+  const ini = rango.startContainer, fin = rango.endContainer;
+  if (ini.nodeType === 3) { const pre = ini.data.slice(0, rango.startOffset).match(/[\wÀ-ÿ'’-]+$/); if (pre) t = pre[0] + t; }
+  if (fin.nodeType === 3) { const post = fin.data.slice(rango.endOffset).match(/^[\wÀ-ÿ'’-]+/); if (post) t = t + post[0]; }
+  t = t.replace(/\s+/g, " ").trim();
+  if (RE_MARCA.test(t)) { RE_MARCA.lastIndex = 0; return null; }
+  if (t.length < 2) return null;
+  return { piezas: [t], lineas: [], palabras: t.split(" ").length, muestra: t, visor: false, rect: rango.getBoundingClientRect() };
+}
+
 function popTapar() {
   if (MESA.trabajo) return;
-  const sel = getSelection();
-  const s = sel.toString().replace(/\s+/g, " ").trim();
-  if (!s || s.length < 2 || s.length > 150 || !sel.rangeCount) return;
-  if (!$("#mesa-texto").contains(sel.anchorNode) && !$("#mesa-paginas").contains(sel.anchorNode)) return;
-  if (RE_MARCA.test(s)) { RE_MARCA.lastIndex = 0; return; }
+  const x = seleccionMesa();
+  if (!x) return;
   const etiquetas = MESA.registro?.etiquetas || {};
-  const tipo = tipoProbable(s);
-  $("#mesa-pop").innerHTML = `<div class="pop-titulo">Tapar «${esc(s.length > 60 ? s.slice(0, 57) + "…" : s)}»</div>
-    <div class="fila-campo"><select id="pop-tipo" aria-label="Qué es">${Object.entries(etiquetas).map(([k, v]) => `<option value="${k}"${k === tipo ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>
-    <button type="button" class="boton boton-principal" id="pop-tapar">Tapar</button></div>
-    <p class="nota">Se tapa ahora en esta copia y, cuando se actualicen, en las demás del expediente.</p>`;
-  situarPop(sel.getRangeAt(0).getBoundingClientRect());
+  const corto = (t) => esc(t.length > 70 ? t.slice(0, 67) + "…" : t);
+  // un párrafo o varias líneas en un PDF: se tapa la zona de cada línea (en este documento);
+  // unas pocas palabras: se tapan como dato (aquí y en las demás copias del expediente)
+  const comoZona = x.visor && MESA.visor?.rotulador && (x.palabras > 6 || x.lineas.length > 2);
+  if (comoZona) {
+    $("#mesa-pop").innerHTML = `<div class="pop-titulo">Tapar ${x.lineas.length === 1 ? "esta línea" : `estas ${x.lineas.length} líneas`}</div>
+      <p class="pop-formas">«${corto(x.muestra)}»</p>
+      <div class="plan-acciones"><button type="button" class="boton boton-principal" id="pop-tapar">Tapar</button></div>
+      <p class="nota">Se tapa con un recuadro en esta copia. Para que un nombre o un dato se tape en todos los documentos, selecciona solo ese dato.</p>`;
+  } else {
+    const tipo = tipoProbable(x.piezas[0]);
+    $("#mesa-pop").innerHTML = `<div class="pop-titulo">Tapar «${corto(x.muestra)}»</div>
+      <div class="fila-campo"><select id="pop-tipo" aria-label="Qué es">${Object.entries(etiquetas).map(([k, v]) => `<option value="${k}"${k === tipo ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>
+      <button type="button" class="boton boton-principal" id="pop-tapar">Tapar</button></div>
+      <p class="nota">Se tapa ahora en esta copia y, cuando se actualicen, en las demás del expediente.</p>`;
+  }
+  situarPop(x.rect);
   $("#pop-tapar").onclick = async () => {
+    $("#mesa-pop").hidden = true;
+    getSelection().removeAllRanges();
     try {
-      const r = await api("POST", `/api/proyectos/${E.proyecto.id}/registro`, { texto: s, tipo: $("#pop-tipo").value, doc: MESA.actual.id, rehacer: MESA.actual.id, conversacion: E.conversacion });
-      $("#mesa-pop").hidden = true;
-      getSelection().removeAllRanges();
+      if (comoZona) {
+        const r = await api("POST", `/api/proyectos/${E.proyecto.id}/zonas`, { archivo: MESA.actual.id, rects: x.lineas.map((l) => ({ pagina: l.pagina, rect: [l.rect[0] - 3, l.rect[1] - 1.5, l.rect[2] + 6, l.rect[3] + 1.5] })), conversacion: E.conversacion });
+        const ids = r.ids || [];
+        seguirTrabajoMesa(r.trabajo, "Tapando…", { texto: x.lineas.length === 1 ? "Línea tapada." : `${x.lineas.length} líneas tapadas.`, etiqueta: "Deshacer", accion: () => quitarZonas(ids) });
+        return;
+      }
+      // frases largas en un documento de Office: una por línea, para que cada una se encuentre en su párrafo
+      const textos = x.piezas.length === 1 && x.palabras > 8 && x.lineas.length > 1 && x.visor ? x.porLinea : x.piezas;
+      const r = await api("POST", `/api/proyectos/${E.proyecto.id}/registro`, { textos, tipo: $("#pop-tipo")?.value || "OTRO", doc: MESA.actual.id, rehacer: MESA.actual.id, conversacion: E.conversacion });
       await cargarRegistroMesa();
-      const marca = r.nuevas?.[0]?.marcador;
-      if (r.trabajo) seguirTrabajoMesa(r.trabajo, "Tapando…", marca
-        ? { texto: `Tapado como «${etiquetaMarca(marca)}».`, etiqueta: "Deshacer", accion: () => deshacerTapado(marca) }
-        : { texto: "Ese dato ya estaba en la lista; la copia se actualiza." });
+      const marcas = (r.nuevas || []).map((n) => n.marcador);
+      if (r.trabajo) seguirTrabajoMesa(r.trabajo, "Tapando…", marcas.length
+        ? { texto: marcas.length === 1 ? `Tapado como «${etiquetaMarca(marcas[0])}».` : `${marcas.length} datos tapados.`, etiqueta: "Deshacer", accion: () => deshacerTapados(marcas) }
+        : { texto: "Eso ya estaba en la lista; la copia se actualiza." });
     } catch (e) { alerta(e.message); }
   };
+}
+
+async function quitarZonas(ids) {
+  if (!ids.length || !MESA.actual) return;
+  const r = await api("POST", `/api/proyectos/${E.proyecto.id}/zonas`, { archivo: MESA.actual.id, accion: "quitar", ids, conversacion: E.conversacion });
+  seguirTrabajoMesa(r.trabajo, "Deshaciendo…", { texto: "Vuelve a verse." });
+}
+
+async function deshacerTapados(marcas) {
+  let ultimo = null;
+  for (const m of marcas) {
+    const e = (MESA.registro?.entidades || []).find((x) => x.marcador === m);
+    if (!e) continue;
+    const ultimoDe = m === marcas[marcas.length - 1];
+    ultimo = await api("POST", `/api/proyectos/${E.proyecto.id}/registro/${e.id}/descartar`, ultimoDe ? { rehacer: MESA.actual.id, conversacion: E.conversacion } : {});
+  }
+  await cargarRegistroMesa();
+  if (ultimo?.trabajo) seguirTrabajoMesa(ultimo.trabajo, "Deshaciendo…", { texto: "Vuelve a verse." });
 }
 
 async function deshacerTapado(marca) {
@@ -1992,7 +2070,10 @@ function enlazar() {
   });
   document.addEventListener("click", async (ev) => {
     if (!ev.target.closest("#menu")) cerrarMenu();
-    if (!ev.target.closest("#mesa-pop") && !ev.target.closest(".marca") && !ev.target.closest(".capa") && !getSelection().toString()) $("#mesa-pop").hidden = true;
+    if (!ev.target.closest("#mesa-pop") && !ev.target.closest(".marca") && !ev.target.closest(".capa") && !getSelection().toString()) {
+      $("#mesa-pop").hidden = true;
+      $$("#mesa-paginas .pal.elegida").forEach((n) => n.classList.remove("elegida"));
+    }
     const b = ev.target.closest("button, [data-proyecto]");
     if (!b) return;
     const d = b.dataset;

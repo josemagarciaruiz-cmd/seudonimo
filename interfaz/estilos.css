@@ -523,8 +523,14 @@ body.mesa-ocupada .pag-marco img { opacity: .6; }
 .pag-marco { container-type: size; }
 .texto-capa { position: absolute; inset: 0; pointer-events: none; }
 .texto-capa .pal { position: absolute; pointer-events: auto; color: transparent; white-space: pre; overflow: hidden; line-height: 1; font-family: Helvetica, Arial, sans-serif; cursor: text; }
-.texto-capa .pal::selection { background: color-mix(in srgb, var(--oro) 45%, transparent); color: transparent; }
+.texto-capa .pal::selection { background: transparent; color: transparent; }
+.texto-capa .pal.elegida { background: color-mix(in srgb, var(--oro) 40%, transparent); border-radius: 2px; }
 .texto-capa .pal-marca { position: absolute; pointer-events: auto; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 0 2px; white-space: nowrap; overflow: hidden; border-radius: 2px; box-sizing: border-box; }
 .texto-capa .pal-marca:hover { outline: 2px solid var(--oro); }
 .pag-marco .capa { z-index: 1; }
 .texto-capa { z-index: 2; }
+
+/* 0.8.2 · zonas tapadas a mano: se ven como el tachón que son */
+.zona-manual { background: var(--tachon); border: 0; border-radius: 2px; display: flex; align-items: center; justify-content: center; z-index: 3; }
+.zona-manual > span { color: var(--tachon-texto); font: 600 clamp(7px, 1.4cqh, 12px)/1 var(--sans); white-space: nowrap; overflow: hidden; pointer-events: none; }
+.zona-manual:hover { background: var(--tachon); outline: 2px solid var(--oro); }

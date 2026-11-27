@@ -1,5 +1,10 @@
 # Cambios
 
+## 0.8.2 · 27 de noviembre de 2026
+
+- **Seleccionar varias palabras, una frase o un párrafo y tapar de una vez.** Al arrastrar sobre la página era fácil empezar o acabar a mitad de una palabra, y entonces no se tapaba nada (solo funcionaba palabra a palabra con el doble clic). Ahora la selección se ajusta siempre a palabras enteras y se ve resaltado exactamente lo que se va a tapar. Unas pocas palabras (un nombre, una frase corta) se tapan como dato, en esta copia y en las demás del expediente; un párrafo o más de dos líneas de un PDF se tapan línea a línea con un recuadro en esa copia, con un solo «Tapar» y un solo «Deshacer». En Word y PowerPoint, una frase larga se apunta línea a línea para que se encuentre en su párrafo.
+- Los recuadros tapados a mano se ven en la revisión como el tachón que son, con su rótulo.
+
 ## 0.8.1 · 27 de noviembre de 2026
 
 - **Una sola vista en la revisión.** Desaparecen los botones «Página | Texto»: la copia se ve como página, tal como ha quedado, y encima lleva una capa de texto invisible, así que el doble clic sobre una palabra y «Tapar» funcionan directamente sobre la página, igual que el rotulador. Las etiquetas («Persona 1»…) se ven sobre sus recuadros y se pueden pulsar. Los documentos que no tienen página (texto, correos) se siguen viendo como texto.
