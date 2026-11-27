@@ -20,6 +20,8 @@ Inventario de lo que se redistribuye en los instaladores. Las versiones exactas 
 | pywin32-ctypes (Windows) | Administrador de credenciales | BSD-3-Clause |
 | pyobjc-framework-Vision (Mac) | OCR de macOS | MIT |
 | Tesseract OCR 5 con los datos `spa`, `eng` y `osd` (Windows) | OCR | Apache-2.0 |
+| OpenCV (opencv-python-headless 4.12) y NumPy (Windows) | Detección de caras en las imágenes | Apache-2.0 (OpenCV), BSD-3-Clause (NumPy) |
+| Modelo YuNet `face_detection_yunet_2023mar.onnx` (OpenCV Zoo, `nucleo/modelos`) | Detección de caras en Windows | MIT |
 | Source Serif 4 | Tipografía de la interfaz | SIL Open Font License 1.1 (`interfaz/fuentes/OFL-SourceSerif4.txt`) |
 | Tauri 2 y sus *crates* | Ventana de escritorio | MIT o Apache-2.0 (los detalles por *crate* van en el SBOM) |
 | whisper.cpp b5454 (`whisper-cli`, con ggml) | Dictado por voz, transcripción en el propio ordenador | MIT (`licencias/LICENSE-whisper.cpp.txt`) |

@@ -41,7 +41,7 @@ Pulsa **«Abrir la mesa de revisión»** (en Documentos o en Datos tapados) o «
 
 **Seudonimizar solo unas páginas.** Pide en el chat «Seudonimiza solo la página 6 del informe»: el plan te deja elegir «Solo esas páginas» (la copia solo tiene esas páginas) o «Documento completo». Vale para PDF, Word (las páginas que Word apuntó al guardar el documento), PowerPoint (diapositivas) y Excel (hojas): «sácame solo la hoja 2 del Excel de nóminas».
 
-**Imágenes y hojas de Excel.** El texto que va dentro de las imágenes se lee y se tapa en los PDF, Word, PowerPoint y Excel. Si el nombre de una hoja de Excel lleva un dato, la hoja se renombra («Nóminas PERSONA_001») y sus fórmulas se ajustan solas.
+**Imágenes, caras, logotipos y hojas de Excel.** El texto que va dentro de las imágenes se lee y se tapa en los PDF, Word, PowerPoint y Excel. Las caras de las fotos se tapan con «[CARA]» y las imágenes pequeñas (logotipos, sellos, firmas) se sustituyen enteras por «[LOGO O SELLO]»; se puede desactivar en «Opciones avanzadas» del proyecto. Si el nombre de una hoja de Excel lleva un dato, la hoja se renombra («Nóminas PERSONA_001») y sus fórmulas se ajustan solas.
 
 **Pedir que tape algo que se ha quedado a la vista.** Si al revisar ves un dato sin tapar, sobre todo dentro de una imagen (la firma de un correo, un sello con un nombre), díselo al asistente: «en la página 2 se ve "Rodríguez" en la firma, tápalo». Te enseña una tarjeta con lo que va a tapar; al confirmarla lo añade a los datos del proyecto y rehace la copia, también dentro de las imágenes.
 

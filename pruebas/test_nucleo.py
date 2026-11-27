@@ -315,3 +315,33 @@ def test_copias_junto_a_los_originales_y_anteriores():
     assert finales[1].endswith("(seudonimizado - revisar).txt")
     assert sorted(os.listdir(sal)) == ["Anteriores", "Carta [PERSONA_001] (seudonimizado - revisar).txt", "Certificados"]
     assert len(os.listdir(os.path.join(sal, "Anteriores"))) == 1
+
+
+def test_caras_y_logotipos_en_office():
+    import io
+    import zipfile
+    import pytest
+    import rostros
+    if not rostros.DISPONIBLE:
+        pytest.skip("sin detector de caras")
+    docx = pytest.importorskip("docx")
+    from docx.shared import Cm
+    from PIL import Image
+    import formatos
+    foto = os.path.join(os.path.dirname(__file__), "datos", "astronauta.jpg")
+    assert rostros.caras(Image.open(foto)), "no ha visto la cara"
+    logo = io.BytesIO()
+    Image.new("RGB", (300, 120), (20, 60, 140)).save(logo, "PNG")
+    logo.seek(0)
+    d = tempfile.mkdtemp()
+    w = docx.Document()
+    w.add_picture(logo, width=Cm(3))
+    w.add_picture(foto, width=Cm(12))
+    ruta, salida = os.path.join(d, "f.docx"), os.path.join(d, "s.docx")
+    w.save(ruta)
+    info = formatos.aplicar(ruta, salida, ".docx", [], {"logos": True})
+    assert info["logos"] == 1 and info["caras"] == 1
+    with zipfile.ZipFile(salida) as z:
+        fotos = [Image.open(io.BytesIO(z.read(n))) for n in z.namelist() if n.startswith("word/media/")]
+    grande = max(fotos, key=lambda i: i.width)
+    assert not rostros.caras(grande.convert("RGB")), "la cara sigue a la vista"

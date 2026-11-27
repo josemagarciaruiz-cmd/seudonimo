@@ -4,6 +4,7 @@ Word, PowerPoint y Excel se editan por dentro (XML), de modo que el documento
 anonimizado conserva su formato, tablas, gráficos e imágenes. Los PDF se leen y se
 tachan con PDFium (ver pdfdoc.py)."""
 import os
+import posixpath
 import re
 import shutil
 import zipfile
@@ -423,7 +424,7 @@ def aplicar(origen, destino, ext, mapa, opciones=None):
         return {}
     if ext == ".pdf":
         return _aplicar_pdf(origen, destino, mapa, logos=bool(opciones.get("logos", True)), extra=opciones.get("extra"))
-    return _aplicar_zip(origen, destino, ZIP[ext], mapa)
+    return _aplicar_zip(origen, destino, ZIP[ext], mapa, logos=bool(opciones.get("logos", True)))
 
 
 def _preservar(ts):
@@ -432,22 +433,39 @@ def _preservar(ts):
             t.set(XML_SPACE, "preserve")
 
 
-def _aplicar_zip(origen, destino, familia, mapa):
-    info = {"vectoriales": 0, "imagenes_tapadas": 0}
+def _aplicar_zip(origen, destino, familia, mapa, logos=True):
+    info = {"vectoriales": 0, "imagenes_tapadas": 0, "logos": 0, "caras": 0}
     with zipfile.ZipFile(origen) as zin, zipfile.ZipFile(destino, "w", zipfile.ZIP_DEFLATED) as zout:
         hojas = {}
         if familia == "xlsx" and "xl/workbook.xml" in zin.namelist():
             hojas = renombrar_hojas_plan(zin.read("xl/workbook.xml"), mapa)
+        tam = imagenes_office.tamanos(zin, familia) if logos else {}
+        # logotipos vectoriales (EMF/WMF): no se pueden editar, se cambian por una imagen PNG
+        vect = {n: posixpath.splitext(n)[0] + "-tapado.png" for n in zin.namelist()
+                if imagenes_office.es_vectorial(n) and imagenes_office.es_logo(tam.get(n))}
         for item in zin.infolist():
             data = zin.read(item.filename)
             kind = _tipo_parte(item.filename, familia)
+            if item.filename in vect:
+                zout.writestr(vect[item.filename], imagenes_office.marcador_logo(*_tamano_vectorial(tam.get(item.filename))))
+                info["logos"] += 1
+                continue
             if imagenes_office.es_imagen(item.filename):
-                nueva = imagenes_office.tapar(data, item.filename, mapa)
+                nueva, que = imagenes_office.tapar(data, item.filename, mapa,
+                                                   logo=logos and imagenes_office.es_logo(tam.get(item.filename)), caras=logos)
                 if nueva is not None:
                     data = nueva
                     info["imagenes_tapadas"] += 1
+                    if que == "logo":
+                        info["logos"] += 1
+                    elif que == "caras":
+                        info["caras"] += 1
                 zout.writestr(item, data)
                 continue
+            if vect and item.filename.endswith(".rels"):
+                data = _cambiar_destinos(data, item.filename, vect)
+            if vect and item.filename == "[Content_Types].xml":
+                data = _tipos_png(data, vect)
             if imagenes_office.es_vectorial(item.filename):
                 info["vectoriales"] += 1
             if hojas and item.filename.endswith(".xml") and (item.filename.startswith("xl/") or item.filename == "docProps/app.xml"):
@@ -483,6 +501,42 @@ def _aplicar_zip(origen, destino, familia, mapa):
                 data = _limpiar_autoria(data)
             zout.writestr(item, data)
     return info
+
+
+def _tamano_vectorial(fr):
+    """Tamaño en píxeles del recuadro que sustituye a un logotipo vectorial (proporción de la página)."""
+    if not fr:
+        return 300, 120
+    ancho = max(60, int(1600 * fr[1]))
+    alto = max(30, int(2260 * fr[2]))
+    return min(ancho, 1600), min(alto, 2260)
+
+
+def _cambiar_destinos(data, nombre_rels, cambios):
+    root = etree.fromstring(data, PARSER)
+    base = posixpath.dirname(posixpath.dirname(nombre_rels))
+    tocado = False
+    for r in root:
+        t = r.get("Target") or ""
+        if r.get("TargetMode") == "External":
+            continue
+        destino = t.lstrip("/") if t.startswith("/") else posixpath.normpath(posixpath.join(base, t))
+        if destino in cambios:
+            nuevo = cambios[destino]
+            r.set("Target", "/" + nuevo if t.startswith("/") else posixpath.relpath(nuevo, base or "."))
+            tocado = True
+    return etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True) if tocado else data
+
+
+def _tipos_png(data, cambios):
+    CTN = "http://schemas.openxmlformats.org/package/2006/content-types"
+    root = etree.fromstring(data, PARSER)
+    for o in list(root.iter("{%s}Override" % CTN)):
+        if (o.get("PartName") or "").lstrip("/") in cambios:
+            root.remove(o)
+    if not any((d.get("Extension") or "").lower() == "png" for d in root.iter("{%s}Default" % CTN)):
+        etree.SubElement(root, "{%s}Default" % CTN, Extension="png", ContentType="image/png")
+    return etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
 
 
 # ---------------------------------------------------------------- nombres de las hojas de Excel
@@ -750,6 +804,22 @@ def _logos_incrustados(page):
     return res
 
 
+def _caras_pagina(page, dpi=110):
+    """Caras en las fotos de una página (una foto de carné escaneada, una fotografía pegada):
+    se tapan enteras con «[CARA]». Solo se mira si la página tiene alguna imagen."""
+    import rostros
+    if not rostros.DISPONIBLE:
+        return []
+    try:
+        if not page.imagenes() and not necesita_ocr(page):
+            return []
+        img = page.renderizar(dpi)
+    except Exception:  # noqa
+        return []
+    e = dpi / 72.0
+    return [(pdfdoc.Rect(x0 / e, y0 / e, x1 / e, y1 / e), rostros.MARCA) for x0, y0, x1, y1 in rostros.caras(img)]
+
+
 def _imagenes_contenido(page):
     """Las imágenes que _logos_incrustados deja como contenido (grandes o en banda ancha)."""
     W, H = page.width, page.height
@@ -865,7 +935,7 @@ def _aplicar_pdf(origen, destino, mapa, logos=True, extra=None):
     extra = extra or {}
     with _abrir_pdf(origen) as doc:
         for page in doc:
-            previos = (_logos_incrustados(page) if logos else []) + list(extra.get(page.number, []))
+            previos = (_logos_incrustados(page) + _caras_pagina(page) if logos else []) + list(extra.get(page.number, []))
             if necesita_ocr(page):
                 escaneadas.add(page.number)
                 t, q = _tachar_ocr(page, mapa, origen, previos)

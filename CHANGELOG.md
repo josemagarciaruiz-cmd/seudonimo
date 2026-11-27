@@ -1,5 +1,11 @@
 # Cambios
 
+## 0.4.1 · 27 de noviembre de 2026
+
+- **Caras en las fotos.** Se detectan en el propio ordenador (en Mac con el sistema; en Windows con OpenCV y el modelo YuNet) y se tapan con «[CARA]» en los PDF (también en las copias escaneadas de un DNI) y en las imágenes de Word, PowerPoint y Excel.
+- **Logotipos, sellos y firmas en Word, PowerPoint y Excel**, con el mismo criterio que en los PDF: las imágenes que se muestran pequeñas se sustituyen enteras por un recuadro «[LOGO O SELLO]» del mismo tamaño. Los logotipos vectoriales (EMF/WMF), que no se pueden editar, se cambian por ese recuadro en PNG.
+- La opción del proyecto pasa a llamarse «Tapar logotipos, sellos, firmas pequeñas y caras de las fotos» y vale para todos los formatos.
+
 ## 0.4.0 · 27 de noviembre de 2026
 
 Más fácil de usar: se ve qué hacer y dónde queda cada documento.
