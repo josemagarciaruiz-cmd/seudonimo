@@ -1,5 +1,12 @@
 # Cambios
 
+## 0.8.1 · 27 de noviembre de 2026
+
+- **Una sola vista en la revisión.** Desaparecen los botones «Página | Texto»: la copia se ve como página, tal como ha quedado, y encima lleva una capa de texto invisible, así que el doble clic sobre una palabra y «Tapar» funcionan directamente sobre la página, igual que el rotulador. Las etiquetas («Persona 1»…) se ven sobre sus recuadros y se pueden pulsar. Los documentos que no tienen página (texto, correos) se siguen viendo como texto.
+- **Word, PowerPoint y Excel también se ven como página** si en el ordenador está Microsoft Office (o Pages, en Mac): es el propio programa el que dibuja la copia, en este ordenador, para enseñarla. La primera vez tarda unos segundos y puede verse abrirse el programa. El rotulador sigue siendo solo para PDF; en Office se tapa con el doble clic.
+- Arreglado: en la aplicación de escritorio las páginas salían en blanco (la ventana no permitía mostrar las imágenes cargadas con el token).
+- «Ver en el Finder» y «Guardar en…» también arriba, en la revisión; en la lista de documentos, el botón «⋯» pasa a llamarse «Carpeta ▾».
+
 ## 0.8.0 · 27 de noviembre de 2026
 
 - **Visor de páginas con rotulador.** La revisión de un PDF (también las fotos y los escaneos, que se convierten a PDF) enseña la página tal como ha quedado, con los tachones. Para tapar algo que falta, se arrastra el ratón por encima, como con un rotulador: la zona se tapa en el acto con un recuadro «Tapado», se puede quitar (✕ al pasar el ratón) y queda guardada en el expediente, de modo que se mantiene si la copia se vuelve a generar. El texto que había debajo desaparece del archivo. Un selector «Página | Texto» permite seguir viendo el texto con las etiquetas; los documentos de Office se ven en texto.

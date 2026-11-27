@@ -35,7 +35,7 @@ A la izquierda, tus **expedientes** (cada uno es un chat; las conversaciones ant
 
 ## Revisar una copia y tapar a mano
 
-Pulsa **«Revisar»** junto a un documento. Si es un PDF (o una foto o un escaneo), verás **la página tal como ha quedado**, con los tachones. Para tapar algo que falta, **arrastra el ratón por encima**, como con un rotulador, y pulsa «Tapar»: la zona se tapa en el acto, el texto que había debajo desaparece del archivo y, si te equivocas, «Deshacer» o la ✕ que aparece al pasar el ratón por la zona. Con «Página | Texto», arriba, pasas a la vista de texto, que es la única para los documentos de Office:
+Pulsa **«Revisar»** junto a un documento. Verás **la página tal como ha quedado**, con los tachones (los PDF, fotos y escaneos siempre; Word, PowerPoint y Excel si tienes Office o Pages en el ordenador, que es quien la dibuja). Para tapar una zona, un sello o una foto de un PDF, **arrastra el ratón por encima**, como con un rotulador, y pulsa «Tapar»: se tapa en el acto, el texto que había debajo desaparece del archivo y, si te equivocas, «Deshacer» o la ✕ que aparece al pasar el ratón por la zona. Los documentos sin página (texto, correos) se ven como texto. En cualquier caso:
 
 - ¿Algo que se ha quedado a la vista? Haz **doble clic** encima (o selecciónalo con el ratón) y pulsa **«Tapar»**. La copia se rehace en el acto y aparece «Deshacer» por si te has equivocado. Se tapará también en las demás copias del expediente cuando se actualicen.
 - ¿Una etiqueta que no debería estar (un juzgado, una ley)? Haz clic en ella y elige **«Dejar a la vista»**. También en el acto, también con «Deshacer».

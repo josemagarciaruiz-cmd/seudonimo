@@ -414,7 +414,7 @@ function filaResultado(c) {
       <button class="boton boton-chico" data-abrir="${esc(c.ruta)}">Abrir copia</button>
       ${c.id ? `<button class="boton boton-chico${c.estado === "revision" ? " aviso" : ""}" data-revisar="${c.id}" title="Ver la copia y tapar a mano lo que falte">Revisar</button>
       <button class="boton boton-chico" data-contexto="${c.id}" title="¿Se podría reconocer a la persona por la suma de datos indirectos?">Comprobar riesgo</button>` : ""}
-      <button class="boton-texto mas-doc" data-menu-copia="${esc(c.ruta)}" data-doc="${c.id || ""}" data-nombre="${esc(c.original || nombre)}" aria-label="Más opciones" title="Más opciones">⋯</button>
+      <button class="boton-texto mas-doc" data-menu-copia="${esc(c.ruta)}" data-doc="${c.id || ""}" data-nombre="${esc(c.original || nombre)}" aria-haspopup="menu" title="Ver en su carpeta, guardar en otro sitio…">Carpeta ▾</button>
     </div></div>`;
 }
 
@@ -784,7 +784,7 @@ function pintarArchivos() {
         <button class="boton boton-chico" data-abrir="${esc(c.ruta)}">Abrir copia</button>
         <button class="boton boton-chico${a.estado === "revision" ? " aviso" : ""}" data-revisar="${a.id}" title="Ver la copia y tapar a mano lo que falte">Revisar</button>
         <button class="boton boton-chico" data-contexto="${a.id}" title="¿Se podría reconocer a la persona por la suma de datos indirectos?">Comprobar riesgo</button>
-        <button class="boton-texto mas-doc" data-menu-copia="${esc(c.ruta)}" data-doc="${a.id}" data-nombre="${esc(a.rel.split(/[\\/]/).pop())}" aria-label="Más opciones" title="Más opciones">⋯</button></div>` : ""}
+        <button class="boton-texto mas-doc" data-menu-copia="${esc(c.ruta)}" data-doc="${a.id}" data-nombre="${esc(a.rel.split(/[\\/]/).pop())}" aria-haspopup="menu" title="Ver en su carpeta, guardar en otro sitio…">Carpeta ▾</button></div>` : ""}
     </div>`;
   }).join("");
   if (fuera.length) html += `<details class="plegable"><summary>${fuera.length === 1 ? "Un archivo no se puede tratar" : fuera.length + " archivos no se pueden tratar"}</summary>
@@ -901,8 +901,8 @@ function menuCopia(boton) {
   const d = boton.dataset;
   const aid = +d.doc || null;
   abrirMenu(boton, [
-    { texto: `Mostrar en ${EXPLORADOR}`, accion: () => api("POST", "/api/mostrar", { ruta: d.menuCopia }) },
-    { texto: "Guardar en…", accion: () => guardarEn([d.menuCopia]) },
+    { texto: EN_MAC ? "Ver en el Finder" : "Ver en su carpeta", accion: () => api("POST", "/api/mostrar", { ruta: d.menuCopia }) },
+    { texto: "Guardar una copia en… (Escritorio, USB, otra carpeta)", accion: () => guardarEn([d.menuCopia]) },
     ...(aid ? [
       { texto: "Pedirle algo al asistente sobre este documento…", accion: () => rellenar(`En «${d.nombre}», `) },
     ] : []),
@@ -1327,7 +1327,7 @@ function pintarVoz(v) {
 // la vista si no es un dato personal (también en el acto). Nada queda «pendiente».
 
 const MESA = { copias: [], actual: null, datos: null, registro: null, trabajo: null, sondeo: null, paginas: new Set(), datosAbiertos: false,
-  visor: null, vista: "pagina" };
+  visor: null };
 const RE_MARCA = /\[(?:[A-Z_]+_\d{1,4}|LOGO O SELLO|CARA|TAPADO)\]/g;
 
 function etiquetaMarca(m) {
@@ -1384,33 +1384,50 @@ async function verCopia(aid) {
   pintarDocsMesa();
   const hoja = $("#mesa-texto");
   hoja.innerHTML = `<p class="nota">Leyendo la copia${/\.pdf$/i.test(MESA.actual.copia) ? " (las páginas escaneadas pasan por el OCR: puede tardar unos segundos)" : ""}…</p>`;
+  const cont = $("#mesa-paginas");
+  cont.hidden = false;
+  cont.innerHTML = `<p class="nota ayuda-rotulador">Dibujando las páginas…${/\.(docx|pptx|xlsx)$/i.test(MESA.actual.copia) ? " Las de Word, PowerPoint y Excel las dibuja el propio programa: la primera vez tarda un poco y puede abrirse un momento." : ""}</p>`;
+  MESA.visor = null;
   try {
     MESA.datos = await api("GET", `/api/proyectos/${E.proyecto.id}/copias/${aid}`);
   } catch (e) { hoja.innerHTML = `<p class="nota">${esc(e.message)}</p>`; return; }
-  try { MESA.visor = await api("GET", `/api/proyectos/${E.proyecto.id}/copias/${aid}/paginas`); } catch (e) { MESA.visor = { visor: false }; }
   pintarHoja();
-  pintarVisor();
+  try { MESA.visor = await api("GET", `/api/proyectos/${E.proyecto.id}/copias/${aid}/paginas`); } catch (e) { MESA.visor = { visor: false }; }
+  if (MESA.actual?.id === aid) pintarVisor();
 }
 
-// ---- visor de páginas: la página tal como ha quedado y el rotulador para tapar una zona
+// ---- visor: la página tal como ha quedado, con una capa de texto invisible encima para poder
+// seleccionar palabras (doble clic → «Tapar») y, en los PDF, el rotulador para tapar una zona.
 function pintarVisor() {
   const v = MESA.visor;
   const hay = !!(v && v.visor);
-  $("#mesa-vista").hidden = !hay;
-  const vista = hay ? MESA.vista : "texto";
-  $$("#mesa-vista button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.vista === vista)));
-  $("#mesa-texto").hidden = vista !== "texto";
+  $("#mesa-texto").hidden = hay;
   const cont = $("#mesa-paginas");
-  cont.hidden = vista !== "pagina";
-  if (!hay || vista !== "pagina") { cont.innerHTML = ""; return; }
+  cont.hidden = !hay;
+  if (!hay) { cont.innerHTML = ""; return; }
+  const d = MESA.datos || { escapados: [] };
   const zonas = v.zonas || [];
-  cont.innerHTML = `<p class="nota ayuda-rotulador">Arrastra el ratón sobre lo que quieras tapar, como con un rotulador. Se tapa en el acto y se puede quitar.${v.paginas.length > 1 ? ` ${v.paginas.length} páginas.` : ""}</p>` +
-    v.paginas.map(([w, h], i) => {
-      const n = i + 1;
-      const zs = zonas.filter((z) => z.pagina === n).map((z) => `<div class="zona-manual" style="left:${(z.rect[0] / w * 100).toFixed(3)}%;top:${(z.rect[1] / h * 100).toFixed(3)}%;width:${((z.rect[2] - z.rect[0]) / w * 100).toFixed(3)}%;height:${((z.rect[3] - z.rect[1]) / h * 100).toFixed(3)}%" title="Tapado a mano"><button type="button" class="quitar-zona" data-quitar-zona="${esc(z.id)}" title="Quitar este tapado">✕</button></div>`).join("");
-      return `<figure class="pag-vista" data-n="${n}" data-w="${w}" data-h="${h}">
-        ${v.paginas.length > 1 ? `<figcaption>Página ${n} de ${v.paginas.length}</figcaption>` : ""}
-        <div class="pag-marco" style="aspect-ratio:${w} / ${h}"><img data-src="${E.conexion.base}/api/proyectos/${E.proyecto.id}/copias/${MESA.actual.id}/pagina/${n}.png?dpi=120&v=${v.version}" alt="Página ${n}" draggable="false"><div class="capa">${zs}<div class="dibujo" hidden></div></div></div>
+  const n = d.escapados.length;
+  const ayuda = v.rotulador
+    ? `Haz doble clic en una palabra (o selecciónala) y pulsa «Tapar». Para tapar una zona, un sello o una foto, arrastra el ratón por encima como con un rotulador. Todo se aplica en el acto y se puede deshacer.`
+    : `Así ha quedado la copia${v.programa ? ` (la dibuja ${esc(v.programa)})` : ""}. Haz doble clic en una palabra (o selecciónala) y pulsa «Tapar». Se aplica en el acto y se puede deshacer.`;
+  const u = d.unidad || "página", U = u.charAt(0).toUpperCase() + u.slice(1);
+  cont.innerHTML = (n && !MESA.trabajo ? `<div class="aviso-hoja"><span>Esta copia es anterior a ${n === 1 ? "un cambio" : n + " cambios"} de la lista de datos.</span><button class="boton boton-principal" data-actualizar-copia>Actualizar esta copia</button></div>` : "")
+    + `<p class="nota ayuda-rotulador">${ayuda}</p>`
+    + v.paginas.map(([w, h], i) => {
+      const num = i + 1;
+      const zs = zonas.filter((z) => z.pagina === num).map((z) => `<div class="zona-manual" style="left:${(z.rect[0] / w * 100).toFixed(3)}%;top:${(z.rect[1] / h * 100).toFixed(3)}%;width:${((z.rect[2] - z.rect[0]) / w * 100).toFixed(3)}%;height:${((z.rect[3] - z.rect[1]) / h * 100).toFixed(3)}%" title="Tapado a mano"><button type="button" class="quitar-zona" data-quitar-zona="${esc(z.id)}" title="Quitar este tapado">✕</button></div>`).join("");
+      const pals = ((v.palabras || [])[i] || []).map(([x0, y0, x1, y1, t]) => {
+        const caja = `left:${(x0 / w * 100).toFixed(3)}%;top:${(y0 / h * 100).toFixed(3)}%;width:${((x1 - x0) / w * 100).toFixed(3)}%;height:${((y1 - y0) / h * 100).toFixed(3)}%`;
+        const alto = ((y1 - y0) / h * 100).toFixed(3);
+        const st = `${caja};font-size:${alto}cqh`;
+        return RE_MARCA.test(t) && (RE_MARCA.lastIndex = 0, true)
+          ? `<button type="button" class="tachon marca pal-marca" data-marca="${esc(t)}" style="${caja};font-size:clamp(7px, ${alto}cqh * 0.72, 12px)" title="En el archivo: ${esc(t)}. Clic para ver qué tapa.">${esc(etiquetaMarca(t))}</button>`
+          : `<span class="pal" style="${st}">${esc(t)} </span>`;
+      }).join("");
+      return `<figure class="pag-vista" data-n="${num}" data-w="${w}" data-h="${h}">
+        ${v.paginas.length > 1 ? `<figcaption><span>${U} ${num} de ${v.paginas.length}</span><label class="opcion repaso" title="El modelo vuelve a leer solo esta ${u} buscando datos que se le escaparan"><input type="checkbox" data-repasar-pagina="${num}"${MESA.paginas.has(num) ? " checked" : ""}> <span>Volver a leer esta ${u}</span></label></figcaption>` : ""}
+        <div class="pag-marco${v.rotulador ? "" : " solo-ver"}" style="aspect-ratio:${w} / ${h}"><img data-src="${E.conexion.base}/api/proyectos/${E.proyecto.id}/copias/${MESA.actual.id}/pagina/${num}.png?dpi=120&v=${v.version}" alt="${U} ${num}" draggable="false"><div class="capa">${zs}<div class="dibujo" hidden></div></div><div class="texto-capa">${pals}</div></div>
       </figure>`;
     }).join("");
   // las imágenes se piden con el token: se cargan a mano
@@ -1420,7 +1437,12 @@ function pintarVisor() {
       if (r.ok) img.src = URL.createObjectURL(await r.blob());
     } catch (e) { /* se queda en blanco */ }
   });
-  $$(".capa", cont).forEach(enlazarRotulador);
+  $$("[data-repasar-pagina]", cont).forEach((c) => (c.onchange = () => {
+    const p = +c.dataset.repasarPagina;
+    if (c.checked) MESA.paginas.add(p); else MESA.paginas.delete(p);
+    pintarRepaso();
+  }));
+  if (v.rotulador) $$(".capa", cont).forEach(enlazarRotulador);
 }
 
 function enlazarRotulador(capa) {
@@ -1476,11 +1498,7 @@ async function quitarZona(id) {
   seguirTrabajoMesa(r.trabajo, "Quitando el tapado…", { texto: "Tapado quitado: vuelve a verse." });
 }
 
-function cambiarVistaMesa(v) {
-  MESA.vista = v;
-  try { localStorage.setItem("seudonimo.vistaMesa", v); } catch (e) { /* sin almacenamiento */ }
-  pintarVisor();
-}
+
 
 function pintarHoja() {
   const d = MESA.datos;
@@ -1558,7 +1576,7 @@ function popTapar() {
   const sel = getSelection();
   const s = sel.toString().replace(/\s+/g, " ").trim();
   if (!s || s.length < 2 || s.length > 150 || !sel.rangeCount) return;
-  if (!$("#mesa-texto").contains(sel.anchorNode)) return;
+  if (!$("#mesa-texto").contains(sel.anchorNode) && !$("#mesa-paginas").contains(sel.anchorNode)) return;
   if (RE_MARCA.test(s)) { RE_MARCA.lastIndex = 0; return; }
   const etiquetas = MESA.registro?.etiquetas || {};
   const tipo = tipoProbable(s);
@@ -1923,12 +1941,15 @@ function enlazar() {
   $("#mesa-cerrar").onclick = cerrarMesa;
   $("#mesa-repasar").onclick = () => repasarPaginas().catch((e) => alerta(e.message));
   $("#mesa-datos-toggle").onclick = () => alternarDatosMesa();
-  $$("#mesa-vista button").forEach((b) => (b.onclick = () => cambiarVistaMesa(b.dataset.vista)));
-  try { MESA.vista = localStorage.getItem("seudonimo.vistaMesa") || "pagina"; } catch (e) { /* sin almacenamiento */ }
+
   try { MESA.datosAbiertos = !!localStorage.getItem("seudonimo.datosMesa"); } catch (e) { /* sin almacenamiento */ }
   $("#mesa-contexto").onclick = () => MESA.actual && riesgoContexto(MESA.actual.id).catch((e) => alerta(e.message));
   $("#mesa-abrir").onclick = () => MESA.actual && api("POST", "/api/abrir", { ruta: MESA.actual.ruta }).catch((e) => alerta(e.message));
+  $("#mesa-finder").textContent = EN_MAC ? "Ver en el Finder" : "Ver en su carpeta";
+  $("#mesa-finder").onclick = () => MESA.actual && api("POST", "/api/mostrar", { ruta: MESA.actual.ruta }).catch((e) => alerta(e.message));
+  $("#mesa-guardar").onclick = () => MESA.actual && guardarEn([MESA.actual.ruta]).catch((e) => alerta(e.message));
   $("#mesa-texto").addEventListener("mouseup", () => setTimeout(popTapar, 0));
+  $("#mesa-paginas").addEventListener("mouseup", () => setTimeout(popTapar, 0));
   $("#mesa-hoja").addEventListener("scroll", () => { $("#mesa-pop").hidden = true; });
   enlazarTirador();
   $("#alternar-panel").onclick = () => {

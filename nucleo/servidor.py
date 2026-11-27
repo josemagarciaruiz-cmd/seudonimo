@@ -44,6 +44,7 @@ import instalacion  # noqa: E402
 import motor  # noqa: E402
 import multipasada  # noqa: E402
 import ocr  # noqa: E402
+import oficina  # noqa: E402
 import pdfdoc  # noqa: E402
 import proveedores  # noqa: E402
 import registro as registro_mod  # noqa: E402
@@ -750,26 +751,42 @@ _PAGINAS = {}         # (ruta, mtime, n, dpi) -> PNG de la página de la copia (
 
 
 def _pdf_copia(pid, aid):
+    """La copia si es un PDF, o (copia, PDF de vista) si es de Office y hay un programa que lo dibuje."""
     c = _copias(pid).get(aid)
-    if not c or os.path.splitext(c["ruta"])[1].lower() != ".pdf":
-        return None
-    return c
+    if not c:
+        return None, None
+    ext = os.path.splitext(c["ruta"])[1].lower()
+    if ext == ".pdf":
+        return c, c["ruta"]
+    if ext in oficina.EXTS and oficina.disponible(ext):
+        try:
+            return c, oficina.a_pdf(c["ruta"])
+        except Exception:  # noqa  (Office no ha respondido: se ve en texto)
+            traceback.print_exc()
+    return c, None
 
 
 @app.get("/api/proyectos/<int:pid>/copias/<int:aid>/paginas")
 def paginas_copia(pid, aid):
-    """Para el visor: cuántas páginas tiene la copia (PDF) y el tamaño de cada una en puntos."""
+    """Para el visor: cuántas páginas tiene la copia y el tamaño de cada una en puntos. Si la copia
+    es de Office y hay Word/PowerPoint/Excel (o Pages), sus páginas se dibujan con ese programa:
+    se ven, pero el rotulador solo funciona sobre PDF."""
     p = _proyecto(pid)
-    c = _pdf_copia(pid, aid)
-    if not c:
-        return jsonify(visor=False)
+    c, pdf = _pdf_copia(pid, aid)
+    if not c or not pdf:
+        ext = os.path.splitext((c or {}).get("ruta", ""))[1].lower()
+        return jsonify(visor=False, programa=oficina.programa(ext) if ext in oficina.EXTS else None)
     try:
-        with pdfdoc.abrir(c["ruta"]) as doc:
+        with pdfdoc.abrir(pdf) as doc:
             tam = [[round(pg.width, 2), round(pg.height, 2)] for pg in doc]
+            # la capa de texto de cada página: para seleccionar palabras encima de la imagen
+            palabras = [[[round(w[0], 1), round(w[1], 1), round(w[2], 1), round(w[3], 1), w[4]] for w in pg.palabras()][:4000] for pg in doc]
     except Exception as e:  # noqa
         return jsonify(error="No he podido abrir la copia: %s" % str(e)[:200]), 400
-    zonas = trabajos.zonas_manuales(p).get(str(aid), [])
-    return jsonify(visor=True, paginas=tam, zonas=zonas, version=int(os.path.getmtime(c["ruta"])))
+    es_pdf = pdf == c["ruta"]
+    zonas = trabajos.zonas_manuales(p).get(str(aid), []) if es_pdf else []
+    return jsonify(visor=True, rotulador=es_pdf, paginas=tam, palabras=palabras, zonas=zonas, version=int(os.path.getmtime(pdf)),
+                   programa=None if es_pdf else oficina.programa(os.path.splitext(c["ruta"])[1].lower()))
 
 
 @app.get("/api/proyectos/<int:pid>/copias/<int:aid>/pagina/<int:n>.png")
@@ -777,17 +794,17 @@ def imagen_pagina(pid, aid, n):
     """La página n (desde 1) de la copia seudonimizada, como imagen. Solo copias conocidas del
     expediente; nunca el original."""
     _proyecto(pid)
-    c = _pdf_copia(pid, aid)
-    if not c:
+    c, pdf = _pdf_copia(pid, aid)
+    if not c or not pdf:
         abort(404)
     try:
         dpi = max(50, min(200, int(request.args.get("dpi", 110))))
     except ValueError:
         dpi = 110
-    clave = (c["ruta"], os.path.getmtime(c["ruta"]), n, dpi)
+    clave = (pdf, os.path.getmtime(pdf), n, dpi)
     if clave not in _PAGINAS:
         try:
-            with pdfdoc.abrir(c["ruta"]) as doc:
+            with pdfdoc.abrir(pdf) as doc:
                 if not 1 <= n <= len(doc):
                     abort(404)
                 img = doc[n - 1].renderizar(dpi)

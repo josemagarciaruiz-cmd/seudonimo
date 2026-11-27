@@ -512,3 +512,11 @@ def test_zonas_manuales_del_proyecto():
     assert trabajos.zonas_manuales({"zonas": None}) == {}
     assert trabajos.zonas_manuales({"zonas": "no es json"}) == {}
     assert trabajos.zonas_manuales({"zonas": '{"7": [{"id": "a", "pagina": 1, "rect": [1, 2, 3, 4]}]}'})["7"][0]["pagina"] == 1
+
+
+def test_vista_office_solo_si_hay_programa():
+    import oficina
+    # en este equipo de pruebas no hay Office: la copia se ve en texto y a_pdf no hace nada
+    assert oficina.programa(".txt") is None
+    if oficina.programa(".docx") is None:
+        assert oficina.a_pdf("/no/existe.docx") is None
