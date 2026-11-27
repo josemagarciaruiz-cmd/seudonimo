@@ -158,16 +158,12 @@ function pintarLateral() {
   if (!E.proyectos.length) { el.innerHTML = `<p class="nota" style="padding:8px">Todavía no hay expedientes.</p>`; return; }
   el.innerHTML = E.proyectos.map((p) => {
     const activo = E.proyecto && E.proyecto.id === p.id;
-    const convs = activo ? (E.conversaciones[p.id] || []) : [];
+    // un expediente es un chat: las conversaciones anteriores están en «Expediente ▾ > Conversaciones»
     return `<div class="proyecto${activo ? " activo" : ""}">
       <div class="fila">
         <button class="proyecto-cab" data-proyecto="${p.id}">${esc(p.nombre)}${p.temporal ? ' <span class="temporal">temporal</span>' : ""}</button>
         <button class="mas" data-menu-proyecto="${p.id}" aria-label="Opciones del expediente ${esc(p.nombre)}" title="Opciones">⋯</button>
       </div>
-      ${activo ? `<div class="conversaciones">
-        <button class="conv conv-nueva" data-nueva-conv="${p.id}">+ Nueva conversación</button>
-        ${convs.map((c) => `<div class="fila"><button class="conv${c.id === E.conversacion ? " activa" : ""}" data-conv="${c.id}" title="${esc(c.titulo)}">${esc(c.titulo)}</button><button class="mas" data-menu-conv="${c.id}" aria-label="Opciones de la conversación" title="Opciones">⋯</button></div>`).join("")}
-      </div>` : ""}
     </div>`;
   }).join("");
 }
@@ -268,7 +264,7 @@ async function refrescarConversaciones() {
 
 async function eliminarProyecto(pid) {
   const p = E.proyectos.find((x) => x.id === pid);
-  const ok = await confirmar("Eliminar el expediente", `Se eliminarán «${p.nombre}», sus conversaciones, su registro de datos y la tabla de correspondencias cifrada con su clave. Tus archivos originales y las copias ya guardadas no se tocan.`, "Eliminar expediente");
+  const ok = await confirmar("Eliminar el expediente", `Se eliminarán «${p.nombre}», sus conversaciones, su lista de datos tapados y la clave que permite recuperar los nombres. Tus documentos originales y las copias ya guardadas no se tocan.`, "Eliminar expediente");
   if (!ok) return;
   if ($("#dlg-proyecto").open) $("#dlg-proyecto").close("cancelar");
   await api("DELETE", `/api/proyectos/${pid}`);
@@ -299,7 +295,7 @@ async function abrirProyecto(pid, conv) {
 async function abrirConversacion(cid) {
   E.conversacion = cid;
   const c = await api("GET", `/api/conversaciones/${cid}`);
-  $("#titulo-conversacion").textContent = c.titulo || "";
+  $("#titulo-conversacion").textContent = (E.conversaciones[E.proyecto.id] || []).length > 1 ? (c.titulo || "") : "";
   const hilo = $("#hilo");
   hilo.innerHTML = "";
   if (!c.mensajes.length) pintarVacioProyecto();
@@ -416,7 +412,8 @@ function filaResultado(c) {
     <div class="resultado-info"><b title="${esc(c.ruta || "")}">${esc(nombre)}</b><span class="nota">${esc(estado)} · original: ${esc(c.original || "")}</span></div>
     <div class="botones-fila">
       <button class="boton boton-chico" data-abrir="${esc(c.ruta)}">Abrir copia</button>
-      ${c.estado === "revision" && c.id ? `<button class="boton boton-chico aviso" data-revisar="${c.id}">Revisar</button>` : ""}
+      ${c.id ? `<button class="boton boton-chico${c.estado === "revision" ? " aviso" : ""}" data-revisar="${c.id}" title="Ver la copia y tapar a mano lo que falte">Revisar</button>
+      <button class="boton boton-chico" data-contexto="${c.id}" title="¿Se podría reconocer a la persona por la suma de datos indirectos?">Comprobar riesgo</button>` : ""}
       <button class="boton-texto mas-doc" data-menu-copia="${esc(c.ruta)}" data-doc="${c.id || ""}" data-nombre="${esc(c.original || nombre)}" aria-label="Más opciones" title="Más opciones">⋯</button>
     </div></div>`;
 }
@@ -461,13 +458,13 @@ function nodoGuardar(plan, mid, datos) {
   const titulo = `Guardar ${n === 1 ? "una copia" : n + " copias"} en ${plan.destino}`;
   if (plan.estado) {
     d.classList.add("cerrado");
-    d.innerHTML = `<h4>${esc(titulo)}</h4><p class="resultado">${plan.estado === "confirmado" ? "Hecho: copiadas en esa carpeta. Los originales y las copias del expediente siguen donde estaban." : "Descartado."}</p>
+    d.innerHTML = `<h4>${esc(titulo)}</h4><p class="resultado">${plan.estado === "confirmado" ? "Hecho: guardadas en esa carpeta. Las copias del expediente siguen también donde estaban." : "Descartado."}</p>
       ${plan.estado === "confirmado" ? `<div class="plan-acciones"><button class="boton-texto" data-abrir="${esc(plan.destino)}">Abrir la carpeta</button></div>` : ""}`;
     return d;
   }
   d.innerHTML = `<h4>${esc(titulo)}</h4>
     <ul class="plan-archivos">${plan.documentos.map((x) => `<li>${esc(x.nombre)}</li>`).join("")}</ul>
-    <p class="nota">Se copia la versión seudonimizada; si ya hay un archivo con ese nombre, no se sobrescribe.</p>
+    <p class="nota">Se guarda la copia seudonimizada; si ya hay un archivo con ese nombre, no se sobrescribe.</p>
     <div class="plan-acciones"><button class="boton boton-principal" data-confirmar>Guardar</button><button class="boton" data-descartar>Descartar</button></div>`;
   $("[data-confirmar]", d).onclick = async () => {
     try {
@@ -491,37 +488,49 @@ async function guardarEn(rutas) {
 // ------------------------------------------------------------------ riesgo por contexto (opcional)
 
 const NIVELES = { bajo: "Riesgo bajo", medio: "Riesgo medio", alto: "Riesgo alto" };
+const NIVEL_FRASE = {
+  bajo: "Con lo que queda a la vista, difícilmente alguien reconocería a la persona.",
+  medio: "Con lo que queda a la vista, alguien de su entorno podría llegar a reconocerla.",
+  alto: "Con lo que queda a la vista, alguien de su entorno (compañeros, la empresa, vecinos) reconocería a la persona aunque no aparezca su nombre.",
+};
 
 async function riesgoContexto(aid) {
   const d = $("#dlg-contexto");
   const cuerpo = $("#contexto-cuerpo");
   const boton = $("#contexto-aplicar");
   boton.disabled = true;
+  boton.textContent = "Aplicar";
   $("#contexto-nota").textContent = "";
-  cuerpo.innerHTML = `<p class="cargando">Leyendo la copia con el modelo local para buscar datos indirectos… En un documento largo puede tardar un par de minutos.</p>`;
+  cuerpo.innerHTML = `<p class="cargando">Leyendo la copia con el modelo local… En un documento largo puede tardar un par de minutos.</p>`;
   if (!d.open) d.showModal();
   let r;
   try { r = await api("POST", `/api/proyectos/${E.proyecto.id}/contexto/${aid}/analizar`); }
   catch (e) { cuerpo.innerHTML = `<p class="aviso-campo">${esc(e.message)}</p>`; return; }
-  const filas = r.hallazgos.map((h, i) => `<label class="contexto-fila">
-      <input type="checkbox" data-i="${i}"${h.aplicada || h.recomendado ? " checked" : ""}>
-      <span class="contexto-cat">${esc(h.nombre_categoria)}</span>
-      <span class="contexto-de">${esc(h.texto)}${h.veces > 1 ? ` <span class="nota">×${h.veces}</span>` : ""}</span>
-      <span class="contexto-flecha" aria-hidden="true">→</span>
-      <input class="contexto-a" data-r="${i}" value="${esc(h.generalizado)}" aria-label="Cómo queda">
-    </label>`).join("");
-  const huerfanas = (r.aplicadas || []).filter((g) => !r.hallazgos.some((h) => h.aplicada && h.texto.toLowerCase() === g.texto.toLowerCase()));
-  cuerpo.innerHTML = `<div class="contexto-nivel ${esc(r.nivel)}"><b>${NIVELES[r.nivel]}</b> · ${esc(r.documento)}<p>${esc(r.explicacion)}</p></div>
-    ${r.hallazgos.length ? `<div class="contexto-lista">${filas}</div>
-      <p class="nota">Vienen marcados los datos que suelen identificar sin aportar nada al asunto (edad, municipio, familia, nacionalidad, rasgos y ser «la única» o «el más…» del entorno). Las fechas, los importes, el puesto y la salud se dejan a tu criterio: pueden ser necesarios para el caso (plazos, cantidades, incapacidad). Puedes cambiar el texto de la derecha.</p>` : ""}
-    ${huerfanas.length ? `<h3>Ya generalizados en este expediente</h3>${huerfanas.map((g) => `<label class="contexto-fila"><input type="checkbox" data-ya="${esc(g.texto)}" checked><span class="contexto-cat">${esc(g.categoria || "")}</span><span class="contexto-de">${esc(g.texto)}</span><span class="contexto-flecha">→</span><span>${esc(g.reemplazo)}</span></label>`).join("")}<p class="nota">Desmarca uno para volver a dejarlo como estaba.</p>` : ""}`;
-  const marcados = () => r.hallazgos.filter((h, i) => $(`input[data-i="${i}"]`, cuerpo).checked);
+  const fila = (h, i) => `<div class="riesgo-fila${h.aplicada ? " aplicada" : ""}">
+      <label class="interruptor-grande"><input type="checkbox" data-i="${i}"${h.aplicada || h.recomendado ? " checked" : ""}><span class="pista-int"></span></label>
+      <div class="riesgo-texto">
+        <div>${h.aplicada ? "Ya cambiado" : "Se ve"} <b class="riesgo-de">«${esc(h.texto)}»</b>${h.veces > 1 ? ` <span class="nota">(${h.veces} veces)</span>` : ""} <span class="nota">· ${esc(h.nombre_categoria.toLowerCase())}</span></div>
+        <div class="riesgo-a">${h.aplicada ? "ahora pone" : "se cambiaría por"} <button type="button" class="riesgo-prop" data-e="${i}" title="Pulsa para escribir otra cosa">«<span data-txt="${i}">${esc(h.generalizado)}</span>»</button><input class="contexto-a" data-r="${i}" value="${esc(h.generalizado)}" hidden aria-label="Cómo queda"></div>
+      </div></div>`;
+  const huerfanas = (r.aplicadas || []).filter((g) => !r.hallazgos.some((h) => h.aplicada && (h.original || h.texto).toLowerCase() === g.texto.toLowerCase()));
+  cuerpo.innerHTML = `<div class="contexto-nivel ${esc(r.nivel)}"><span class="semaforo" aria-hidden="true"></span><div><b>${NIVELES[r.nivel]}</b><p>${esc(NIVEL_FRASE[r.nivel] || r.explicacion)}</p></div></div>
+    ${r.hallazgos.length ? `<p class="nota">Deja activado lo que quieras cambiar. Vienen activados los datos que delatan a la persona sin aportar nada al asunto; las fechas, los importes, el puesto y la salud los decides tú, porque pueden ser necesarios para el caso.</p>
+      <div class="riesgo-lista">${r.hallazgos.map(fila).join("")}</div>` : `<p class="nota">No queda ningún dato indirecto que cambiar.</p>`}
+    ${huerfanas.length ? `<h3>Cambiados antes en este expediente</h3><div class="riesgo-lista">${huerfanas.map((g) => `<div class="riesgo-fila aplicada"><label class="interruptor-grande"><input type="checkbox" data-ya="${esc(g.texto)}" checked><span class="pista-int"></span></label><div class="riesgo-texto"><div>«${esc(g.texto)}» → «${esc(g.reemplazo)}»</div></div></div>`).join("")}</div><p class="nota">Desactiva uno para volver a dejarlo como estaba.</p>` : ""}`;
+  $$(".riesgo-prop", cuerpo).forEach((b) => (b.onclick = () => {
+    const inp = $(`input[data-r="${b.dataset.e}"]`, cuerpo);
+    b.hidden = true; inp.hidden = false; inp.focus(); inp.select();
+    inp.onblur = () => { $(`[data-txt="${b.dataset.e}"]`, cuerpo).textContent = inp.value; inp.hidden = true; b.hidden = false; contar(); };
+    inp.onkeydown = (ev) => { if (ev.key === "Enter") { ev.preventDefault(); inp.blur(); } };
+  }));
   const contar = () => {
-    const poner = marcados().filter((h) => !h.aplicada).length;
+    const poner = r.hallazgos.filter((h, i) => !h.aplicada && $(`input[data-i="${i}"]`, cuerpo).checked).length;
     const quitar = r.hallazgos.filter((h, i) => h.aplicada && !$(`input[data-i="${i}"]`, cuerpo).checked).length + $$("input[data-ya]", cuerpo).filter((x) => !x.checked).length;
     const cambios = r.hallazgos.filter((h, i) => h.aplicada && $(`input[data-i="${i}"]`, cuerpo).checked && $(`input[data-r="${i}"]`, cuerpo).value !== h.generalizado).length;
-    boton.disabled = !(poner || quitar || cambios);
-    $("#contexto-nota").textContent = poner || quitar || cambios ? `${poner ? poner + " para generalizar" : ""}${poner && quitar ? " · " : ""}${quitar ? quitar + " para quitar" : ""}` : "";
+    const total = poner + quitar + cambios;
+    boton.disabled = !total;
+    boton.textContent = total ? `Aplicar ${total === 1 ? "el cambio" : total + " cambios"}` : "Aplicar";
+    $("#contexto-nota").textContent = total ? "La copia se actualiza al momento." : "";
   };
   cuerpo.oninput = contar;
   contar();
@@ -532,12 +541,10 @@ async function riesgoContexto(aid) {
     const quitar = r.hallazgos.filter((h, i) => h.aplicada && !$(`input[data-i="${i}"]`, cuerpo).checked).map((h) => h.original || h.texto)
       .concat($$("input[data-ya]", cuerpo).filter((x) => !x.checked).map((x) => x.dataset.ya));
     try {
-      await api("POST", `/api/proyectos/${E.proyecto.id}/contexto/aplicar`, { archivo: aid, poner, quitar, conversacion: E.conversacion });
+      const res = await api("POST", `/api/proyectos/${E.proyecto.id}/contexto/aplicar`, { archivo: aid, poner, quitar, conversacion: E.conversacion });
       d.close();
-      avisoFlotante("Rehaciendo la copia con los datos generalizados…");
-      if (!$("#mesa").hidden) cerrarMesa();
-      mostrarPestana("operaciones");
-      await refrescarOperaciones();
+      if (!$("#mesa").hidden && MESA.actual?.id === aid) seguirTrabajoMesa(res.id, "Actualizando la copia…", { texto: "Copia actualizada con los cambios." });
+      else { avisoFlotante("Actualizando la copia con los cambios…"); await refrescarOperaciones(); }
     } catch (e) { alerta(e.message); }
   };
 }
@@ -551,14 +558,14 @@ function nodoTapar(plan, mid, datos) {
   if (plan.estado) {
     d.classList.add("cerrado");
     d.innerHTML = `<h4>${esc(titulo)}</h4><p class="resultado">${plan.estado === "confirmado"
-      ? "Confirmado. La copia se está rehaciendo; el avance se ve en la lista de documentos." : "Descartado."}</p>`;
+      ? "En marcha: la copia se está rehaciendo con esos datos tapados. El avance se ve en la lista de documentos." : "Descartado."}</p>`;
     return d;
   }
   d.innerHTML = `<h4>${esc(titulo)}</h4>
     <ul class="plan-archivos">${plan.datos.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
-    <p class="nota">Se añaden a los datos del expediente y se rehace la copia${plan.pagina ? ` (mencionas la página ${plan.pagina}, pero se tapan en todo el documento)` : ""}, también dentro de las imágenes. El original no se toca.</p>
+    <p class="nota">Se tapan en todo el documento${plan.pagina ? ` (también fuera de la página ${plan.pagina})` : ""}, dentro de las imágenes incluidas. El original no se toca.</p>
     <div class="plan-acciones">
-      <button class="boton boton-principal" data-confirmar>Tapar y rehacer la copia</button>
+      <button class="boton boton-principal" data-confirmar>Tapar</button>
       <button class="boton" data-descartar>Descartar</button>
     </div>`;
   $("[data-confirmar]", d).onclick = async () => {
@@ -596,7 +603,7 @@ function nodoPlan(plan, mid, datos) {
   if (estado) {
     d.classList.add("cerrado");
     d.innerHTML = `<h4>${esc(pags ? titulo : `Seudonimización de ${n} archivo${n === 1 ? "" : "s"}`)}</h4>
-      <p class="resultado">${estado === "confirmado" ? `Confirmada (${plan.perfil === "intensivo" ? "revisión a fondo" : "revisión normal"}). El avance se ve en la lista de documentos.` : estado === "otro_proyecto" ? "Este plan era del expediente de origen de la conversación. Si lo necesitas aquí, vuelve a pedirlo." : "Descartada."}</p>`;
+      <p class="resultado">${estado === "confirmado" ? `En marcha${plan.perfil === "intensivo" ? " (revisión a fondo)" : ""}. El avance se ve en la lista de documentos; allí puedes cancelarlo. Los originales no se tocan.` : estado === "otro_proyecto" ? "Esto era del expediente de origen de la conversación. Si lo necesitas aquí, vuelve a pedirlo." : "Descartada."}</p>`;
     return d;
   }
   const intensivo = plan.perfil === "intensivo";
@@ -684,7 +691,13 @@ async function enviar(texto) {
         else if (ev.t === "fin") {
           $(".prosa", nodo).classList.remove("cursor");
           const datos = { herramientas: [], planes };
-          for (const p of planes) nodo.append(nodoPlan(p, ev.mensaje, datos));
+          for (const p of planes) {
+            const tarjeta = nodoPlan(p, ev.mensaje, datos);
+            nodo.append(tarjeta);
+            // lo que pide el usuario se hace sin pedir confirmación: nada toca los originales y todo se puede cancelar o deshacer
+            const b = $("[data-confirmar]", tarjeta);
+            if (b) b.click();
+          }
         }
         hilo.scrollTop = hilo.scrollHeight;
       }
@@ -769,7 +782,8 @@ function pintarArchivos() {
       <div class="resultado-info"><b title="${esc(a.rel)}">${esc(a.rel.split(/[\\/]/).pop())}</b><span class="nota">${esc(estado)}${a.motivo && !c ? " · " + esc(a.motivo) : ""}</span></div>
       ${c ? `<div class="botones-fila">
         <button class="boton boton-chico" data-abrir="${esc(c.ruta)}">Abrir copia</button>
-        ${a.estado === "revision" ? `<button class="boton boton-chico aviso" data-revisar="${a.id}">Revisar</button>` : ""}
+        <button class="boton boton-chico${a.estado === "revision" ? " aviso" : ""}" data-revisar="${a.id}" title="Ver la copia y tapar a mano lo que falte">Revisar</button>
+        <button class="boton boton-chico" data-contexto="${a.id}" title="¿Se podría reconocer a la persona por la suma de datos indirectos?">Comprobar riesgo</button>
         <button class="boton-texto mas-doc" data-menu-copia="${esc(c.ruta)}" data-doc="${a.id}" data-nombre="${esc(a.rel.split(/[\\/]/).pop())}" aria-label="Más opciones" title="Más opciones">⋯</button></div>` : ""}
     </div>`;
   }).join("");
@@ -789,6 +803,21 @@ function pintarArchivos() {
     <button class="boton-texto" data-accion="actualizar-carpetas" title="Volver a leer las carpetas">Volver a leer las carpetas</button></details>`;
   html += detalleTecnico(activos);
   el.innerHTML = html;
+  pintarGuia(el, { adm: adm.length, pend: pend.length, activos: activos.length, hechos: (R.copias || []).length });
+}
+
+// Tres globos la primera vez: qué hacer ahora. Desaparecen al pulsar «Entendido» en el último.
+function guiaVista() { try { return !!localStorage.getItem("seudonimo.guia"); } catch (e) { return true; } }
+function pintarGuia(el, n) {
+  if (guiaVista() || !E.proyecto) return;
+  const paso = !n.adm ? 1 : (n.pend || n.activos) && !n.hechos ? 2 : n.hechos ? 3 : 0;
+  if (!paso) return;
+  const textos = {
+    1: ["Paso 1 de 3", "Arrastra aquí los documentos del asunto, o pulsa «+ Añadir». Los originales nunca se tocan."],
+    2: ["Paso 2 de 3", n.activos ? "Ya está trabajando. Al terminar, cada documento tendrá su copia sin datos." : "Pulsa «Seudonimizar». Tarda un rato y puedes seguir usando el ordenador."],
+    3: ["Paso 3 de 3", "«Abrir copia» abre el documento sin datos. Si ves algo sin tapar, pulsa «Revisar», haz doble clic encima y «Tapar». Y en el chat puedes pedir lo que quieras con tus palabras."],
+  }[paso];
+  el.insertAdjacentHTML("afterbegin", `<div class="globo"><b>${textos[0]}</b><p>${textos[1]}</p>${paso === 3 ? `<button class="boton boton-chico" data-accion="guia-vista">Entendido</button>` : `<button class="boton-texto boton-chico" data-accion="guia-vista">No mostrar más</button>`}</div>`);
 }
 
 async function expedienteDesde(rutas) {
@@ -875,9 +904,7 @@ function menuCopia(boton) {
     { texto: `Mostrar en ${EXPLORADOR}`, accion: () => api("POST", "/api/mostrar", { ruta: d.menuCopia }) },
     { texto: "Guardar en…", accion: () => guardarEn([d.menuCopia]) },
     ...(aid ? [
-      { texto: "Revisar y tapar a mano", accion: () => abrirMesa(aid) },
-      { texto: "Riesgo por contexto", accion: () => riesgoContexto(aid) },
-      { texto: "Pedírselo al asistente…", accion: () => rellenar(`En «${d.nombre}», `) },
+      { texto: "Pedirle algo al asistente sobre este documento…", accion: () => rellenar(`En «${d.nombre}», `) },
     ] : []),
   ]);
 }
@@ -887,12 +914,21 @@ function menuExpediente(boton) {
   const hayCopias = (E.resultados?.copias || []).length > 0;
   abrirMenu(boton, [
     { texto: "Ajustes del expediente", accion: () => abrirDialogoProyecto(true) },
-    ...(hayCopias ? [{ texto: "Revisar las copias y los datos tapados", accion: () => abrirMesa() }] : []),
+    ...(hayCopias ? [{ texto: "Revisar las copias", accion: () => abrirMesa() }] : []),
     ...(hayCopias ? [{ texto: "Copiar las copias para otra IA", accion: copiarParaIA }] : []),
-    { texto: "Poner los nombres en una respuesta de otra IA…", accion: abrirNombres },
-    ...(p.tabla === "cifrada" ? [{ texto: "Exportar la tabla de correspondencias…", accion: () => accion("exportar-tabla") }] : []),
-    { texto: "Nueva conversación", accion: nuevaConversacion },
+    { texto: "Volver a poner los nombres en una respuesta de otra IA…", accion: abrirNombres },
+    ...(p.tabla === "cifrada" ? [{ texto: "Exportar la lista de nombres y etiquetas…", accion: () => accion("exportar-tabla") }] : []),
+    { texto: "Empezar una conversación nueva", accion: nuevaConversacion },
+    ...((E.conversaciones[p.id] || []).length > 1 ? [{ texto: "Conversaciones anteriores…", accion: () => menuConversaciones(boton) }] : []),
   ]);
+}
+
+function menuConversaciones(boton) {
+  const convs = (E.conversaciones[E.proyecto.id] || []).slice(0, 12);
+  abrirMenu(boton, convs.map((c) => ({
+    texto: `${c.id === E.conversacion ? "● " : ""}${c.titulo}`,
+    accion: () => abrirConversacion(c.id),
+  })).concat([{ texto: "Gestionar la conversación actual…", accion: () => menuConversacion(boton, E.conversacion) }]));
 }
 
 function menuAjustes(boton) {
@@ -913,48 +949,42 @@ function rellenar(texto) {
   e.setSelectionRange(e.value.length, e.value.length);
 }
 
-// ------------------------------------------------------------------ panel: revisión
+// ------------------------------------------------------------------ lista de datos tapados (dentro de la revisión)
 
-async function pintarRevision(el = $("#mesa-datos"), enMesa = true) {
-  if (!E.proyecto) return;
-  let r;
-  try { r = enMesa && MESA.registro ? MESA.registro : await api("GET", `/api/proyectos/${E.proyecto.id}/registro`); }
-  catch (e) { el.innerHTML = `<p class="nota">${esc(e.message)}</p>`; return; }
+function pintarRevision(el = $("#mesa-datos")) {
+  const r = MESA.registro;
+  if (!E.proyecto || !r) return;
   const grupos = {};
   for (const e of r.entidades) (grupos[e.tipo] = grupos[e.tipo] || []).push(e);
   const tipos = Object.keys(r.etiquetas);
-  const hayCopias = (E.proyecto.archivos || []).some((a) => ["sin_hallazgos", "revision"].includes(a.estado));
-  el.innerHTML = `
-    ${enMesa ? `<h3>Datos tapados</h3>` : `${hayCopias ? `<button class="boton boton-principal ancho" data-accion="abrir-mesa">Abrir la mesa de revisión</button>` : ""}
-    <p class="nota">Todos los datos que el expediente tapa, con su marcador. En la mesa de revisión ves cada copia entera y puedes tapar lo que se haya escapado seleccionándolo con el ratón.</p>`}
+  el.innerHTML = `<div class="mesa-datos-cab"><h3>Datos tapados</h3><button type="button" class="boton-texto" id="mesa-datos-cerrar" aria-label="Ocultar">✕</button></div>
+    <p class="nota">Todo lo que se tapa en este expediente. Lo que apuntes aquí se tapa en esta copia ahora y en las demás cuando se actualicen.</p>
     <form class="form-anadir">
       <input name="texto" placeholder="Dato que se ha escapado" required>
-      <button class="boton">Añadir</button>
-      <select name="tipo">${tipos.map((t) => `<option value="${t}"${t === "PERSONA" ? " selected" : ""}>${esc(r.etiquetas[t])}</option>`).join("")}</select>
+      <button class="boton">Tapar</button>
+      <select name="tipo" aria-label="Qué es">${tipos.map((t) => `<option value="${t}"${t === "PERSONA" ? " selected" : ""}>${esc(r.etiquetas[t])}</option>`).join("")}</select>
     </form>
-    ${enMesa ? `<input class="filtro-datos" type="search" placeholder="Buscar un dato o un marcador">` : `<div class="acciones-panel">
-      <button class="boton" data-accion="regenerar" ${r.entidades.length ? "" : "disabled"}>Rehacer copias</button>
-      ${E.proyecto.tabla === "cifrada" && r.entidades.length ? `<button class="boton-texto" data-accion="exportar-tabla">Exportar tabla…</button>` : ""}
-    </div>`}
+    <input class="filtro-datos" type="search" placeholder="Buscar un dato o una etiqueta">
     ${r.entidades.length ? "" : `<p class="nota">Todavía no hay datos detectados en este expediente.</p>`}
     <div class="grupos-datos">${Object.entries(grupos).map(([tipo, ents]) => `<div class="grupo-tipo"><h3>${esc(r.etiquetas[tipo] || tipo)} · ${ents.filter((e) => e.activo).length}</h3>
       ${ents.map((e) => {
         const visible = !e.activo || e.conservado || e.en_lista;
-        return `<div class="entidad${visible ? " inactiva" : ""}" data-buscar="${esc((e.marcador + " " + e.formas.join(" ")).toLowerCase())}">
-        <span class="tachon${visible ? " descartado" : ""}">${esc(e.marcador)}</span>
+        return `<div class="entidad${visible ? " inactiva" : ""}" data-buscar="${esc((e.marcador + " " + etiquetaMarca(e.marcador) + " " + e.formas.join(" ")).toLowerCase())}">
+        <span class="tachon${visible ? " descartado" : ""}" title="En el archivo: ${esc(e.marcador)}">${esc(etiquetaMarca(e.marcador))}</span>
         <span class="formas">${e.formas.map(esc).join(" · ")}</span>
-        ${!e.activo ? `<button class="boton-texto" data-reactivar-ent="${e.id}">Recuperar</button>` : (e.conservado || e.en_lista) ? `<span></span>` : `<button class="boton-texto" data-descartar-ent="${e.id}" title="No es un dato personal">Descartar</button>`}
-        <span class="meta">${e.conservado ? "se deja a la vista por el tipo de asunto · " : ""}${e.en_lista ? "en la lista «Nunca tapar» · " : ""}${e.docs.length} documento${e.docs.length === 1 ? "" : "s"} · ${esc(e.origenes.join(", "))}${e.ambigua ? " · ambigua: revisa si es la misma persona" : ""}</span>
+        ${!e.activo ? `<button class="boton-texto" data-reactivar-ent="${e.id}">Volver a tapar</button>` : (e.conservado || e.en_lista) ? `<span></span>` : `<button class="boton-texto" data-descartar-ent="${e.id}" title="No es un dato personal">Dejar a la vista</button>`}
+        <span class="meta">${e.conservado ? "a la vista por el tipo de asunto · " : ""}${e.en_lista ? "en la lista «Nunca tapar» · " : ""}${e.docs.length} documento${e.docs.length === 1 ? "" : "s"} · ${esc(e.origenes.join(", "))}${e.ambigua ? " · ambigua: revisa si es la misma persona" : ""}</span>
       </div>`; }).join("")}</div>`).join("")}</div>`;
+  $("#mesa-datos-cerrar", el).onclick = () => alternarDatosMesa(false);
   $(".form-anadir", el).onsubmit = async (ev) => {
     ev.preventDefault();
+    if (MESA.trabajo) return;
     const f = new FormData(ev.target);
     try {
-      await api("POST", `/api/proyectos/${E.proyecto.id}/registro`, { texto: f.get("texto"), tipo: f.get("tipo") });
-      if (enMesa) {
-        MESA.pendientes++; pintarPendientes(); await cargarRegistroMesa();
-        MESA.datos = await api("GET", `/api/proyectos/${E.proyecto.id}/copias/${MESA.actual.id}`); pintarHoja();
-      } else pintarRevision();
+      const r2 = await api("POST", `/api/proyectos/${E.proyecto.id}/registro`, { texto: f.get("texto"), tipo: f.get("tipo"), rehacer: MESA.actual?.id, conversacion: E.conversacion });
+      await cargarRegistroMesa();
+      const marca = r2.nuevas?.[0]?.marcador;
+      if (r2.trabajo) seguirTrabajoMesa(r2.trabajo, "Tapando…", marca ? { texto: `Tapado como «${etiquetaMarca(marca)}».`, etiqueta: "Deshacer", accion: () => deshacerTapado(marca) } : { texto: "Ese dato ya estaba en la lista." });
     } catch (e) { alerta(e.message); }
   };
   const filtro = $(".filtro-datos", el);
@@ -962,6 +992,12 @@ async function pintarRevision(el = $("#mesa-datos"), enMesa = true) {
     const q = filtro.value.trim().toLowerCase();
     $$(".entidad", el).forEach((n) => (n.hidden = q && !n.dataset.buscar.includes(q)));
   };
+}
+
+function alternarDatosMesa(abrir) {
+  MESA.datosAbiertos = abrir === undefined ? !MESA.datosAbiertos : abrir;
+  $("#mesa").classList.toggle("con-datos", MESA.datosAbiertos);
+  try { localStorage.setItem("seudonimo.datosMesa", MESA.datosAbiertos ? "1" : ""); } catch (e) { /* sin almacenamiento */ }
 }
 
 // ------------------------------------------------------------------ diálogos
@@ -1038,7 +1074,7 @@ function abrirDialogoProyecto(editar) {
     try {
       if (editar) {
         if (E.proyecto.tabla === "cifrada" && datos.tabla === "sin_tabla") {
-          const ok = await confirmar("Dejar de guardar la tabla", "Se destruirá la tabla de correspondencias cifrada de este expediente. No se podrá deshacer la seudonimización de las copias ya generadas.", "Destruir la tabla");
+          const ok = await confirmar("Dejar de guardar la clave", "Se destruirá la clave de este expediente: ya no se podrán volver a poner los nombres en las copias generadas ni en las respuestas de otra IA.", "Destruir la clave");
           if (!ok) return;
         }
         Object.assign(datos, { instrucciones: f.instrucciones.value, logos: f.logos.checked ? 1 : 0, vigilar: f.vigilar.checked });
@@ -1285,12 +1321,23 @@ function pintarVoz(v) {
   }).join("");
 }
 
-// ------------------------------------------------------------------ mesa de revisión
-// La copia seudonimizada a pantalla completa: se selecciona con el ratón lo que se ha escapado
-// («Tapar») y se hace clic en un marcador para descartarlo. Los cambios se aplican al rehacer.
+// ------------------------------------------------------------------ revisión de la copia
+// La copia seudonimizada entera. Doble clic (o selección) sobre lo que se ha escapado y «Tapar»:
+// la copia se rehace en el acto, con «Deshacer». Clic en una etiqueta para ver qué tapa y dejarla a
+// la vista si no es un dato personal (también en el acto). Nada queda «pendiente».
 
-const MESA = { copias: [], actual: null, datos: null, registro: null, pendientes: 0, trabajo: null, sondeo: null, paginas: new Set() };
-const RE_MARCA = /\[(?:[A-Z_]+_\d{1,4}|LOGO O SELLO)\]/g;
+const MESA = { copias: [], actual: null, datos: null, registro: null, trabajo: null, sondeo: null, paginas: new Set(), datosAbiertos: false };
+const RE_MARCA = /\[(?:[A-Z_]+_\d{1,4}|LOGO O SELLO|CARA)\]/g;
+
+function etiquetaMarca(m) {
+  // [PERSONA_001] → «Persona 1»: lo que ve quien revisa; el archivo conserva el marcador
+  if (m === "[LOGO O SELLO]") return "Logo o sello";
+  if (m === "[CARA]") return "Cara";
+  const x = /^\[([A-Z_]+)_(\d{1,4})\]$/.exec(m);
+  if (!x) return m;
+  const etq = (MESA.registro?.etiquetas || E.etiquetas || {})[x[1]] || x[1].charAt(0) + x[1].slice(1).toLowerCase().replace(/_/g, " ");
+  return `${etq} ${parseInt(x[2], 10)}`;
+}
 
 async function abrirMesa(aid) {
   if (!E.proyecto) return;
@@ -1298,30 +1345,33 @@ async function abrirMesa(aid) {
   if (!MESA.copias.length) return alerta("Todavía no hay copias seudonimizadas en este expediente. Pide primero que seudonimice los documentos.", "Nada que revisar");
   $("#mesa").hidden = false;
   document.body.classList.add("con-mesa");
+  $("#mesa").classList.toggle("con-datos", MESA.datosAbiertos);
   await cargarRegistroMesa();
   const elegido = MESA.copias.find((c) => c.id === aid) || MESA.copias.find((c) => c.estado === "revision") || MESA.copias[0];
   await verCopia(elegido.id);
-  pintarPendientes();
+  pintarEstadoMesa();
 }
 
 function cerrarMesa() {
-  if (MESA.pendientes && !MESA.trabajo) {
-    return confirmar("Cambios sin aplicar", `Has hecho ${MESA.pendientes} cambio${MESA.pendientes === 1 ? "" : "s"} que aún no están en las copias. Se aplicarán cuando las rehagas.`, "Cerrar de todas formas")
-      .then((ok) => { if (ok) { MESA.pendientes = 0; cerrarMesa(); } });
-  }
   $("#mesa").hidden = true;
   $("#mesa-pop").hidden = true;
   document.body.classList.remove("con-mesa");
+  refrescarOperaciones();
 }
 
 async function cargarRegistroMesa() {
   MESA.registro = await api("GET", `/api/proyectos/${E.proyecto.id}/registro`);
   pintarRevision($("#mesa-datos"), true);
+  const n = (MESA.registro.entidades || []).filter((e) => e.activo).length;
+  $("#mesa-datos-toggle").textContent = `Datos tapados${n ? " · " + n : ""}`;
 }
 
 function pintarDocsMesa() {
-  $("#mesa-docs").innerHTML = `<h3>Copias</h3>` + MESA.copias.map((c) => `<button class="mesa-doc${MESA.actual && c.id === MESA.actual.id ? " activo" : ""}" data-mesa-doc="${c.id}">
-      <span class="nombre">${esc(c.original)}</span><span class="chip ${esc(c.estado)}">${esc(ESTADOS[c.estado] || c.estado)}</span></button>`).join("");
+  const el = $("#mesa-docs");
+  el.hidden = MESA.copias.length < 2;
+  el.innerHTML = `<h3>Documentos</h3>` + MESA.copias.map((c) => `<button class="mesa-doc${MESA.actual && c.id === MESA.actual.id ? " activo" : ""}" data-mesa-doc="${c.id}">
+      <span class="nombre">${esc(c.original)}</span><span class="chip ${esc(c.estado)}">${esc(c.estado === "revision" ? "Revísala" : ESTADOS[c.estado] || c.estado)}</span></button>`).join("");
+  $("#mesa-nombre").textContent = MESA.actual ? MESA.actual.original : "";
 }
 
 async function verCopia(aid) {
@@ -1341,11 +1391,10 @@ async function verCopia(aid) {
 function pintarHoja() {
   const d = MESA.datos;
   const t = d.texto || "";
-  // tramos: los datos conocidos que siguen a la vista (rojo) y los marcadores (tachón)
+  // tramos: los datos conocidos que siguen a la vista (rojo) y las etiquetas (tachón)
   const tramos = d.escapados.map((x) => ({ ini: x.ini, fin: x.fin, tipo: "escapado", marca: x.marcador }));
   for (const m of t.matchAll(RE_MARCA)) tramos.push({ ini: m.index, fin: m.index + m[0].length, tipo: "marca", marca: m[0] });
   tramos.sort((a, b) => a.ini - b.ini || b.fin - a.fin);
-  // el texto se pinta por páginas (PDF): cada una con su número y su casilla «Repasar»
   const cortes = d.paginas && d.paginas.length ? d.paginas : [0];
   const pintarTramo = (a, b) => {
     let html = "", pos = a;
@@ -1354,8 +1403,8 @@ function pintarHoja() {
       html += esc(t.slice(pos, s.ini));
       const trozo = esc(t.slice(s.ini, Math.min(s.fin, b)));
       html += s.tipo === "marca"
-        ? `<button type="button" class="tachon marca" data-marca="${esc(s.marca)}">${trozo}</button>`
-        : `<mark class="escapado" data-marca="${esc(s.marca)}" title="Este dato ya está en la lista de datos tapados (${esc(s.marca)}) pero sigue a la vista en esta copia. Rehaz la copia.">${trozo}</mark>`;
+        ? `<button type="button" class="tachon marca" data-marca="${esc(s.marca)}" title="En el archivo: ${esc(s.marca)}. Clic para ver qué tapa.">${esc(etiquetaMarca(s.marca))}</button>`
+        : `<mark class="escapado" data-marca="${esc(s.marca)}" title="Este dato ya está en la lista (${esc(etiquetaMarca(s.marca))}) pero esta copia es anterior: pulsa «Actualizar esta copia».">${trozo}</mark>`;
       pos = Math.min(s.fin, b);
     }
     return html + esc(t.slice(pos, b));
@@ -1370,20 +1419,20 @@ function pintarHoja() {
     const u = d.unidad || "página", U = u.charAt(0).toUpperCase() + u.slice(1);
     html += `<section class="pagina${enRojo(ini, fin) ? " con-restos" : ""}" id="pagina-${n}">
       <header class="pagina-cab"><span>${U} ${n} de ${cortes.length}</span>
-        <label class="opcion repaso"><input type="checkbox" data-repasar-pagina="${n}"${MESA.paginas.has(n) ? " checked" : ""}> <span>Repasar esta ${u}</span></label></header>
+        <label class="opcion repaso" title="El modelo vuelve a leer solo esta ${u} buscando datos que se le escaparan"><input type="checkbox" data-repasar-pagina="${n}"${MESA.paginas.has(n) ? " checked" : ""}> <span>Volver a leer esta ${u}</span></label></header>
       <div class="texto-copia">${cuerpo || `<span class="nota">${U} sin texto legible.</span>`}</div></section>`;
   });
   const n = d.escapados.length;
-  $("#mesa-texto").innerHTML = (n ? `<p class="aviso-hoja">${n} dato${n === 1 ? "" : "s"} conocido${n === 1 ? "" : "s"} sigue${n === 1 ? "" : "n"} a la vista en esta copia (en rojo). Pulsa «${MESA.pendientes ? "Aplicar" : "Rehacer esta copia"}» arriba para taparlo${n === 1 ? "" : "s"}.</p>` : "")
-    + (cortes.length > 1 ? `<p class="nota ayuda-repaso">¿Una ${d.unidad || "página"} con datos sin tapar? Marca «Repasar esta ${d.unidad || "página"}» y pulsa «Repasar páginas»: el modelo vuelve a leer solo ${d.unidades === "hojas" ? "esas hojas" : d.unidades === "diapositivas" ? "esas diapositivas" : "esas páginas"}. Si en una imagen se ve algo sin tapar, pídeselo al asistente en el chat: «en la página 2 se ve "…", tápalo».</p>` : "")
-    + (html || '<span class="nota">La copia no tiene texto legible.</span>');
+  $("#mesa-texto").innerHTML = (n && !MESA.trabajo ? `<div class="aviso-hoja"><span>Esta copia es anterior a ${n === 1 ? "un cambio" : n + " cambios"} de la lista de datos (en rojo).</span><button class="boton boton-principal" data-actualizar-copia>Actualizar esta copia</button></div>` : "")
+    + (cortes.length > 1 ? "" : "")
+    + (html || '<span class="nota">La copia no tiene texto legible.</span>')
+    + `<p class="nota ayuda-mesa">¿Algo sin tapar? Haz doble clic encima (o selecciónalo) y pulsa «Tapar». ¿Una etiqueta que no debería estar? Haz clic en ella y elige «Dejar a la vista». Los cambios se aplican en el acto y se pueden deshacer.${cortes.length > 1 ? ` Si en una ${d.unidad || "página"} falta mucho, marca «Volver a leer esta ${d.unidad || "página"}».` : ""}</p>`;
   $$("[data-repasar-pagina]").forEach((c) => (c.onchange = () => {
     const p = +c.dataset.repasarPagina;
     if (c.checked) MESA.paginas.add(p); else MESA.paginas.delete(p);
     pintarRepaso();
   }));
   $("#mesa-hoja").scrollTop = 0;
-  $("#mesa-rehacer-uno").disabled = !!MESA.trabajo;
 }
 
 function tipoProbable(s) {
@@ -1411,6 +1460,7 @@ function situarPop(rect) {
 }
 
 function popTapar() {
+  if (MESA.trabajo) return;
   const sel = getSelection();
   const s = sel.toString().replace(/\s+/g, " ").trim();
   if (!s || s.length < 2 || s.length > 150 || !sel.rangeCount) return;
@@ -1419,54 +1469,61 @@ function popTapar() {
   const etiquetas = MESA.registro?.etiquetas || {};
   const tipo = tipoProbable(s);
   $("#mesa-pop").innerHTML = `<div class="pop-titulo">Tapar «${esc(s.length > 60 ? s.slice(0, 57) + "…" : s)}»</div>
-    <div class="fila-campo"><select id="pop-tipo">${Object.entries(etiquetas).map(([k, v]) => `<option value="${k}"${k === tipo ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>
+    <div class="fila-campo"><select id="pop-tipo" aria-label="Qué es">${Object.entries(etiquetas).map(([k, v]) => `<option value="${k}"${k === tipo ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>
     <button type="button" class="boton boton-principal" id="pop-tapar">Tapar</button></div>
-    <p class="nota">Se tapará en todas las copias del expediente al rehacerlas.</p>`;
+    <p class="nota">Se tapa ahora en esta copia y, cuando se actualicen, en las demás del expediente.</p>`;
   situarPop(sel.getRangeAt(0).getBoundingClientRect());
   $("#pop-tapar").onclick = async () => {
     try {
-      const r = await api("POST", `/api/proyectos/${E.proyecto.id}/registro`, { texto: s, tipo: $("#pop-tipo").value, doc: MESA.actual.id });
+      const r = await api("POST", `/api/proyectos/${E.proyecto.id}/registro`, { texto: s, tipo: $("#pop-tipo").value, doc: MESA.actual.id, rehacer: MESA.actual.id, conversacion: E.conversacion });
       $("#mesa-pop").hidden = true;
       getSelection().removeAllRanges();
-      MESA.pendientes++;
       await cargarRegistroMesa();
-      pintarPendientes();
-      // vuelve a marcar la copia: lo recién añadido aparece en rojo hasta que se rehaga
-      const y = $("#mesa-hoja").scrollTop;
-      MESA.datos = await api("GET", `/api/proyectos/${E.proyecto.id}/copias/${MESA.actual.id}`);
-      pintarHoja();
-      $("#mesa-hoja").scrollTop = y;
-      avisoFlotante(r.nuevas?.length ? `Añadido como ${r.nuevas[0].marcador}. Pulsa «Aplicar el cambio a esta copia» (arriba) para taparlo.` : "Ese dato ya estaba en la lista.");
+      const marca = r.nuevas?.[0]?.marcador;
+      if (r.trabajo) seguirTrabajoMesa(r.trabajo, "Tapando…", marca
+        ? { texto: `Tapado como «${etiquetaMarca(marca)}».`, etiqueta: "Deshacer", accion: () => deshacerTapado(marca) }
+        : { texto: "Ese dato ya estaba en la lista; la copia se actualiza." });
     } catch (e) { alerta(e.message); }
   };
+}
+
+async function deshacerTapado(marca) {
+  const e = (MESA.registro?.entidades || []).find((x) => x.marcador === marca);
+  if (!e) return;
+  const r = await api("POST", `/api/proyectos/${E.proyecto.id}/registro/${e.id}/descartar`, { rehacer: MESA.actual.id, conversacion: E.conversacion });
+  await cargarRegistroMesa();
+  if (r.trabajo) seguirTrabajoMesa(r.trabajo, "Deshaciendo…", { texto: "Vuelve a verse." });
 }
 
 function popMarca(boton) {
   const marca = boton.dataset.marca;
   const e = (MESA.registro?.entidades || []).find((x) => x.marcador === marca);
   const etq = MESA.registro?.etiquetas || {};
-  $("#mesa-pop").innerHTML = e ? `<div class="pop-titulo"><span class="tachon">${esc(marca)}</span> ${esc(etq[e.tipo] || e.tipo)}</div>
+  $("#mesa-pop").innerHTML = e ? `<div class="pop-titulo"><span class="tachon">${esc(etiquetaMarca(marca))}</span> <span class="nota">${esc(etq[e.tipo] || e.tipo)} · en el archivo ${esc(marca)}</span></div>
       <p class="pop-formas">${e.formas.map(esc).join(" · ")}</p>
       <p class="nota">Aparece en ${e.docs.length} documento${e.docs.length === 1 ? "" : "s"} · ${esc(e.origenes.join(", "))}</p>
-      ${e.activo ? `<button type="button" class="boton" data-descartar-ent="${e.id}">No es un dato personal: dejarlo a la vista</button>`
-        : `<p class="nota">Descartado: volverá a verse al rehacer la copia.</p><button type="button" class="boton-texto" data-reactivar-ent="${e.id}">Volver a taparlo</button>`}`
-    : `<div class="pop-titulo"><span class="tachon">${esc(marca)}</span></div><p class="nota">Marcador de una revisión anterior.</p>`;
+      ${e.activo ? `<button type="button" class="boton" data-descartar-ent="${e.id}"${MESA.trabajo ? " disabled" : ""}>Dejar a la vista (no es un dato personal)</button>`
+        : `<p class="nota">Se deja a la vista.</p><button type="button" class="boton-texto" data-reactivar-ent="${e.id}">Volver a taparlo</button>`}`
+    : `<div class="pop-titulo"><span class="tachon">${esc(etiquetaMarca(marca))}</span></div><p class="nota">Etiqueta de una revisión anterior.</p>`;
   situarPop(boton.getBoundingClientRect());
 }
 
-function pintarPendientes() {
-  const el = $("#mesa-pendientes");
-  el.hidden = !MESA.pendientes && !MESA.trabajo;
-  el.textContent = MESA.trabajo ? MESA.trabajo : `${MESA.pendientes} cambio${MESA.pendientes === 1 ? "" : "s"} sin aplicar`;
-  const uno = $("#mesa-rehacer-uno"), todas = $("#mesa-rehacer-todas");
-  uno.disabled = todas.disabled = !!MESA.trabajo;
-  // con cambios pendientes, el botón que los aplica se ilumina y dice lo que hace
-  const hay = MESA.pendientes > 0 && !MESA.trabajo;
-  uno.textContent = hay ? `Aplicar ${MESA.pendientes === 1 ? "el cambio" : MESA.pendientes + " cambios"} a esta copia` : "Rehacer esta copia";
-  todas.textContent = hay && MESA.copias.length > 1 ? "Aplicar a todas las copias" : "Rehacer todas";
-  uno.classList.toggle("boton-principal", hay);
-  uno.classList.toggle("latido", hay);
-  todas.classList.toggle("boton-principal", !hay);
+async function cambiarEntidadMesa(eid, accion) {
+  $("#mesa-pop").hidden = true;
+  const e = (MESA.registro?.entidades || []).find((x) => x.id === eid);
+  const r = await api("POST", `/api/proyectos/${E.proyecto.id}/registro/${eid}/${accion}`, { rehacer: MESA.actual?.id, conversacion: E.conversacion });
+  await cargarRegistroMesa();
+  const nombre = e ? etiquetaMarca(e.marcador) : "";
+  if (r.trabajo) seguirTrabajoMesa(r.trabajo, accion === "descartar" ? "Dejando a la vista…" : "Tapando…",
+    accion === "descartar" ? { texto: `«${nombre}» vuelve a verse.`, etiqueta: "Deshacer", accion: () => cambiarEntidadMesa(eid, "reactivar") }
+      : { texto: `«${nombre}» vuelve a estar tapado.`, etiqueta: "Deshacer", accion: () => cambiarEntidadMesa(eid, "descartar") });
+}
+
+function pintarEstadoMesa() {
+  const el = $("#mesa-estado-trabajo");
+  el.hidden = !MESA.trabajo;
+  el.textContent = MESA.trabajo || "";
+  document.body.classList.toggle("mesa-ocupada", !!MESA.trabajo);
   pintarRepaso();
 }
 
@@ -1475,18 +1532,16 @@ function pintarRepaso() {
   const n = MESA.paginas.size;
   b.hidden = !n;
   b.disabled = !!MESA.trabajo;
-  b.textContent = n === 1 ? `Repasar la página ${[...MESA.paginas][0]}` : `Repasar ${n} páginas`;
+  const u = MESA.datos?.unidad || "página", us = MESA.datos?.unidades || "páginas";
+  b.textContent = n === 1 ? `Volver a leer la ${u} ${[...MESA.paginas][0]}` : `Volver a leer ${n} ${us}`;
 }
 
 async function repasarPaginas() {
   const pags = [...MESA.paginas].sort((a, b) => a - b);
   if (!pags.length || !MESA.actual) return;
-  const intensiva = fondo();
-  const ok = await confirmar(pags.length === 1 ? `Repasar la página ${pags[0]}` : `Repasar las páginas ${pags.join(", ")}`,
-    `El modelo vuelve a buscar datos solo en ${pags.length === 1 ? "esa página" : "esas páginas"}${intensiva ? ", con revisión a fondo" : ""}. Lo que encuentre se añade a los datos del expediente y la copia se regenera y se verifica entera. Tarda bastante menos que repasar el documento completo.`, "Repasar");
-  if (!ok) return;
   await rehacer([MESA.actual.id], pags);
   MESA.paginas.clear();
+  pintarRepaso();
 }
 
 async function rehacer(ids, paginas) {
@@ -1494,40 +1549,47 @@ async function rehacer(ids, paginas) {
   const cuerpo = paginas ? { archivos: ids, paginas, perfil, conversacion: E.conversacion }
     : { archivos: ids, solo_ciclos: true, perfil, conversacion: E.conversacion };
   const r = await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, cuerpo);
-  MESA.trabajo = paginas ? "Repasando…" : "Rehaciendo…";
-  pintarPendientes();
+  seguirTrabajoMesa(r.id, paginas ? "Volviendo a leer…" : "Actualizando la copia…", { texto: paginas ? "Páginas leídas de nuevo y copia actualizada." : "Copia actualizada." });
+}
+
+function seguirTrabajoMesa(tid, texto, aviso) {
+  MESA.trabajo = texto;
+  pintarEstadoMesa();
   clearTimeout(MESA.sondeo);
   const seguir = async () => {
     let t;
-    try { t = await api("GET", `/api/trabajos/${r.id}`); } catch (e) { t = null; }
+    try { t = await api("GET", `/api/trabajos/${tid}`); } catch (e) { t = null; }
     if (t && ["pendiente", "procesando"].includes(t.estado)) {
-      MESA.trabajo = paginas ? `Repasando ${paginas.length === 1 ? "la página " + paginas[0] : paginas.length + " páginas"}… ${Math.round(t.progreso * 100)} %`
-        : `Rehaciendo ${ids.length === 1 ? "la copia" : ids.length + " copias"}… ${Math.round(t.progreso * 100)} %`;
-      pintarPendientes();
-      MESA.sondeo = setTimeout(seguir, 1500);
+      MESA.trabajo = `${texto} ${Math.round(t.progreso * 100)} %`;
+      pintarEstadoMesa();
+      MESA.sondeo = setTimeout(seguir, 1200);
       return;
     }
     MESA.trabajo = null;
-    MESA.pendientes = 0;
-    pintarPendientes();
+    pintarEstadoMesa();
     E.proyecto = await api("GET", `/api/proyectos/${E.proyecto.id}`);
-    pintarArchivos();
+    await refrescarOperaciones();
     if ($("#mesa").hidden) return;
     const actual = MESA.actual?.id;
     MESA.copias = await api("GET", `/api/proyectos/${E.proyecto.id}/copias`);
     await cargarRegistroMesa();
+    const y = $("#mesa-hoja").scrollTop;
     await verCopia(MESA.copias.some((c) => c.id === actual) ? actual : MESA.copias[0].id);
-    avisoFlotante(paginas ? "Páginas repasadas: copia regenerada y verificada." : "Copias rehechas y verificadas.");
+    $("#mesa-hoja").scrollTop = y;
+    if (aviso) avisoAccion(aviso.texto, aviso.etiqueta, aviso.accion);
   };
   seguir();
 }
 
-function avisoFlotante(texto) {
+function avisoFlotante(texto) { avisoAccion(texto); }
+
+function avisoAccion(texto, etiqueta, accion, ms) {
   const el = $("#aviso-flotante");
-  el.textContent = texto;
+  el.innerHTML = `<span>${esc(texto)}</span>${etiqueta ? `<button type="button" class="aviso-accion">${esc(etiqueta)}</button>` : ""}`;
+  if (etiqueta) $(".aviso-accion", el).onclick = () => { el.hidden = true; clearTimeout(el._t); Promise.resolve(accion()).catch((e) => alerta(e.message)); };
   el.hidden = false;
   clearTimeout(el._t);
-  el._t = setTimeout(() => (el.hidden = true), 3500);
+  el._t = setTimeout(() => (el.hidden = true), ms || (etiqueta ? 8000 : 3500));
 }
 
 // ------------------------------------------------------------------ copiar para la IA y poner nombres
@@ -1559,7 +1621,7 @@ async function copiarParaIA() {
 
 function abrirNombres() {
   const d = $("#dlg-nombres");
-  if (E.proyecto.tabla !== "cifrada") return alerta("Este expediente no guarda la tabla de correspondencias, así que no se pueden recuperar los datos. Actívala en «Ajustes del expediente» para los próximos trabajos.", "Sin tabla");
+  if (E.proyecto.tabla !== "cifrada") return alerta("Este expediente no guarda la clave para recuperar los nombres, así que no se pueden poner. Actívala en «Ajustes del expediente» (Más opciones) para los próximos trabajos.", "Sin clave");
   $("#nombres-entrada").value = "";
   $("#nombres-salida").value = "";
   $("#nombres-resumen").textContent = "";
@@ -1574,8 +1636,8 @@ function abrirNombres() {
         const r = await api("POST", `/api/proyectos/${E.proyecto.id}/reidentificar`, { texto });
         $("#nombres-salida").value = r.texto;
         $("#nombres-copiar").disabled = false;
-        $("#nombres-resumen").textContent = `${r.sustituidos} marcador${r.sustituidos === 1 ? "" : "es"} sustituido${r.sustituidos === 1 ? "" : "s"} (${r.distintos} dato${r.distintos === 1 ? "" : "s"} distinto${r.distintos === 1 ? "" : "s"}).`
-          + (r.desconocidos.length ? ` No son de este expediente: ${r.desconocidos.join(", ")}.` : "");
+        $("#nombres-resumen").textContent = `${r.sustituidos} etiqueta${r.sustituidos === 1 ? "" : "s"} sustituida${r.sustituidos === 1 ? "" : "s"} (${r.distintos} dato${r.distintos === 1 ? "" : "s"} distinto${r.distintos === 1 ? "" : "s"}).`
+          + (r.desconocidos.length ? ` Estas etiquetas no son de este expediente: ${r.desconocidos.join(", ")}.` : "");
       } catch (e) { $("#nombres-resumen").textContent = e.message; }
     }, 250);
   };
@@ -1766,8 +1828,8 @@ function enlazar() {
 
   $("#mesa-cerrar").onclick = cerrarMesa;
   $("#mesa-repasar").onclick = () => repasarPaginas().catch((e) => alerta(e.message));
-  $("#mesa-rehacer-uno").onclick = () => MESA.actual && rehacer([MESA.actual.id]).catch((e) => alerta(e.message));
-  $("#mesa-rehacer-todas").onclick = () => rehacer(MESA.copias.map((c) => c.id)).catch((e) => alerta(e.message));
+  $("#mesa-datos-toggle").onclick = () => alternarDatosMesa();
+  try { MESA.datosAbiertos = !!localStorage.getItem("seudonimo.datosMesa"); } catch (e) { /* sin almacenamiento */ }
   $("#mesa-contexto").onclick = () => MESA.actual && riesgoContexto(MESA.actual.id).catch((e) => alerta(e.message));
   $("#mesa-abrir").onclick = () => MESA.actual && api("POST", "/api/abrir", { ruta: MESA.actual.ruta }).catch((e) => alerta(e.message));
   $("#mesa-texto").addEventListener("mouseup", () => setTimeout(popTapar, 0));
@@ -1827,16 +1889,16 @@ function enlazar() {
       else if (d.rellenar) rellenar(d.rellenar);
       else if (d.menuCopia) { ev.stopPropagation(); menuCopia(b); }
       else if (d.quitarCarpeta) { await api("DELETE", `/api/proyectos/${E.proyecto.id}/carpetas/${d.quitarCarpeta}`); E.proyecto = await api("GET", `/api/proyectos/${E.proyecto.id}`); pintarArchivos(); }
-      else if (d.cancelar) { if (await confirmar("Cancelar la seudonimización", "Los documentos ya terminados se exportan; el resto queda cancelado.", "Cancelar el trabajo")) { await api("POST", `/api/trabajos/${d.cancelar}/cancelar`); refrescarOperaciones(); } }
+      else if (d.cancelar) { await api("POST", `/api/trabajos/${d.cancelar}/cancelar`); avisoFlotante("Cancelado. Lo ya terminado se conserva."); refrescarOperaciones(); }
       else if (d.abrir) await api("POST", "/api/abrir", { ruta: d.abrir });
       else if (d.mostrar) await api("POST", "/api/mostrar", { ruta: d.mostrar });
       else if (d.contexto) await riesgoContexto(+d.contexto);
       else if (d.guardarEn) await guardarEn(d.guardarEn.split("\n"));
       else if (d.descartarEnt || d.reactivarEnt) {
-        await api("POST", `/api/proyectos/${E.proyecto.id}/registro/${d.descartarEnt || d.reactivarEnt}/${d.descartarEnt ? "descartar" : "reactivar"}`);
-        if (!$("#mesa").hidden) { MESA.pendientes++; pintarPendientes(); $("#mesa-pop").hidden = true; await cargarRegistroMesa(); }
-        else pintarRevision();
+        if (MESA.trabajo) return;
+        await cambiarEntidadMesa(+(d.descartarEnt || d.reactivarEnt), d.descartarEnt ? "descartar" : "reactivar");
       }
+      else if ("actualizarCopia" in d) { if (MESA.actual && !MESA.trabajo) await rehacer([MESA.actual.id]); }
       else if (d.marca) popMarca(b);
       else if (d.mesaDoc) await verCopia(+d.mesaDoc);
       else if (d.revisar) await abrirMesa(+d.revisar);
@@ -1879,13 +1941,11 @@ async function accion(a) {
     { texto: "Archivos sueltos…", accion: async () => anadirRutas(await elegir("archivos")) },
   ]);
   else if (a === "expediente-desde-carpeta") await expedienteDesde(await elegir("carpeta"));
+  else if (a === "guia-vista") { try { localStorage.setItem("seudonimo.guia", "1"); } catch (e) { /* sin almacenamiento */ } pintarArchivos(); }
   else if (a === "cambiar-destino") abrirDialogoProyecto(true);
   else if (a === "seudonimizar-pendientes") {
     const pend = pendientes();
     if (!pend.length) return;
-    const ok = await confirmar(pend.length === 1 ? "Seudonimizar el documento" : `Seudonimizar ${pend.length} documentos`,
-      `Revisión ${fondo() ? "a fondo (más lenta)" : "normal"}. Las copias se guardan ${E.proyecto.guardar_efectivo === "carpeta" ? "en " + E.proyecto.salida_efectiva : "junto a los originales, en una carpeta «Seudonimizados»"}; los originales no se tocan.`, "Seudonimizar");
-    if (!ok) return;
     if (!E.conversacion) {
       const c = await api("POST", `/api/proyectos/${E.proyecto.id}/conversaciones`, { titulo: `Seudonimización · ${new Date().toLocaleDateString("es-ES")}` });
       E.conversacion = c.id;
@@ -1897,24 +1957,15 @@ async function accion(a) {
     mostrarPestana("operaciones");
     await refrescarOperaciones();
     if ($("#hilo .vacio")) pintarVacioProyecto();
-    avisoFlotante("Seudonimizando… el avance se ve en la lista de documentos; al terminar tendrás un resumen en el chat.");
-  }
-  else if (a === "regenerar") {
-    const ultimos = (E.proyecto.archivos || []).filter((x) => ["sin_hallazgos", "revision"].includes(x.estado));
-    if (!ultimos.length) { alerta("Todavía no hay copias generadas en este expediente.", "Nada que regenerar"); return; }
-    const ok = await confirmar("Regenerar copias", `Se vuelven a generar y verificar ${ultimos.length} copia${ultimos.length === 1 ? "" : "s"} con los datos revisados, en una carpeta de resultados nueva, con revisión ${fondo() ? "a fondo" : "normal"}. No se repite la detección.`, "Regenerar");
-    if (!ok) return;
-    await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, { archivos: ultimos.map((x) => x.id), solo_ciclos: true,
-      perfil: fondo() ? "intensivo" : "estandar", conversacion: E.conversacion });
-    mostrarPestana("operaciones");
+    avisoFlotante(`Seudonimizando ${pend.length === 1 ? "el documento" : pend.length + " documentos"}. Los originales no se tocan; puedes cancelarlo en la lista.`);
   }
   else if (a === "exportar-tabla") {
-    const ok = await confirmar("Exportar la tabla de correspondencias", "La tabla contiene los datos originales y permite deshacer la seudonimización. Guárdala en el expediente, fuera de carpetas sincronizadas, y no la subas nunca a ninguna IA.", "Elegir dónde guardarla");
+    const ok = await confirmar("Exportar la lista de nombres y etiquetas", "Es una hoja con cada etiqueta y el dato real al que sustituye: permite deshacer la seudonimización. Guárdala en el expediente, fuera de carpetas sincronizadas, y no la subas nunca a ninguna IA.", "Elegir dónde guardarla");
     if (!ok) return;
     const r = await elegir("guardar");
     if (!r[0]) return;
     const res = await api("POST", `/api/proyectos/${E.proyecto.id}/tabla/exportar`, { ruta: r[0] });
-    if (res.sincronizada) alerta("La tabla se ha guardado en una carpeta que parece sincronizada con la nube. Muévela a una carpeta local.", "Tabla exportada");
+    if (res.sincronizada) alerta("La lista se ha guardado en una carpeta que parece sincronizada con la nube. Muévela a una carpeta local.", "Lista exportada");
   }
 }
 

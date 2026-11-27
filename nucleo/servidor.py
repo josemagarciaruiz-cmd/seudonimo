@@ -601,7 +601,20 @@ def cambiar_entidad(pid, eid, accion):
     else:
         abort(400)
     trabajos.guardar_registro(pid, p["tabla"])
-    return jsonify(ok=True, version=r.version)
+    return jsonify(ok=True, version=r.version, **_rehacer_si_piden(p, _json()))
+
+
+def _rehacer_si_piden(p, d):
+    """Si la petición trae «rehacer»: <id de archivo>, la copia de ese documento se rehace en el acto
+    (así «Tapar» o «Dejar a la vista» en la revisión se aplican de una vez, sin segundo paso)."""
+    aid = d.get("rehacer")
+    if not isinstance(aid, int):
+        return {}
+    a = next((x for x in ALM.archivos(p["id"]) if x["id"] == aid and x["admitido"]), None)
+    if not a or not os.path.isfile(a["ruta"]):
+        return {}
+    tid = _rehacer(p, a, None, d.get("conversacion"))
+    return {"trabajo": tid, "estado": GESTOR.estado(tid)}
 
 
 @app.post("/api/proyectos/<int:pid>/registro")
@@ -612,9 +625,12 @@ def anadir_entidad(pid):
     if len(texto) < 2:
         return jsonify(error="Escribe el dato que quieres seudonimizar."), 400
     doc = d.get("doc") if isinstance(d.get("doc"), int) else None
-    nuevas = trabajos.registro(pid, p["tabla"]).anadir_manual(texto, d.get("tipo") or "OTRO", doc)
+    r = trabajos.registro(pid, p["tabla"])
+    nuevas = r.anadir_manual(texto, d.get("tipo") or "OTRO", doc)
     trabajos.guardar_registro(pid, p["tabla"])
-    return jsonify(nuevas=[{"marcador": n["marcador"], "tipo": n["tipo"]} for n in nuevas])
+    ids = [r.entidades.index(n) for n in nuevas if n in r.entidades]
+    return jsonify(nuevas=[{"marcador": n["marcador"], "tipo": n["tipo"]} for n in nuevas], ids=ids,
+                   **_rehacer_si_piden(p, d))
 
 
 @app.post("/api/proyectos/<int:pid>/tabla/exportar")

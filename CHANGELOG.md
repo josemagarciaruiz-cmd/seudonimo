@@ -1,5 +1,17 @@
 # Cambios
 
+## 0.7.0 · 27 de noviembre de 2026
+
+Menos pasos y palabras más claras, para que se use sin explicaciones.
+
+- **«Tapar» tapa de una vez.** En la revisión, al tapar una palabra (o dejar a la vista una etiqueta) la copia se rehace en el acto y aparece «Deshacer». Desaparecen los cambios pendientes y los botones «Rehacer esta copia» y «Rehacer todas»; si una copia se abrió antes que un cambio, un solo botón, «Actualizar esta copia».
+- **Sin confirmaciones** para lo que no toca los originales: «Seudonimizar», volver a leer páginas y lo que se pide en el chat se ejecutan directamente (siempre con «Cancelar» a la vista). Se sigue confirmando lo que no tiene vuelta atrás (borrar un expediente, destruir la clave).
+- **«Comprobar riesgo» a la vista** en cada documento terminado y en la tarjeta «Listo». El cuadro habla claro: un semáforo, «Se ve «54 años», se cambiaría por «entre 50 y 59 años»», un interruptor por dato y un botón «Aplicar». La propuesta se puede cambiar pulsándola.
+- **Etiquetas en lugar de códigos** en la revisión: «Persona 1», «Empresa 1», «DNI / NIE 1» (el archivo sigue llevando [PERSONA_001]…). «Dejar a la vista» en vez de «Descartar», «clave para recuperar los nombres» en vez de «tabla de correspondencias».
+- **La revisión se abre dentro de la ventana**, con la lista de documentos del expediente a la izquierda y los «Datos tapados» plegados hasta que se piden.
+- **Un expediente es un chat.** La columna izquierda ya no acumula conversaciones; las anteriores están en «Expediente ▾ › Conversaciones anteriores».
+- **Guía en tres globos** la primera vez (añadir, seudonimizar, abrir y revisar).
+
 ## 0.6.2 · 27 de noviembre de 2026
 
 - **Tapar a mano dentro de una generalización.** Si en la revisión se tapa una palabra que puso el riesgo por contexto (por ejemplo «proceso», de «un proceso de salud mental»), ahora se tapa al rehacer la copia. Antes la copia quedaba «para revisar» porque esa palabra no está en el original.

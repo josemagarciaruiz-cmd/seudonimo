@@ -23,40 +23,30 @@
 
 ## La pantalla
 
-A la izquierda, tus **expedientes** y sus conversaciones. En el centro, el **chat**: le pides las cosas con tus palabras, escribiendo o con el botón **«Dictar»** (⌘⇧D), y responde con tarjetas que confirmas. A la derecha, la **lista de documentos** del expediente, cada uno con su estado. Arriba, «Expediente ▾» reúne los ajustes del expediente, la revisión de las copias, el uso con otra IA y la tabla de correspondencias; abajo a la izquierda, «Ajustes» lleva a los modelos, el dictado, las listas del despacho y las actualizaciones.
+A la izquierda, tus **expedientes** (cada uno es un chat; las conversaciones anteriores están en «Expediente ▾»). En el centro, el **chat**: le pides las cosas con tus palabras, escribiendo o con el botón **«Dictar»** (⌘⇧D), y lo hace directamente (con «Cancelar» a la vista). A la derecha, la **lista de documentos** del expediente, cada uno con su estado. Arriba, «Expediente ▾» reúne los ajustes del expediente, la revisión de las copias, el uso con otra IA y la lista de nombres y etiquetas; abajo a la izquierda, «Ajustes» lleva a los modelos, el dictado, las listas del despacho y las actualizaciones.
 
 ## Trabajar
 
 1. **Crea un expediente.** Basta con el nombre; o arrastra la carpeta del asunto a la ventana y se crea con su nombre. Dónde se guardan las copias, el tipo de asunto y la revisión a fondo están en «Más opciones» (y en «Expediente ▾ > Ajustes del expediente»).
 2. **Añade los documentos**: arrastra archivos o carpetas a la ventana, o pulsa «+ Añadir» en la lista. Los originales nunca se modifican ni se mueven.
 3. **Pulsa «Seudonimizar»** o pídeselo al chat: «seudonimiza todos los documentos», «seudonimiza solo la página 6 del informe». El avance se ve en la lista de documentos.
-4. **Al terminar**, cada documento muestra **«Abrir copia»** y **«⋯»** (Mostrar en el Finder o en su carpeta, Guardar en…, Revisar y tapar a mano, Riesgo por contexto, Pedírselo al asistente). Los que conviene mirar antes de usar llevan además **«Revisar»**. En el chat queda una tarjeta «Listo» con lo mismo.
+4. **Al terminar**, cada documento muestra **«Abrir copia»**, **«Revisar»**, **«Comprobar riesgo»** y **«⋯»** (Mostrar en el Finder o en su carpeta, Guardar en…, pedirle algo al asistente). En el chat queda una tarjeta «Listo» con lo mismo. Nada pide confirmación: los originales nunca se tocan y todo se puede cancelar o deshacer.
 5. **Pídeselo al chat** cuando no sepas dónde está algo: «¿dónde está la copia de la carta de despido?», «guarda las copias en el Escritorio», «en la página 2 se ve "Rodríguez", tápalo», «¿qué documentos necesitan revisión?». Debajo de la lista, plegado, está el detalle técnico de cada seudonimización (D = lectura del documento, V = comprobación de la copia).
 
-## Revisar las copias: la mesa de revisión
+## Revisar una copia y tapar a mano
 
-Pulsa **«Revisar»** junto a un documento, «⋯ > Revisar y tapar a mano» o «Expediente ▾ > Revisar las copias y los datos tapados». Verás la copia seudonimizada entera y, a la derecha, todos los datos tapados del expediente con su marcador:
+Pulsa **«Revisar»** junto a un documento. Verás la copia entera con las etiquetas («Persona 1», «Empresa 1»…) en lugar de los datos:
 
-- Los **marcadores** ([PERSONA_001]…) aparecen como tachones. Haz clic en uno para ver qué dato tapa. Si no es un dato personal, pulsa «No es un dato personal: dejarlo a la vista».
-- Lo que aparece **en rojo** es un dato que ya está en la lista pero sigue a la vista en esa copia: rehazla.
-- Si ves un dato que **se ha escapado**, selecciónalo con el ratón, elige su tipo y pulsa **«Tapar»**. Se tapará en todas las copias del expediente.
-- Los cambios se aplican al pulsar **«Rehacer esta copia»** o **«Rehacer todas»**. La copia se vuelve a generar desde el original y se verifica de nuevo, en una carpeta de resultados nueva.
-
-**Seudonimizar solo unas páginas.** Pide en el chat «Seudonimiza solo la página 6 del informe»: el plan te deja elegir «Solo esas páginas» (la copia solo tiene esas páginas) o «Documento completo». Vale para PDF, Word (las páginas que Word apuntó al guardar el documento), PowerPoint (diapositivas) y Excel (hojas): «sácame solo la hoja 2 del Excel de nóminas».
-
-**Imágenes, caras, logotipos y hojas de Excel.** El texto que va dentro de las imágenes se lee y se tapa en los PDF, Word, PowerPoint y Excel. Las caras de las fotos se tapan con «[CARA]» y las imágenes pequeñas (logotipos, sellos, firmas) se sustituyen enteras por «[LOGO O SELLO]»; se puede desactivar en los ajustes del expediente. Si el nombre de una hoja de Excel lleva un dato, la hoja se renombra («Nóminas PERSONA_001») y sus fórmulas se ajustan solas.
-
-**Pedir que tape algo que se ha quedado a la vista.** Si al revisar ves un dato sin tapar, sobre todo dentro de una imagen (la firma de un correo, un sello con un nombre), díselo al asistente: «en la página 2 se ve "Rodríguez" en la firma, tápalo». Te enseña una tarjeta con lo que va a tapar; al confirmarla lo añade a los datos del expediente y rehace la copia, también dentro de las imágenes.
-
-**Repasar solo unas páginas.** En los PDF, la mesa muestra el documento por páginas; las que tienen datos conocidos sin tapar llevan el número en rojo. Si en una o dos páginas se han quedado datos, marca «Repasar esta página» en ellas y pulsa «Repasar»: el modelo vuelve a buscar solo en esas páginas (mucho más rápido que el documento entero) y la copia se regenera y se verifica. También puedes pedirlo en el chat: «Repasa las páginas 6 y 7 del informe del INSS».
-
-El panel de la derecha se ensancha arrastrando su borde izquierdo (doble clic para alternar entre estrecho y ancho).
+- ¿Algo que se ha quedado a la vista? Haz **doble clic** encima (o selecciónalo con el ratón) y pulsa **«Tapar»**. La copia se rehace en el acto y aparece «Deshacer» por si te has equivocado. Se tapará también en las demás copias del expediente cuando se actualicen.
+- ¿Una etiqueta que no debería estar (un juzgado, una ley)? Haz clic en ella y elige **«Dejar a la vista»**. También en el acto, también con «Deshacer».
+- ¿Una página con muchos datos sin tapar? Marca «Volver a leer esta página» y pulsa el botón de arriba: el modelo la lee de nuevo entera.
+- **«Datos tapados»** (arriba a la derecha) despliega la lista completa del expediente, con un buscador y un campo para apuntar un dato a mano.
 
 ## Riesgo por contexto (opcional)
 
-Una copia sin nombres ni DNI puede seguir identificando a alguien por la suma de datos indirectos: «jefa de almacén de 54 años en el centro de Arrecife, de baja desde el 12 de febrero por un trastorno adaptativo». Si quieres revisarlo, pulsa **«Riesgo por contexto»** junto a la copia (en su «⋯» de la lista de documentos, o en la revisión de las copias).
+Una copia sin nombres ni DNI puede seguir identificando a alguien por la suma de datos indirectos: «jefa de almacén de 54 años en el centro de Arrecife, de baja desde el 12 de febrero por un trastorno adaptativo». Si quieres revisarlo, pulsa **«Comprobar riesgo»** junto al documento (en la lista, en la tarjeta «Listo» o en la revisión).
 
-El modelo local lee la copia ya seudonimizada y muestra el nivel de riesgo, los datos indirectos que quedan y una versión más general de cada uno. Vienen marcados los que suelen identificar sin aportar nada al asunto (edad, municipio, familia, nacionalidad, rasgos y ser «la única» o «el más…» de su entorno, que se detecta también sin el modelo); las fechas, los importes, el puesto y la salud quedan a tu criterio, porque pueden ser necesarios (plazos, cantidades, incapacidad). Puedes cambiar el texto propuesto. Al pulsar «Generalizar y rehacer la copia» se cambian en la copia y se vuelve a verificar. Las generalizaciones valen para todo el expediente y se pueden quitar desde el mismo cuadro. Si no pulsas el botón, la aplicación no hace nada de esto.
+El modelo local lee la copia ya seudonimizada y muestra un semáforo, los datos indirectos que quedan («Se ve «54 años»») y una forma más general de decirlo («se cambiaría por «entre 50 y 59 años»»), con un interruptor por dato. Vienen marcados los que suelen identificar sin aportar nada al asunto (edad, municipio, familia, nacionalidad, rasgos y ser «la única» o «el más…» de su entorno, que se detecta también sin el modelo); las fechas, los importes, el puesto y la salud quedan a tu criterio, porque pueden ser necesarios (plazos, cantidades, incapacidad). Puedes cambiar la propuesta pulsándola. Al pulsar «Aplicar» se cambian en la copia y se vuelve a verificar. Las generalizaciones valen para todo el expediente y se pueden quitar desde el mismo cuadro. Si no pulsas el botón, la aplicación no hace nada de esto.
 
 ## Usar las copias con otra IA
 

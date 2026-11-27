@@ -67,25 +67,24 @@
   </aside>
 </div>
 
-<!-- Mesa de revisión: la copia seudonimizada a pantalla completa -->
-<section class="mesa" id="mesa" hidden aria-label="Mesa de revisión">
+<!-- Revisión de la copia: la copia seudonimizada entera, en el sitio del chat y la lista -->
+<section class="mesa" id="mesa" hidden aria-label="Revisión de la copia">
   <header class="mesa-cab">
     <div class="mesa-titulo">
-      <h2>Revisión de las copias</h2>
-      <span class="subtitulo" id="mesa-estado">Selecciona con el ratón un dato que se haya escapado y pulsa «Tapar». Haz clic en un marcador para ver qué tapa.</span>
+      <h2>Revisión de la copia</h2>
+      <span class="subtitulo" id="mesa-nombre"></span>
     </div>
     <div class="mesa-acciones">
-      <span class="pendientes" id="mesa-pendientes" hidden></span>
-      <button class="boton boton-principal" id="mesa-repasar" hidden>Repasar páginas</button>
-      <button class="boton" id="mesa-rehacer-uno" disabled>Rehacer esta copia</button>
-      <button class="boton boton-principal" id="mesa-rehacer-todas" disabled>Rehacer todas</button>
-      <button class="boton-texto" id="mesa-contexto" title="Buscar datos indirectos que, juntos, podrían identificar a la persona">Riesgo por contexto</button>
+      <span class="pendientes" id="mesa-estado-trabajo" hidden></span>
+      <button class="boton boton-principal" id="mesa-repasar" hidden>Volver a leer</button>
+      <button class="boton" id="mesa-contexto" title="¿Se podría reconocer a la persona por la suma de datos indirectos?">Comprobar riesgo</button>
       <button class="boton-texto" id="mesa-abrir" title="Abrir la copia con su programa">Abrir la copia</button>
+      <button class="boton-texto" id="mesa-datos-toggle" aria-controls="mesa-datos">Datos tapados</button>
       <button class="boton" id="mesa-cerrar">Cerrar</button>
     </div>
   </header>
   <div class="mesa-cuerpo">
-    <nav class="mesa-docs" id="mesa-docs" aria-label="Copias"></nav>
+    <nav class="mesa-docs" id="mesa-docs" aria-label="Documentos" hidden></nav>
     <article class="mesa-hoja" id="mesa-hoja"><div class="mesa-texto" id="mesa-texto"></div></article>
     <aside class="mesa-datos" id="mesa-datos" aria-label="Datos tapados"></aside>
   </div>
@@ -130,11 +129,11 @@
           <span><b>A fondo.</b> Además, un segundo modelo revisa cada copia y se exigen dos comprobaciones limpias seguidas. Más lenta; para documentos delicados.</span></label>
       </fieldset>
       <fieldset class="campo">
-        <legend>Tabla de correspondencias</legend>
+        <legend>Clave para recuperar los nombres</legend>
         <label class="opcion"><input type="radio" name="tabla" value="cifrada" checked>
-          <span><b>Guardar cifrada.</b> Permite volver a poner los nombres (por ejemplo, en la respuesta de otra IA). La clave queda en el almacén de credenciales del sistema.</span></label>
+          <span><b>Guardarla, cifrada en este ordenador.</b> Permite volver a poner los nombres reales en la respuesta de otra IA. Es lo que en protección de datos se llama la tabla de correspondencias de la seudonimización.</span></label>
         <label class="opcion"><input type="radio" name="tabla" value="sin_tabla">
-          <span><b>No guardar.</b> Las etiquetas solo existen durante cada trabajo. Ojo: la persona puede seguir siendo identificable por el contexto.</span></label>
+          <span><b>No guardarla.</b> Nadie podrá deshacer la seudonimización, tampoco tú.</span></label>
       </fieldset>
       <label class="campo solo-edicion">Instrucciones para el asistente en este expediente
         <textarea name="instrucciones" rows="3" placeholder="Por ejemplo: conserva los nombres de los magistrados; el cliente es la parte actora."></textarea>
@@ -206,24 +205,24 @@
 
 <dialog id="dlg-contexto" class="dialogo dialogo-ancho">
   <form method="dialog" id="form-contexto">
-    <h2>Riesgo de identificación por contexto</h2>
-    <p class="nota">Aunque no aparezcan nombres ni DNI, la suma de datos indirectos (edad, puesto, municipio, salud, fechas…) puede permitir que alguien del entorno reconozca a la persona. Marca lo que quieras generalizar: se cambia en la copia por una expresión más general y la copia se rehace. Es opcional y no cambia nada si no lo aplicas.</p>
+    <h2>¿Se podría reconocer a la persona?</h2>
+    <p class="nota">Aunque no aparezcan nombres ni DNI, la suma de datos sueltos (edad, puesto, municipio, salud, fechas…) puede delatar a alguien ante quien la conoce. Aquí ves esos datos y una forma más general de decir lo mismo. Es opcional: si no aplicas nada, la copia no cambia.</p>
     <div id="contexto-cuerpo"></div>
     <div class="dialogo-pie">
       <span class="nota" id="contexto-nota"></span>
       <span class="hueco"></span>
-      <button value="cancelar" class="boton">Cerrar sin cambios</button>
-      <button type="button" class="boton boton-principal" id="contexto-aplicar" disabled>Generalizar y rehacer la copia</button>
+      <button value="cancelar" class="boton">Cerrar</button>
+      <button type="button" class="boton boton-principal" id="contexto-aplicar" disabled>Aplicar</button>
     </div>
   </form>
 </dialog>
 
 <dialog id="dlg-nombres" class="dialogo dialogo-ancho">
   <form method="dialog">
-    <h2>Poner los nombres</h2>
-    <p class="nota">Pega aquí la respuesta de la IA, con sus marcadores ([PERSONA_001]…). Seudónimo los cambia por los datos reales de este expediente, sin conexión. El resultado contiene datos personales: no lo vuelvas a pegar en ninguna IA.</p>
+    <h2>Volver a poner los nombres</h2>
+    <p class="nota">Pega aquí la respuesta de la IA, con sus etiquetas ([PERSONA_001]…). Seudónimo las cambia por los datos reales de este expediente, sin conexión. El resultado contiene datos personales: no lo vuelvas a pegar en ninguna IA.</p>
     <div class="dos-columnas">
-      <label class="campo">Texto con marcadores <textarea id="nombres-entrada" rows="14" placeholder="Pega aquí la respuesta…"></textarea></label>
+      <label class="campo">Respuesta con etiquetas <textarea id="nombres-entrada" rows="14" placeholder="Pega aquí la respuesta…"></textarea></label>
       <label class="campo">Con los datos reales <textarea id="nombres-salida" rows="14" readonly></textarea></label>
     </div>
     <p class="nota" id="nombres-resumen"></p>
