@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.4.2 · 27 de noviembre de 2026
+
+- **La comprobación final busca caras en la copia.** En cada ciclo, después de generar la copia, el detector vuelve a buscar caras desde cero en sus páginas (PDF) o imágenes (Word, PowerPoint y Excel). Si encuentra alguna que se escapó, el ciclo siguiente la tapa en ese sitio; si sigue viéndola donde ya se tapó, el documento queda «Para revisar» con el motivo, en vez de darse por bueno.
+
 ## 0.4.1 · 27 de noviembre de 2026
 
 - **Caras en las fotos.** Se detectan en el propio ordenador (en Mac con el sistema; en Windows con OpenCV y el modelo YuNet) y se tapan con «[CARA]» en los PDF (también en las copias escaneadas de un DNI) y en las imágenes de Word, PowerPoint y Excel.

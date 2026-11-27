@@ -740,8 +740,8 @@ function certificadoDe(tid) {
 function pistaDoc(d) {
   return (d.pasadas || []).map((p) => {
     if (p.tipo === "deteccion") return `<span class="paso${p.nuevos ? " nuevos" : ""}" title="Detección ${p.n}: ${p.nuevos} dato(s) nuevo(s)">D${p.n}</span>`;
-    const cls = p.restos || p.incidencias_graves ? "restos" : p.nuevos ? "nuevos" : "limpio";
-    return `<span class="paso ${cls}" title="Verificación ${p.ciclo} (método ${p.metodo}): ${p.nuevos} nuevo(s), ${p.restos} resto(s), ${p.incidencias_graves} incidencia(s) grave(s)">V${p.ciclo}</span>`;
+    const cls = p.restos || p.incidencias_graves ? "restos" : p.nuevos || p.caras ? "nuevos" : "limpio";
+    return `<span class="paso ${cls}" title="Verificación ${p.ciclo} (método ${p.metodo}): ${p.nuevos} nuevo(s), ${p.restos} resto(s), ${p.incidencias_graves} incidencia(s) grave(s)${p.caras ? `, ${p.caras} cara(s) aún visible(s), se tapan en el ciclo siguiente` : ""}">V${p.ciclo}</span>`;
   }).join("");
 }
 

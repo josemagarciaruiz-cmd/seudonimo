@@ -345,3 +345,42 @@ def test_caras_y_logotipos_en_office():
         fotos = [Image.open(io.BytesIO(z.read(n))) for n in z.namelist() if n.startswith("word/media/")]
     grande = max(fotos, key=lambda i: i.width)
     assert not rostros.caras(grande.convert("RGB")), "la cara sigue a la vista"
+
+
+def test_verificacion_de_caras_y_segundo_ciclo():
+    """Una cara que la edición no tapó (aquí, con la opción desactivada) la ve la verificación,
+    y con esas zonas el ciclo siguiente la tapa: en PDF y en Word."""
+    import pytest
+    import rostros
+    if not rostros.DISPONIBLE:
+        pytest.skip("sin detector de caras")
+    from reportlab.pdfgen import canvas
+    import formatos
+    foto = os.path.join(os.path.dirname(__file__), "datos", "astronauta.jpg")
+    d = tempfile.mkdtemp()
+    pdf = os.path.join(d, "dni.pdf")
+    c = canvas.Canvas(pdf)
+    c.drawString(72, 780, "Copia del documento de identidad")
+    c.drawImage(foto, 72, 400, 250, 250)
+    c.save()
+    copia = os.path.join(d, "c1.pdf")
+    formatos.aplicar(pdf, copia, ".pdf", [], {"logos": False})
+    caras = formatos.caras_en(copia, ".pdf")
+    assert caras, "la verificación no ve la cara"
+    extra = {p: [(r, "[CARA]") for r in rs] for p, rs in caras.items()}
+    copia2 = os.path.join(d, "c2.pdf")
+    formatos.aplicar(pdf, copia2, ".pdf", [], {"logos": False, "extra": extra})
+    assert not formatos.caras_en(copia2, ".pdf")
+    docx = pytest.importorskip("docx")
+    from docx.shared import Cm
+    w = docx.Document()
+    w.add_picture(foto, width=Cm(12))
+    ruta = os.path.join(d, "f.docx")
+    w.save(ruta)
+    s1 = os.path.join(d, "s1.docx")
+    formatos.aplicar(ruta, s1, ".docx", [], {"logos": False})
+    medios = formatos.caras_en(s1, ".docx")
+    assert medios
+    s2 = os.path.join(d, "s2.docx")
+    formatos.aplicar(ruta, s2, ".docx", [], {"logos": False, "extra_medios": medios})
+    assert not formatos.caras_en(s2, ".docx")

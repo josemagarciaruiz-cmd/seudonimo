@@ -424,7 +424,8 @@ def aplicar(origen, destino, ext, mapa, opciones=None):
         return {}
     if ext == ".pdf":
         return _aplicar_pdf(origen, destino, mapa, logos=bool(opciones.get("logos", True)), extra=opciones.get("extra"))
-    return _aplicar_zip(origen, destino, ZIP[ext], mapa, logos=bool(opciones.get("logos", True)))
+    return _aplicar_zip(origen, destino, ZIP[ext], mapa, logos=bool(opciones.get("logos", True)),
+                        extra_medios=opciones.get("extra_medios"))
 
 
 def _preservar(ts):
@@ -433,7 +434,7 @@ def _preservar(ts):
             t.set(XML_SPACE, "preserve")
 
 
-def _aplicar_zip(origen, destino, familia, mapa, logos=True):
+def _aplicar_zip(origen, destino, familia, mapa, logos=True, extra_medios=None):
     info = {"vectoriales": 0, "imagenes_tapadas": 0, "logos": 0, "caras": 0}
     with zipfile.ZipFile(origen) as zin, zipfile.ZipFile(destino, "w", zipfile.ZIP_DEFLATED) as zout:
         hojas = {}
@@ -452,7 +453,8 @@ def _aplicar_zip(origen, destino, familia, mapa, logos=True):
                 continue
             if imagenes_office.es_imagen(item.filename):
                 nueva, que = imagenes_office.tapar(data, item.filename, mapa,
-                                                   logo=logos and imagenes_office.es_logo(tam.get(item.filename)), caras=logos)
+                                                   logo=logos and imagenes_office.es_logo(tam.get(item.filename)), caras=logos,
+                                                   extra=(extra_medios or {}).get(item.filename))
                 if nueva is not None:
                     data = nueva
                     info["imagenes_tapadas"] += 1
@@ -818,6 +820,37 @@ def _caras_pagina(page, dpi=110):
         return []
     e = dpi / 72.0
     return [(pdfdoc.Rect(x0 / e, y0 / e, x1 / e, y1 / e), rostros.MARCA) for x0, y0, x1, y1 in rostros.caras(img)]
+
+
+def caras_en(ruta, ext):
+    """Caras que siguen a la vista en una copia ya seudonimizada (verificación).
+    PDF: {página: [Rect]}; Word, PowerPoint y Excel: {imagen interna: [(x0, y0, x1, y1)]}."""
+    import rostros
+    if not rostros.DISPONIBLE:
+        return {}
+    res = {}
+    if ext == ".pdf":
+        with _abrir_pdf(ruta) as doc:
+            for page in doc:
+                zonas = _caras_pagina(page)
+                if zonas:
+                    res[page.number] = [r for r, _ in zonas]
+    elif ext in ZIP:
+        from PIL import Image
+        import io as _io
+        with zipfile.ZipFile(ruta) as z:
+            for n in z.namelist():
+                if not imagenes_office.es_imagen(n):
+                    continue
+                try:
+                    img = Image.open(_io.BytesIO(z.read(n)))
+                    img.load()
+                except Exception:  # noqa
+                    continue
+                cajas = rostros.caras(img)
+                if cajas:
+                    res[n] = cajas
+    return res
 
 
 def _imagenes_contenido(page):

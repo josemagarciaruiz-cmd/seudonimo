@@ -193,7 +193,7 @@ def marcador_logo(ancho, alto, formato="PNG"):
     return salida.getvalue()
 
 
-def tapar(data, nombre, mapa, logo=False, caras=True):
+def tapar(data, nombre, mapa, logo=False, caras=True, extra=None):
     """Bytes de la imagen con los datos del mapa tapados (y las caras), la imagen entera
     sustituida si es un logotipo, o None si no hay nada que tapar. Devuelve (bytes, qué)."""
     ext = posixpath.splitext(nombre)[1].lower()
@@ -212,6 +212,9 @@ def tapar(data, nombre, mapa, logo=False, caras=True):
             rects_caras = rostros.caras(_abrir(data))
         except Exception:  # noqa
             rects_caras = []
+    # caras que la verificación encontró aún a la vista en la copia (mismas coordenadas: la copia
+    # de la imagen tiene el mismo tamaño que el original)
+    rects_caras = list(rects_caras) + list(extra or [])
     hecho = _tapar(data, nombre, mapa, ls, rects_caras)
     return (hecho, "caras" if rects_caras else "texto") if hecho is not None else (None, None)
 

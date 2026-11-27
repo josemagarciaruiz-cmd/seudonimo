@@ -101,6 +101,16 @@ def verificar(salida, ext, registro, opciones=None, progreso=None, cancelado=Non
 
     # 5. Estructura del archivo
     res["incidencias"] += estructura(salida, ext, mapa)
+
+    # 6. Caras: se vuelven a buscar en la copia, con el detector desde cero
+    if opciones.get("caras") and not (cancelado and cancelado()):
+        if progreso:
+            progreso(0.97, "verificación %s: buscando caras en las imágenes de la copia…" % m["nombre"])
+        try:
+            res["caras"] = formatos.caras_en(salida, ext)
+        except Exception as e:  # noqa
+            res["incidencias"].append({"tipo": "error_caras", "grave": False,
+                                       "detalle": "No se han podido revisar las caras de la copia: %s" % str(e)[:120]})
     return res
 
 

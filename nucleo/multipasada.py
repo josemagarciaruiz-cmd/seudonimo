@@ -88,6 +88,13 @@ def _casi_igual(a, b):
     return (not inter.is_empty) and inter.get_area() >= 0.8 * max(min(a.get_area(), b.get_area()), 0.01)
 
 
+def _cajas_parecidas(a, b):
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    area = lambda c: max(0.01, (c[2] - c[0]) * (c[3] - c[1]))
+    return ix * iy >= 0.8 * min(area(a), area(b))
+
+
 def nombre_salida(nombre, mapa):
     base, ext = os.path.splitext(nombre)
     base = motor.reemplazar_texto(base, mapa)
@@ -115,6 +122,7 @@ class TrabajoDocumento:
         self.texto_original = None  # solo en memoria; nunca se guarda en disco
         self.paginas_texto = None   # texto por página (PDF, Word), diapositiva u hoja, para repasar solo unas
         self.zonas_extra = {}       # {página: [(Rect, marcador)]}: restos localizados en la copia por la verificación
+        self.medios_extra = {}      # {imagen interna de Office: [caja]}: caras que la verificación vio en la copia
         self.version_registro = -1
         self.aplicado = set()       # (forma, marcador) aplicados en el último ciclo
         self.aviso = None
@@ -269,7 +277,8 @@ class TrabajoDocumento:
             self.avisar(0.72, "ciclo %d: generando la copia seudonimizada desde el original…" % (ciclo + 1))
             with self.crono.medir("transformacion"):
                 info = formatos.aplicar(self.ruta, salida, self.ext, mapa, {"logos": lim.get("logos", True),
-                                                                           "extra": self.zonas_extra})
+                                                                           "extra": self.zonas_extra,
+                                                                           "extra_medios": self.medios_extra})
             self.salida = salida
             self.version_registro = version
             if (info or {}).get("vectoriales") and "vectorial" not in (self.aviso or ""):
@@ -284,7 +293,8 @@ class TrabajoDocumento:
             with self.crono.medir("verificacion"):
                 v = verificacion.verificar(salida, self.ext, self.registro,
                                            {"ciclo": ciclo, "modelo_auditor": lim["modelo_auditor"],
-                                            "modelo": lim.get("modelo")}, avance, self._cancelado)
+                                            "modelo": lim.get("modelo"), "caras": lim.get("logos", True)},
+                                           avance, self._cancelado)
             self.comprobar()
             # Lo hallado en la copia que también está en la lectura del original se incorpora con
             # normalidad. Lo que solo aparece en la copia (el OCR del original lo leyó mal) se
@@ -308,11 +318,20 @@ class TrabajoDocumento:
                                               self.doc["id"])
             graves = [i for i in v["incidencias"] if i.get("grave")]
             restos = sorted({r["marcador"] for r in v["restos"]})
+            caras_vistas, caras_nuevas = self._caras_restantes(v.get("caras") or {})
             self.incidencias = v["incidencias"]
             self.pasadas.append({"tipo": "verificacion", "ciclo": ciclo + 1, "metodo": v["metodo"],
                                  "nuevos": len(nuevas), "restos": len(restos), "fuera_del_original": len(ajenos),
                                  "ruido_ocr": len(ruido),
-                                 "incidencias_graves": len(graves), "tiempo": round(time.time() - self.t0, 1)})
+                                 "incidencias_graves": len(graves), "caras": caras_vistas,
+                                 "tiempo": round(time.time() - self.t0, 1)})
+            if caras_vistas and not caras_nuevas:
+                # el detector sigue viendo una cara en el mismo sitio aunque ya se haya tapado ahí
+                self.estado = "revision"
+                self.motivos.append("Se ve%s %d cara%s en las imágenes de la copia que no se ha%s podido tapar: revísala%s antes de usar la copia." % (
+                    "n" if caras_vistas > 1 else "", caras_vistas, "s" if caras_vistas > 1 else "",
+                    "n" if caras_vistas > 1 else "", "s" if caras_vistas > 1 else ""))
+                return
             if nuevas:
                 limpias = 0
                 if restos and self.ext == ".pdf":
@@ -328,6 +347,8 @@ class TrabajoDocumento:
                 return
             else:
                 limpias += 1
+            if caras_nuevas:
+                limpias = 0       # las caras recién localizadas se tapan en el ciclo siguiente
             if graves and not nuevas:
                 self.estado = "revision"
                 self.motivos += [i["detalle"] for i in graves]
@@ -340,6 +361,25 @@ class TrabajoDocumento:
         self.motivos.append("Se ha alcanzado el máximo de %d ciclos sin dos verificaciones limpias seguidas."
                             % lim["max_ciclos"] if lim["limpias"] > 1 else
                             "Se ha alcanzado el máximo de %d ciclos sin una verificación limpia." % lim["max_ciclos"])
+
+    def _caras_restantes(self, caras):
+        """Las caras que la verificación aún ve en la copia pasan a zonas que el siguiente ciclo tapa.
+        Devuelve (caras vistas, zonas nuevas)."""
+        vistas = nuevas = 0
+        for donde, cajas in caras.items():
+            for c in cajas:
+                vistas += 1
+                if isinstance(donde, int):                     # página de un PDF: Rect
+                    ya = self.zonas_extra.setdefault(donde, [])
+                    if not any(_casi_igual(c, x) for x, _ in ya):
+                        ya.append((c, "[CARA]"))
+                        nuevas += 1
+                else:                                           # imagen interna de Office: caja en píxeles
+                    ya = self.medios_extra.setdefault(donde, [])
+                    if not any(_cajas_parecidas(c, x) for x in ya):
+                        ya.append(tuple(c))
+                        nuevas += 1
+        return vistas, nuevas
 
     def _localizar_restos(self, salida, v, restos):
         """Busca en la copia dónde siguen los datos conocidos y guarda esas zonas para taparlas.
