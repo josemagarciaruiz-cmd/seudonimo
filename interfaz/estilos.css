@@ -452,3 +452,5 @@ body.soltando .vacio.bienvenida .zona-soltar { border-color: var(--oro); color: 
 .dictar:hover { background: var(--oro-claro); border-color: var(--oro-hondo); }
 .dictar.grabando + .redactor-pista { color: var(--rojo); }
 #menu-expediente { font-weight: 600; color: var(--tinta); }
+.boton.latido { animation: latido-boton 1.4s ease-in-out 3; }
+@keyframes latido-boton { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--oro) 35%, transparent); } }

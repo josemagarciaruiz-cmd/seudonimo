@@ -1,5 +1,10 @@
 # Cambios
 
+## 0.6.2 · 27 de noviembre de 2026
+
+- **Tapar a mano dentro de una generalización.** Si en la revisión se tapa una palabra que puso el riesgo por contexto (por ejemplo «proceso», de «un proceso de salud mental»), ahora se tapa al rehacer la copia. Antes la copia quedaba «para revisar» porque esa palabra no está en el original.
+- En la revisión de las copias, en cuanto hay un cambio pendiente, el botón se ilumina y dice lo que hace: «Aplicar el cambio a esta copia» (o «Aplicar a todas las copias»). El aviso tras «Tapar» indica que hay que pulsarlo.
+
 ## 0.6.1 · 27 de noviembre de 2026
 
 - Riesgo por contexto: si el modelo señala un trozo de una frase de unicidad que ya ha encontrado la regla («única mujer… en la isla» dentro de «la única mujer… dentro del grupo empresarial»), se muestra una sola vez, con la propuesta de la regla. Y si el modelo propone una versión que sigue siendo única («única persona… en la zona»), se corrige a «una persona…».

@@ -1374,7 +1374,7 @@ function pintarHoja() {
       <div class="texto-copia">${cuerpo || `<span class="nota">${U} sin texto legible.</span>`}</div></section>`;
   });
   const n = d.escapados.length;
-  $("#mesa-texto").innerHTML = (n ? `<p class="aviso-hoja">${n} dato${n === 1 ? "" : "s"} conocido${n === 1 ? "" : "s"} sigue${n === 1 ? "" : "n"} a la vista en esta copia (en rojo). Pulsa «Rehacer esta copia».</p>` : "")
+  $("#mesa-texto").innerHTML = (n ? `<p class="aviso-hoja">${n} dato${n === 1 ? "" : "s"} conocido${n === 1 ? "" : "s"} sigue${n === 1 ? "" : "n"} a la vista en esta copia (en rojo). Pulsa «${MESA.pendientes ? "Aplicar" : "Rehacer esta copia"}» arriba para taparlo${n === 1 ? "" : "s"}.</p>` : "")
     + (cortes.length > 1 ? `<p class="nota ayuda-repaso">¿Una ${d.unidad || "página"} con datos sin tapar? Marca «Repasar esta ${d.unidad || "página"}» y pulsa «Repasar páginas»: el modelo vuelve a leer solo ${d.unidades === "hojas" ? "esas hojas" : d.unidades === "diapositivas" ? "esas diapositivas" : "esas páginas"}. Si en una imagen se ve algo sin tapar, pídeselo al asistente en el chat: «en la página 2 se ve "…", tápalo».</p>` : "")
     + (html || '<span class="nota">La copia no tiene texto legible.</span>');
   $$("[data-repasar-pagina]").forEach((c) => (c.onchange = () => {
@@ -1436,7 +1436,7 @@ function popTapar() {
       MESA.datos = await api("GET", `/api/proyectos/${E.proyecto.id}/copias/${MESA.actual.id}`);
       pintarHoja();
       $("#mesa-hoja").scrollTop = y;
-      avisoFlotante(r.nuevas?.length ? `Añadido como ${r.nuevas[0].marcador}. Rehaz la copia para aplicarlo.` : "Ese dato ya estaba en la lista.");
+      avisoFlotante(r.nuevas?.length ? `Añadido como ${r.nuevas[0].marcador}. Pulsa «Aplicar el cambio a esta copia» (arriba) para taparlo.` : "Ese dato ya estaba en la lista.");
     } catch (e) { alerta(e.message); }
   };
 }
@@ -1458,8 +1458,15 @@ function pintarPendientes() {
   const el = $("#mesa-pendientes");
   el.hidden = !MESA.pendientes && !MESA.trabajo;
   el.textContent = MESA.trabajo ? MESA.trabajo : `${MESA.pendientes} cambio${MESA.pendientes === 1 ? "" : "s"} sin aplicar`;
-  $("#mesa-rehacer-uno").disabled = !!MESA.trabajo;
-  $("#mesa-rehacer-todas").disabled = !!MESA.trabajo;
+  const uno = $("#mesa-rehacer-uno"), todas = $("#mesa-rehacer-todas");
+  uno.disabled = todas.disabled = !!MESA.trabajo;
+  // con cambios pendientes, el botón que los aplica se ilumina y dice lo que hace
+  const hay = MESA.pendientes > 0 && !MESA.trabajo;
+  uno.textContent = hay ? `Aplicar ${MESA.pendientes === 1 ? "el cambio" : MESA.pendientes + " cambios"} a esta copia` : "Rehacer esta copia";
+  todas.textContent = hay && MESA.copias.length > 1 ? "Aplicar a todas las copias" : "Rehacer todas";
+  uno.classList.toggle("boton-principal", hay);
+  uno.classList.toggle("latido", hay);
+  todas.classList.toggle("boton-principal", !hay);
   pintarRepaso();
 }
 

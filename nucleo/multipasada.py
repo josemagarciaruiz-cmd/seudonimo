@@ -40,6 +40,14 @@ import registro as registro_mod
 import rutas
 import verificacion
 
+
+def mapa_completo(base, generalizaciones):
+    """Los datos del registro y las generalizaciones elegidas (riesgo por contexto). Lo que el
+    profesional tape a mano también se tapa dentro del texto que pone una generalización:
+    «un proceso de salud mental» → «un [OTRO_001] de salud mental»."""
+    return base + [dict(g, marcador=motor.reemplazar_texto(g["marcador"], base))
+                   for g in contexto.como_mapa(generalizaciones)]
+
 ESTADOS = {
     "pendiente": "Pendiente",
     "procesando": "Procesando",
@@ -271,7 +279,7 @@ class TrabajoDocumento:
             self.comprobar()
             # los datos personales del registro y, si el profesional lo ha pedido, las generalizaciones
             # de datos indirectos (riesgo por contexto)
-            mapa = self.registro.mapa() + contexto.como_mapa(lim.get("generalizaciones") or [])
+            mapa = mapa_completo(self.registro.mapa(), lim.get("generalizaciones") or [])
             version = self.registro.version
             dest = os.path.join(self.carpeta, "ciclo-%d" % ciclo)
             shutil.rmtree(dest, ignore_errors=True)

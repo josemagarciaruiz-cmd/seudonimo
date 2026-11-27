@@ -473,3 +473,12 @@ def test_contexto_unicidad_por_regla_y_con_generalizaciones_previas():
     mapa = contexto.como_mapa([{"texto": "jefa de almacén", "reemplazo": "mando intermedio"},
                                {"texto": h[0]["original"], "reemplazo": h[0]["generalizado"]}])
     assert motor.reemplazar_texto(original, mapa) == "Es una mujer con categoría de mando intermedio."
+
+
+def test_tapar_a_mano_dentro_de_una_generalizacion():
+    import multipasada
+    base = [{"texto": "proceso", "tipo": "OTRO", "marcador": "[OTRO_001]"}]
+    mapa = multipasada.mapa_completo(base, [{"texto": "trastorno adaptativo", "reemplazo": "un proceso de salud mental"}])
+    original = "Está de baja por un trastorno adaptativo derivado del conflicto."
+    assert motor.reemplazar_texto(original.replace("un trastorno", "trastorno"), mapa) == \
+        "Está de baja por un [OTRO_001] de salud mental derivado del conflicto."
