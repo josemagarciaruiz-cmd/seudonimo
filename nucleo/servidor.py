@@ -245,7 +245,7 @@ def proyectos():
 @app.post("/api/proyectos")
 def crear_proyecto():
     d = _json()
-    pid = ALM.crear_proyecto((d.get("nombre") or "Proyecto sin título").strip()[:120], bool(d.get("temporal")),
+    pid = ALM.crear_proyecto((d.get("nombre") or "Expediente sin título").strip()[:120], bool(d.get("temporal")),
                              d.get("modelo") or ALM.ajuste("modelo_defecto", motor.MODELO),
                              d.get("perfil") if d.get("perfil") in multipasada.PERFILES else "estandar",
                              "sin_tabla" if d.get("tabla") == "sin_tabla" else "cifrada")
@@ -353,7 +353,8 @@ def conversaciones(pid):
 @app.post("/api/proyectos/<int:pid>/conversaciones")
 def crear_conversacion(pid):
     p = _proyecto(pid)
-    cid = ALM.crear_conversacion(pid, modelo=p.get("modelo"))
+    titulo = (str(_json().get("titulo") or "").strip() or "Nueva conversación")[:120]
+    cid = ALM.crear_conversacion(pid, titulo, modelo=p.get("modelo"))
     return jsonify(ALM.conversacion(cid))
 
 
@@ -454,7 +455,7 @@ def tapar_y_rehacer(pid):
     d = _json()
     a = next((x for x in ALM.archivos(pid) if x["id"] == d.get("archivo") and x["admitido"]), None)
     if not a:
-        return jsonify(error="Ese documento ya no está en el proyecto."), 400
+        return jsonify(error="Ese documento ya no está en el expediente."), 400
     if not os.path.isfile(a["ruta"]):
         return jsonify(error="El documento ya no está en su carpeta: %s" % a["rel"]), 400
     datos = [re.sub(r"\s+", " ", str(x or "")).strip() for x in (d.get("datos") or [])]
@@ -516,7 +517,7 @@ def aplicar_contexto(pid):
     d = _json()
     a = next((x for x in ALM.archivos(pid) if x["id"] == d.get("archivo") and x["admitido"]), None)
     if not a:
-        return jsonify(error="Ese documento ya no está en el proyecto."), 400
+        return jsonify(error="Ese documento ya no está en el expediente."), 400
     gens = {motor.clave(g["texto"]): g for g in trabajos.generalizaciones(p)}
     for q in d.get("quitar") or []:
         gens.pop(motor.clave(str(q)), None)
@@ -747,7 +748,7 @@ def copiar_para_ia(pid):
     except Exception as e:  # noqa
         return jsonify(error="No he podido leer una de las copias: %s" % str(e)[:200]), 400
     if not partes:
-        return jsonify(error="Todavía no hay copias seudonimizadas en este proyecto."), 400
+        return jsonify(error="Todavía no hay copias seudonimizadas en este expediente."), 400
     texto = ("Los documentos siguientes están seudonimizados: los datos personales se han sustituido por marcadores "
              "entre corchetes, como [PERSONA_001]. Conserva los marcadores tal cual en tu respuesta.\n\n" + "\n\n".join(partes))
     return jsonify(texto=texto, documentos=len(partes), caracteres=len(texto))
@@ -762,8 +763,8 @@ def reidentificar(pid):
     p = _proyecto(pid)
     texto = _json().get("texto") or ""
     if p["tabla"] != "cifrada":
-        return jsonify(error="Este proyecto no guarda la tabla de correspondencias, así que no se pueden recuperar los datos. "
-                             "Actívala en «Ajustes del proyecto» para los próximos trabajos."), 400
+        return jsonify(error="Este expediente no guarda la tabla de correspondencias, así que no se pueden recuperar los datos. "
+                             "Actívala en «Ajustes del expediente» para los próximos trabajos."), 400
     r = trabajos.registro(pid, p["tabla"])
     hechos, desconocidos = [], set()
 
@@ -1080,7 +1081,7 @@ def _dialogo(tipo):
     import subprocess
     if rutas.ES_MAC:
         if tipo == "carpeta":
-            s = 'POSIX path of (choose folder with prompt "Elige la carpeta del proyecto")'
+            s = 'POSIX path of (choose folder with prompt "Elige la carpeta del expediente")'
         elif tipo == "guardar":
             s = 'POSIX path of (choose file name with prompt "Guardar la tabla de correspondencias" default name "Tabla de correspondencias.csv")'
         else:

@@ -24,22 +24,22 @@ MAX_TEXTO = 12000
 ESQUEMAS = [
     {"type": "function", "function": {
         "name": "inspeccionar_carpeta",
-        "description": "Inventario de los archivos del proyecto: cuántos hay, de qué formatos, cuáles se pueden tratar y cuáles no (y por qué). No lee el contenido.",
+        "description": "Inventario de los archivos del expediente: cuántos hay, de qué formatos, cuáles se pueden tratar y cuáles no (y por qué). No lee el contenido.",
         "parameters": {"type": "object", "properties": {}, "required": []}}},
     {"type": "function", "function": {
         "name": "inspeccionar_documento",
-        "description": "Ficha técnica de un archivo del proyecto: formato, tamaño, páginas, si tiene páginas escaneadas y su estado de seudonimización. No devuelve el texto.",
+        "description": "Ficha técnica de un archivo del expediente: formato, tamaño, páginas, si tiene páginas escaneadas y su estado de seudonimización. No devuelve el texto.",
         "parameters": {"type": "object", "properties": {
-            "archivo": {"type": "string", "description": "Nombre del archivo (o parte del nombre) tal como aparece en el proyecto"}},
+            "archivo": {"type": "string", "description": "Nombre del archivo (o parte del nombre) tal como aparece en el expediente"}},
             "required": ["archivo"]}}},
     {"type": "function", "function": {
         "name": "extraer_texto",
-        "description": "Texto de un archivo del proyecto (con OCR si está escaneado), para responder preguntas sobre su contenido o resumirlo. Úsala solo si el usuario pregunta por el contenido.",
+        "description": "Texto de un archivo del expediente (con OCR si está escaneado), para responder preguntas sobre su contenido o resumirlo. Úsala solo si el usuario pregunta por el contenido.",
         "parameters": {"type": "object", "properties": {
             "archivo": {"type": "string"}}, "required": ["archivo"]}}},
     {"type": "function", "function": {
         "name": "seudonimizar",
-        "description": "Prepara la seudonimización de archivos del proyecto con auditoría multipasada. NO la ejecuta: la aplicación muestra el plan al usuario para que lo confirme. Conserva el formato original cuando es posible y nunca sobrescribe los originales.",
+        "description": "Prepara la seudonimización de archivos del expediente con auditoría multipasada. NO la ejecuta: la aplicación muestra el plan al usuario para que lo confirme. Conserva el formato original cuando es posible y nunca sobrescribe los originales.",
         "parameters": {"type": "object", "properties": {
             "archivos": {"type": "array", "items": {"type": "string"},
                          "description": "Nombres de archivo; lista vacía o [\"todos\"] para todos los admitidos del proyecto"},
@@ -59,14 +59,14 @@ ESQUEMAS = [
         "name": "guardar_copia",
         "description": "Cuando el usuario pide guardar o copiar documentos seudonimizados en otra carpeta («guárdalo en el Escritorio», «cópialos a Descargas»). Prepara un plan que el usuario confirma; los originales no se tocan.",
         "parameters": {"type": "object", "properties": {
-            "archivo": {"type": "string", "description": "Documento a copiar; vacío para todos los del proyecto"},
+            "archivo": {"type": "string", "description": "Documento a copiar; vacío para todos los del expediente"},
             "carpeta": {"type": "string", "description": "Escritorio, Documentos, Descargas o la ruta completa de una carpeta"}},
             "required": ["carpeta"]}}},
     {"type": "function", "function": {
         "name": "tapar",
-        "description": "Cuando el usuario dice que en una copia ya seudonimizada se ha quedado a la vista algún dato y pide taparlo («en la página 2 se ve el apellido Rodríguez, tápalo», «tapa también josemaria.ai»). Prepara un plan que añade esos datos al registro del proyecto y rehace la copia tapándolos en todo el documento, también dentro de las imágenes. NO lo ejecuta: el usuario lo confirma.",
+        "description": "Cuando el usuario dice que en una copia ya seudonimizada se ha quedado a la vista algún dato y pide taparlo («en la página 2 se ve el apellido Rodríguez, tápalo», «tapa también josemaria.ai»). Prepara un plan que añade esos datos al registro del expediente y rehace la copia tapándolos en todo el documento, también dentro de las imágenes. NO lo ejecuta: el usuario lo confirma.",
         "parameters": {"type": "object", "properties": {
-            "archivo": {"type": "string", "description": "Documento del proyecto al que se refiere"},
+            "archivo": {"type": "string", "description": "Documento del expediente al que se refiere"},
             "datos": {"type": "array", "items": {"type": "string"},
                       "description": "Cada dato que hay que tapar, copiado tal como lo escribe el usuario (sin comillas), por ejemplo [\"Rodríguez\", \"josemaria.ai\"]"},
             "tipo": {"type": "string", "enum": motor.TIPOS, "description": "Tipo del dato si está claro (PERSONA para nombres y apellidos); si no, OTRO"},
@@ -74,14 +74,14 @@ ESQUEMAS = [
             "required": ["archivo", "datos"]}}},
     {"type": "function", "function": {
         "name": "verificar_documento",
-        "description": "Audita un archivo del proyecto que YA está seudonimizado (por esta aplicación o por otra vía): busca los datos originales conocidos del proyecto, aplica las reglas fijas e inspecciona metadatos, comentarios, cambios controlados y objetos ocultos. No modifica nada.",
+        "description": "Audita un archivo del expediente que YA está seudonimizado (por esta aplicación o por otra vía): busca los datos originales conocidos del expediente, aplica las reglas fijas e inspecciona metadatos, comentarios, cambios controlados y objetos ocultos. No modifica nada.",
         "parameters": {"type": "object", "properties": {
             "archivo": {"type": "string"},
             "con_modelo": {"type": "boolean", "description": "Añadir un modelo auditor (más lento)"}},
             "required": ["archivo"]}}},
     {"type": "function", "function": {
         "name": "estado_trabajos",
-        "description": "Estado de las seudonimizaciones en curso o terminadas del proyecto: documentos aprobados, pendientes de revisión o con error, y dónde están las copias.",
+        "description": "Estado de las seudonimizaciones en curso o terminadas del expediente: documentos aprobados, pendientes de revisión o con error, y dónde están las copias.",
         "parameters": {"type": "object", "properties": {}, "required": []}}},
 ]
 
@@ -117,7 +117,7 @@ def _resolver(archivos, ref):
             return puntos[0][1]
         if len(archivos) == 1:
             return archivos[0]
-        raise ErrorHerramienta("No hay ningún archivo en el proyecto que se llame «%s»." % ref)
+        raise ErrorHerramienta("No hay ningún archivo en el expediente que se llame «%s»." % ref)
     raise ErrorHerramienta("Hay %d archivos que coinciden con «%s»: %s. Pide al usuario que concrete." % (
         len(parciales), ref, "; ".join(a["rel"] for a in parciales[:8])))
 
@@ -189,7 +189,7 @@ def ejecutar(nombre, args, ctx):
                     vistos.add(a["id"])
                     elegidos.append(a)
         if not elegidos:
-            raise ErrorHerramienta("El proyecto no tiene archivos admitidos. Pide al usuario que añada una carpeta o archivos.")
+            raise ErrorHerramienta("El expediente no tiene archivos admitidos. Pide al usuario que añada una carpeta o archivos.")
         perfil = args.get("perfil") if args.get("perfil") in multipasada.PERFILES else (pr.get("perfil") or "estandar")
         paginas = []
         for x in args.get("paginas") or []:
@@ -366,7 +366,7 @@ def resumen_para_prompt(almacen, pid):
               for a in adm[:60]]
     if len(adm) > 60:
         lineas.append("- … y %d más" % (len(adm) - 60))
-    return "%d archivo(s) admitido(s) en el proyecto%s\n%s" % (
+    return "%d archivo(s) admitido(s) en el expediente%s\n%s" % (
         len(adm), "" if len(adm) == len(archivos) else " (y %d no admitidos)" % (len(archivos) - len(adm)),
         "\n".join(lineas))
 

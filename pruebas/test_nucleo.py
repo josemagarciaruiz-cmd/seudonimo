@@ -435,3 +435,37 @@ def test_contexto_no_repite_lo_ya_generalizado_ni_duplica():
     finally:
         proveedores.actual = antes
     assert [(h["categoria"], h["texto"]) for h in a["hallazgos"]] == [("fecha", "12/02/2026")]
+
+
+def test_contexto_unicidad_por_regla_y_con_generalizaciones_previas():
+    import contexto
+    import proveedores
+    r = {(h["texto"], h["generalizado"]) for h in contexto._unicidad(
+        "Es la única mujer con categoría de jefa de almacén en la isla dentro del grupo empresarial. "
+        "Era la más antigua de la plantilla. Es el único que habla alemán en la oficina. "
+        "La única prueba aportada es el correo. Lo único que consta es la carta.")}
+    assert ("la única mujer con categoría de jefa de almacén en la isla dentro del grupo empresarial",
+            "una mujer con categoría de jefa de almacén") in r
+    assert ("la más antigua de la plantilla", "una de las personas con más antigüedad") in r
+    assert ("el único que habla alemán en la oficina", "alguien que habla alemán") in r
+    assert len(r) == 3            # ni «la única prueba» ni «lo único que consta»
+
+    class Falso:
+        def estructurado(self, modelo, mensajes, esquema):
+            return {"datos": []}
+    antes = proveedores.actual
+    proveedores.actual = lambda: Falso()
+    try:
+        # segunda pasada: la copia ya lleva «mando intermedio» en lugar de «jefa de almacén»
+        copia = "Es la única mujer con categoría de mando intermedio en la isla dentro del grupo empresarial."
+        a = contexto.analizar(copia, aplicadas=[{"texto": "jefa de almacén", "reemplazo": "mando intermedio",
+                                                 "categoria": "puesto"}])
+    finally:
+        proveedores.actual = antes
+    h = [x for x in a["hallazgos"] if x["categoria"] == "unico"]
+    assert h and h[0]["recomendado"] and h[0]["generalizado"] == "una mujer con categoría de mando intermedio"
+    assert h[0]["original"] == "la única mujer con categoría de jefa de almacén en la isla dentro del grupo empresarial"
+    original = "Es la única mujer con categoría de jefa de almacén en la isla dentro del grupo empresarial."
+    mapa = contexto.como_mapa([{"texto": "jefa de almacén", "reemplazo": "mando intermedio"},
+                               {"texto": h[0]["original"], "reemplazo": h[0]["generalizado"]}])
+    assert motor.reemplazar_texto(original, mapa) == "Es una mujer con categoría de mando intermedio."

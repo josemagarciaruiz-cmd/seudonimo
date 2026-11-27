@@ -1,5 +1,16 @@
 # Cambios
 
+## 0.6.0 · 27 de noviembre de 2026
+
+Más sencilla: el chat en el centro y una sola lista de documentos.
+
+- **Expedientes** en lugar de proyectos. Para crear uno basta con el nombre; lo demás está en «Más opciones». Si se arrastra la carpeta de un asunto a la ventana sin expediente abierto, se propone uno con el nombre de la carpeta.
+- **Una sola lista de documentos** a la derecha, sin pestañas: cada documento con su estado, «Abrir copia» y «⋯» (Mostrar en el Finder, Guardar en…, Revisar y tapar a mano, Riesgo por contexto, Pedírselo al asistente). Los que conviene mirar llevan «Revisar». Debajo, dónde se guardan las copias, el certificado y, plegados, las carpetas del expediente y el detalle técnico.
+- **El chat, protagonista**: ejemplos que se pulsan para rellenar la caja («Seudonimiza solo la página 6 del informe», «¿Dónde está la copia…?», «Guarda las copias en el Escritorio», «En la página 2 se ve "…", tápalo») y botón «Dictar» más visible.
+- Fuera de la vista lo técnico: el selector de modelo, la casilla de revisión a fondo y los botones de añadir repetidos. «Expediente ▾» reúne los ajustes del expediente, la revisión de las copias, el uso con otra IA y la tabla; «Ajustes» (abajo a la izquierda), los modelos, el dictado, las listas del despacho y las actualizaciones.
+- **Primera puesta en marcha guiada** en dos pasos: instalar Ollama y descargar el modelo recomendado con un botón.
+- **Riesgo por contexto: «la única…» y «el más…»**. Se detectan por regla, sin depender del modelo, frases como «la única mujer con categoría de jefa de almacén en la isla» o «el más antiguo de la plantilla», y se propone «una mujer con categoría de jefa de almacén» o «una de las personas con más antigüedad». Un segundo análisis ya no se salta estas frases cuando llevan dentro algo generalizado antes.
+
 ## 0.5.1 · 27 de noviembre de 2026
 
 - Riesgo por contexto: las versiones generales encajan en la frase (sin «por un un proceso…»; «nacionalidad colombiana» → «nacionalidad extranjera»), un segundo análisis ya no señala lo que se generalizó antes y no repite el mismo dato con más o menos palabras («12/02/2026» y «desde el 12/02/2026»).

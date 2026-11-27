@@ -1,6 +1,6 @@
 # Seudónimo
 
-Asistente documental jurídico **de escritorio**, al estilo de las aplicaciones de Claude o ChatGPT, que funciona **entero en el ordenador del usuario** con modelos locales. Tiene proyectos, conversaciones y carpetas adjuntas, y su primer caso de uso es la **seudonimización de expedientes jurídico-laborales con auditoría multipasada verificable**.
+Asistente documental jurídico **de escritorio**, al estilo de las aplicaciones de Claude o ChatGPT, que funciona **entero en el ordenador del usuario** con modelos locales. Tiene expedientes, conversaciones (también por voz) y carpetas adjuntas, y su primer caso de uso es la **seudonimización de expedientes jurídico-laborales con auditoría multipasada verificable**.
 
 Ningún documento sale del equipo: la lectura, el OCR, el modelo (por defecto Gemma 4 · 12B a través de Ollama) y la verificación son locales.
 
@@ -8,21 +8,21 @@ Ningún documento sale del equipo: la lectura, el OCR, el modelo (por defecto Ge
 
 ## Qué hace
 
-- **Proyectos** con carpetas y archivos autorizados por el usuario (diálogo del sistema), **conversaciones** y **selector de modelo**. Proyectos y conversaciones se renombran y se eliminan desde su menú «⋯», y una conversación puede **moverse a otro proyecto**.
+- **Expedientes** (en el código, «proyectos») con carpetas y archivos autorizados por el usuario, **conversaciones** con el asistente, por escrito o dictadas, y una sola **lista de documentos** con «Abrir copia» y «⋯». Expedientes y conversaciones se renombran y se eliminan desde su menú «⋯», y una conversación puede **moverse a otro expediente**.
 - **Mesa de revisión** a pantalla completa para tapar a mano lo que se escape (seleccionándolo) y descartar falsos positivos; **listas del despacho**, **tipo de asunto**, **correos y chats de WhatsApp**, **carpeta vigilada**, **certificado de seudonimización** en PDF y **«Usar con otra IA»** (copiar las copias y volver a poner los nombres en la respuesta).
 - **Dictado por voz**: el botón «Dictar» (⌘⇧D) transcribe con Whisper (whisper.cpp) en el propio ordenador y deja el texto en la caja de mensaje para revisarlo antes de enviarlo. El modelo de voz se descarga una sola vez, cuando se pide.
 - El asistente entiende órdenes como «Seudonimiza toda esta carpeta, mantén la coherencia de las etiquetas y conserva el formato». Prepara un **plan** con su alcance y el usuario lo confirma.
 - **Motor multipasada** (anexo técnico): dos pasadas de detección y ciclos de transformación y verificación independiente desde el original inmutable. Termina por convergencia, por límites o por error, nunca porque el modelo diga que está limpio.
 - Estados honestos: «Sin hallazgos en las comprobaciones configuradas», «Requiere revisión» o «Error de procesamiento». Nunca «anonimización garantizada».
 - **Etiquetas estables por proyecto** (`[PERSONA_001]`, `[DNI_002]`…) compartidas entre todos los documentos. La tabla de correspondencias es **opcional y va cifrada**, con la clave en el Llavero de Mac o en el Administrador de credenciales de Windows.
-- **Gestor de modelos**: ver los instalados, descargar otros (con comprobación de espacio y la licencia a la vista) y elegir el modelo por proyecto.
+- **Gestor de modelos**: ver los instalados, descargar otros (con comprobación de espacio y la licencia a la vista) y elegir el modelo por expediente.
 
 ## Arquitectura
 
 | Capa | Dónde | Qué |
 |---|---|---|
 | Ventana de escritorio | `escritorio/` | Tauri 2 (WebView del sistema). Arranca el servicio local y abre los diálogos nativos. |
-| Interfaz | `interfaz/` | HTML, CSS y JS sin frameworks: proyectos, conversaciones, archivos, operaciones, revisión y modelos. |
+| Interfaz | `interfaz/` | HTML, CSS y JS sin frameworks: expedientes, chat, lista de documentos, revisión de copias y modelos. |
 | Servicio local | `nucleo/servidor.py` | Flask en 127.0.0.1, puerto libre y token efímero; valida Host y Origin. |
 | Asistente | `nucleo/asistente.py`, `nucleo/herramientas.py` | Llamadas a herramientas registradas con esquema; clasificador de intención si el modelo no las admite. |
 | Proveedores | `nucleo/proveedores/` | Interfaz común (`listar`, `chat`, `estructurado`, `descargar`…). Primer adaptador: Ollama. |

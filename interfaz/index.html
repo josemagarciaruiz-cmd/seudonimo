@@ -9,19 +9,18 @@
 <body>
 <div id="app" class="app">
 
-  <!-- Barra lateral: proyectos y conversaciones -->
-  <nav class="lateral" aria-label="Proyectos">
+  <!-- Barra lateral: expedientes y conversaciones -->
+  <nav class="lateral" aria-label="Expedientes">
     <div class="marca">
       <img class="sello" src="img/icono.png" alt="" aria-hidden="true">
       <span class="marca-nombre">Seudónimo<br><button type="button" class="version" id="version" title="Versión instalada: pulsa para buscar actualizaciones">Asistente local</button></span>
     </div>
-    <button class="boton boton-principal ancho" id="nuevo-proyecto">Nuevo proyecto</button>
+    <button class="boton boton-principal ancho" id="nuevo-proyecto">Nuevo expediente</button>
     <div class="lista-proyectos" id="lista-proyectos"></div>
     <button class="cola" id="cola" hidden></button>
     <button class="actualizacion" id="actualizacion" hidden></button>
     <div class="lateral-pie">
-      <button class="boton-texto" id="abrir-modelos">Modelos</button>
-      <button class="boton-texto" id="abrir-listas" title="Datos que nunca o siempre se tapan, en todos los proyectos">Listas</button>
+      <button class="boton-texto" id="ajustes" aria-haspopup="menu">Ajustes</button>
       <span class="estado-motor" id="estado-motor" title="Estado del modelo local">Comprobando…</span>
     </div>
   </nav>
@@ -34,13 +33,8 @@
         <span id="titulo-conversacion" class="subtitulo"></span>
       </div>
       <div class="cabecera-acciones">
-        <label class="selector-modelo" title="Modelo de esta conversación">
-          <span class="visualmente-oculto">Modelo</span>
-          <select id="selector-modelo"></select>
-        </label>
-        <button class="boton-texto" id="otra-ia" hidden title="Copiar las copias seudonimizadas para otra IA y volver a poner los nombres en su respuesta">Usar con otra IA ▾</button>
-        <button class="boton-texto" id="ajustes-proyecto" hidden>Ajustes del proyecto</button>
-        <button class="boton-texto" id="alternar-panel" aria-controls="panel" aria-expanded="true">Panel</button>
+        <button class="boton-texto" id="menu-expediente" hidden aria-haspopup="menu" title="Ajustes, datos tapados y uso con otra IA">Expediente ▾</button>
+        <button class="boton-texto" id="alternar-panel" aria-controls="panel" aria-expanded="true">Documentos</button>
       </div>
     </header>
 
@@ -51,37 +45,25 @@
 
     <form class="redactor" id="redactor" hidden>
       <div class="redactor-caja">
-        <textarea id="entrada" rows="1" placeholder="Pide algo sobre los documentos del proyecto…"></textarea>
+        <textarea id="entrada" rows="1" placeholder="Escribe o dicta lo que necesites: «seudonimiza solo la página 6 y guárdalo en el Escritorio»"></textarea>
         <div class="redactor-barra">
-          <div class="redactor-adjuntos">
-            <button type="button" class="boton-texto" id="adjuntar-archivos">Añadir archivos</button>
-            <button type="button" class="boton-texto" id="adjuntar-carpeta">Añadir carpeta</button>
-          </div>
           <button type="button" class="boton dictar" id="dictar" aria-pressed="false" title="Dictar con la voz (⌘⇧D). Se transcribe en este ordenador.">
-            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg>
             <span id="dictar-texto">Dictar</span>
           </button>
-          <label class="interruptor" title="Más ciclos de verificación y un modelo auditor en cada uno">
-            <input type="checkbox" id="intensiva"> <span>Revisión a fondo</span>
-          </label>
+          <span class="redactor-pista">Habla y vuelve a pulsar para terminar · ⌘⇧D</span>
+          <span class="hueco"></span>
           <button type="submit" class="boton boton-principal" id="enviar">Enviar</button>
         </div>
       </div>
-      <p class="redactor-nota">Todo se procesa en este ordenador. Revisa los resultados antes de compartirlos.</p>
+      <p class="redactor-nota">Todo se procesa en este ordenador, también tu voz. Revisa los resultados antes de compartirlos.</p>
     </form>
   </main>
 
-  <!-- Panel: archivos, operaciones y revisión -->
-  <aside class="panel" id="panel" aria-label="Panel del proyecto">
+  <!-- Documentos del expediente: una sola lista -->
+  <aside class="panel" id="panel" aria-label="Documentos del expediente">
     <div class="tirador" id="tirador" role="separator" aria-orientation="vertical" aria-label="Ancho del panel" tabindex="0" title="Arrastra para cambiar el ancho"></div>
-    <div class="pestanas" role="tablist">
-      <button role="tab" class="pestana" aria-selected="true" data-pestana="archivos">Documentos</button>
-      <button role="tab" class="pestana" aria-selected="false" data-pestana="operaciones">Resultados</button>
-      <button role="tab" class="pestana" aria-selected="false" data-pestana="revision">Datos tapados</button>
-    </div>
-    <div class="panel-cuerpo" id="panel-archivos" role="tabpanel"></div>
-    <div class="panel-cuerpo" id="panel-operaciones" role="tabpanel" hidden></div>
-    <div class="panel-cuerpo" id="panel-revision" role="tabpanel" hidden></div>
+    <div class="panel-cuerpo" id="panel-archivos"></div>
   </aside>
 </div>
 
@@ -89,7 +71,7 @@
 <section class="mesa" id="mesa" hidden aria-label="Mesa de revisión">
   <header class="mesa-cab">
     <div class="mesa-titulo">
-      <h2>Mesa de revisión</h2>
+      <h2>Revisión de las copias</h2>
       <span class="subtitulo" id="mesa-estado">Selecciona con el ratón un dato que se haya escapado y pulsa «Tapar». Haz clic en un marcador para ver qué tapa.</span>
     </div>
     <div class="mesa-acciones">
@@ -113,11 +95,13 @@
 <!-- Diálogos -->
 <dialog id="dlg-proyecto" class="dialogo">
   <form method="dialog" id="form-proyecto">
-    <h2 id="dlg-proyecto-titulo">Nuevo proyecto</h2>
-    <p class="nota solo-alta">Un proyecto es como un expediente: reúne sus documentos y las conversaciones sobre él.</p>
+    <h2 id="dlg-proyecto-titulo">Nuevo expediente</h2>
+    <p class="nota solo-alta">Reúne los documentos de un asunto y las conversaciones sobre ellos. Basta con el nombre: lo demás se puede cambiar después.</p>
     <label class="campo">Nombre
       <input name="nombre" required maxlength="120" placeholder="Por ejemplo: Despido Ferrer — TSJ Canarias">
     </label>
+    <details class="campo avanzadas" id="mas-opciones">
+      <summary>Más opciones</summary>
     <label class="campo">Tipo de asunto
       <select name="plantilla" id="proyecto-plantilla"></select>
       <span class="nota" id="plantilla-desc"></span>
@@ -131,8 +115,6 @@
           <span class="fila-campo"><input name="salida" readonly placeholder="Elige la carpeta"><button type="button" class="boton-texto" id="elegir-salida">Elegir…</button></span></span></label>
       <p class="aviso-campo" id="aviso-salida" hidden>Esa carpeta parece sincronizada con la nube. Los resultados contienen información del asunto: mejor una carpeta local.</p>
     </fieldset>
-    <details class="campo avanzadas">
-      <summary>Opciones avanzadas</summary>
       <label class="campo">Modelo
         <select name="modelo" id="proyecto-modelo"></select>
       </label>
@@ -154,18 +136,18 @@
         <label class="opcion"><input type="radio" name="tabla" value="sin_tabla">
           <span><b>No guardar.</b> Las etiquetas solo existen durante cada trabajo. Ojo: la persona puede seguir siendo identificable por el contexto.</span></label>
       </fieldset>
-      <label class="campo solo-edicion">Instrucciones para el asistente en este proyecto
+      <label class="campo solo-edicion">Instrucciones para el asistente en este expediente
         <textarea name="instrucciones" rows="3" placeholder="Por ejemplo: conserva los nombres de los magistrados; el cliente es la parte actora."></textarea>
       </label>
       <label class="opcion solo-edicion"><input type="checkbox" name="logos"> <span>Tapar logotipos, sellos, firmas pequeñas y caras de las fotos (PDF, Word, PowerPoint y Excel)</span></label>
-      <label class="opcion solo-edicion"><input type="checkbox" name="vigilar"> <span><b>Carpeta vigilada.</b> Lo que llegue a partir de ahora a las carpetas del proyecto se seudonimiza solo, mientras Seudónimo esté abierto (aunque esté minimizado).</span></label>
-      <label class="opcion solo-alta"><input type="checkbox" name="temporal"> <span>Proyecto temporal: se borra entero al cerrar la aplicación</span></label>
+      <label class="opcion solo-edicion"><input type="checkbox" name="vigilar"> <span><b>Carpeta vigilada.</b> Lo que llegue a partir de ahora a las carpetas del expediente se seudonimiza solo, mientras Seudónimo esté abierto (aunque esté minimizado).</span></label>
+      <label class="opcion solo-alta"><input type="checkbox" name="temporal"> <span>Expediente temporal: se borra entero al cerrar la aplicación</span></label>
     </details>
     <div class="dialogo-pie">
-      <button type="button" class="boton-texto peligro solo-edicion" id="borrar-proyecto">Borrar proyecto</button>
+      <button type="button" class="boton-texto peligro solo-edicion" id="borrar-proyecto">Borrar expediente</button>
       <span class="hueco"></span>
       <button value="cancelar" class="boton">Cancelar</button>
-      <button value="aceptar" class="boton boton-principal" id="guardar-proyecto">Crear proyecto</button>
+      <button value="aceptar" class="boton boton-principal" id="guardar-proyecto">Crear expediente</button>
     </div>
   </form>
 </dialog>
@@ -213,8 +195,8 @@
 <dialog id="dlg-mover" class="dialogo">
   <form method="dialog">
     <h2>Mover la conversación</h2>
-    <p class="nota">La conversación pasa al proyecto que elijas, con todos sus mensajes. Los planes que no se hayan confirmado se anulan, porque se referían a los archivos del proyecto de origen.</p>
-    <label class="campo">Proyecto de destino <select id="mover-destino"></select></label>
+    <p class="nota">La conversación pasa al expediente que elijas, con todos sus mensajes. Los planes que no se hayan confirmado se anulan, porque se referían a los archivos del expediente de origen.</p>
+    <label class="campo">Expediente de destino <select id="mover-destino"></select></label>
     <div class="dialogo-pie"><span class="hueco"></span>
       <button value="no" class="boton">Cancelar</button>
       <button value="si" class="boton boton-principal">Mover</button>
@@ -239,7 +221,7 @@
 <dialog id="dlg-nombres" class="dialogo dialogo-ancho">
   <form method="dialog">
     <h2>Poner los nombres</h2>
-    <p class="nota">Pega aquí la respuesta de la IA, con sus marcadores ([PERSONA_001]…). Seudónimo los cambia por los datos reales de este proyecto, sin conexión. El resultado contiene datos personales: no lo vuelvas a pegar en ninguna IA.</p>
+    <p class="nota">Pega aquí la respuesta de la IA, con sus marcadores ([PERSONA_001]…). Seudónimo los cambia por los datos reales de este expediente, sin conexión. El resultado contiene datos personales: no lo vuelvas a pegar en ninguna IA.</p>
     <div class="dos-columnas">
       <label class="campo">Texto con marcadores <textarea id="nombres-entrada" rows="14" placeholder="Pega aquí la respuesta…"></textarea></label>
       <label class="campo">Con los datos reales <textarea id="nombres-salida" rows="14" readonly></textarea></label>
@@ -255,7 +237,7 @@
 <dialog id="dlg-listas" class="dialogo dialogo-ancho dialogo-listas">
   <form method="dialog">
     <h2>Listas del despacho</h2>
-    <p class="nota">Valen para todos los proyectos y se aplican en las próximas seudonimizaciones (o al pulsar «Rehacer»).</p>
+    <p class="nota">Valen para todos los expedientes y se aplican en las próximas seudonimizaciones (o al pulsar «Rehacer»).</p>
     <div class="dos-columnas">
       <section>
         <h3>Nunca tapar</h3>

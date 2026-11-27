@@ -410,3 +410,45 @@ details.avanzadas[open] { padding-bottom: 4px; }
 .contexto-a { width: 100%; font: inherit; padding: 4px 6px; border: 1px solid var(--linea); border-radius: var(--r-pequeno); background: var(--papel); color: var(--tinta); }
 .contexto-flecha { color: var(--tinta-3); }
 .cargando { color: var(--tinta-2); padding: 18px 0; }
+
+/* 0.6.0 · pantalla sencilla: el chat en el centro, una sola lista de documentos */
+#alternar-panel { display: none; }
+@media (max-width: 860px) { #alternar-panel { display: inline-block; } }
+.panel .panel-cuerpo { padding-top: 16px; }
+.docs-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0 4px; }
+.docs-cab h3 { margin: 0 !important; font: 600 14px/1.3 var(--sans) !important; color: var(--tinta) !important; }
+.boton-chico { padding: 4px 10px; font-size: 13px; }
+.boton.aviso { border-color: var(--ambar); color: var(--ambar); }
+.boton.aviso:hover { background: var(--ambar-claro); }
+.mas-doc { font-size: 17px; line-height: 1; padding: 3px 9px; color: var(--tinta-2); }
+.resultado-doc .botones-fila { align-items: center; gap: 6px; }
+.resultado-doc .punto.procesando, .resultado-doc .punto.en_cola { background: var(--oro); animation: latido 1.6s ease-in-out infinite; }
+.resultado-doc .punto.nuevo, .resultado-doc .punto.cancelado, .resultado-doc .punto.interrumpido { background: transparent; box-shadow: inset 0 0 0 1.5px var(--tinta-3); }
+.resultado-doc .punto.error { background: var(--rojo); }
+.trabajo.en-curso { border-color: var(--oro); background: var(--oro-claro); }
+.trabajo.en-curso .trabajo-cab b { display: inline-flex; align-items: center; gap: 6px; }
+details.plegable { margin-top: 14px; border-top: 1px solid var(--linea-suave); padding-top: 10px; }
+details.plegable > summary { cursor: pointer; color: var(--tinta-2); font-size: 13px; }
+details.plegable[open] > summary { margin-bottom: 8px; }
+.pie-docs { margin-top: 14px; padding: 10px 12px; border-radius: var(--r-medio); background: var(--carton); }
+.pie-docs .nota { margin: 0 0 4px; }
+.pie-docs .plan-acciones { gap: 2px; }
+.zona-soltar.grande { display: grid; gap: 4px; padding: 26px 16px; margin: 10px 0; font-size: 14px; }
+.zona-soltar.grande b { color: var(--tinta); font-weight: 600; }
+.zona-soltar.grande .plan-acciones { margin-top: 10px; }
+.plan-acciones.centrado { justify-content: center; }
+.vacio.bienvenida { max-width: 640px; margin: 0 auto; padding-top: 8vh; }
+.vacio.bienvenida .zona-soltar { margin: 22px 0 14px; }
+body.soltando .vacio.bienvenida .zona-soltar { border-color: var(--oro); color: var(--oro-hondo); background: var(--oro-claro); }
+.vacio.guia > p { text-align: center; max-width: 560px; margin: 0 auto 14px; }
+.ejemplos { margin-top: 30px; text-align: center; }
+.ejemplos > p { color: var(--tinta-2); margin: 0 auto 10px; max-width: 520px; }
+.ejemplos .sugerencias { margin-top: 0; }
+.sugerencia { font-size: 13.5px; text-align: left; }
+.sugerencia.muda { cursor: default; }
+.sugerencia.muda:hover { border-color: var(--linea); color: var(--tinta-2); }
+.redactor-pista { font-size: 12px; color: var(--tinta-3); }
+.dictar { border-color: var(--oro); color: var(--oro-hondo); font-weight: 600; padding: 7px 14px; border-radius: 999px; }
+.dictar:hover { background: var(--oro-claro); border-color: var(--oro-hondo); }
+.dictar.grabando + .redactor-pista { color: var(--rojo); }
+#menu-expediente { font-weight: 600; color: var(--tinta); }

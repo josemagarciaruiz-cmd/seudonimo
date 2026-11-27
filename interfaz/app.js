@@ -21,9 +21,12 @@ const E = {
   enviando: false,
 };
 
+const fondo = () => E.proyecto?.perfil === "intensivo";       // «Revisión a fondo» se elige en los ajustes del expediente
+const modeloActual = () => E.proyecto?.modelo || E.modeloDefecto;
+
 const ESTADOS = {
   nuevo: "Sin tratar", no_admitido: "No admitido", en_cola: "En cola", procesando: "Procesando",
-  sin_hallazgos: "Sin hallazgos", revision: "Requiere revisión", error: "Error", cancelado: "Cancelado", pendiente: "Pendiente",
+  sin_hallazgos: "Lista", revision: "Revísala", error: "Error", cancelado: "Cancelado", pendiente: "Pendiente",
   interrumpido: "Interrumpido (se cerró la aplicación)", parcial: "Copia de algunas páginas",
 };
 
@@ -90,8 +93,11 @@ async function iniciar() {
     // arrastrar archivos o carpetas sobre la ventana los añade al proyecto
     try {
       T.webview.getCurrentWebview().onDragDropEvent((ev) => {
-        document.body.classList.toggle("soltando", ["enter", "over"].includes(ev.payload.type) && !!E.proyecto);
-        if (ev.payload.type === "drop" && ev.payload.paths?.length && E.proyecto) anadirRutas(ev.payload.paths);
+        document.body.classList.toggle("soltando", ["enter", "over"].includes(ev.payload.type));
+        if (ev.payload.type === "drop" && ev.payload.paths?.length) {
+          if (E.proyecto) anadirRutas(ev.payload.paths);
+          else expedienteDesde(ev.payload.paths).catch((e) => alerta(e.message));
+        }
       });
     } catch (e) { /* versión sin soporte */ }
   }
@@ -115,25 +121,25 @@ async function refrescarModelos() {
     E.modeloDefecto = r.defecto;
     E.catalogo = r;
   } catch (e) { E.modelos = []; }
-  const sel = $("#selector-modelo");
-  const actual = E.proyecto?.modelo || E.modeloDefecto;
-  const nombres = E.modelos.map((m) => m.nombre);
-  if (actual && !nombres.includes(actual)) nombres.unshift(actual);
-  sel.innerHTML = nombres.map((n) => `<option value="${esc(n)}"${n === actual ? " selected" : ""}>${esc(n)}${E.modelos.some((m) => m.nombre === n) ? "" : " (sin descargar)"}</option>`).join("");
   pintarAviso();
 }
 
 function pintarAviso() {
   const b = $("#aviso-banda");
   let html = "";
+  const rec = (E.catalogo?.catalogo || []).find((m) => m.recomendado) || (E.catalogo?.catalogo || [])[0];
+  const bajando = Object.values(E.catalogo?.descargas || {}).find((d) => d.fase === "trabajando");
   if (E.salud && !E.salud.instalado && !E.salud.ollama) {
-    html = `<span>Para trabajar hace falta Ollama, el programa que ejecuta los modelos en este ordenador.</span><button class="boton boton-principal" data-accion="instalar-ollama">Instalar Ollama</button>`;
+    html = `<span><b>Preparar este ordenador · paso 1 de 2.</b> Instala Ollama, el programa gratuito que ejecuta el modelo de IA dentro de este ordenador. Es una sola vez.</span><button class="boton boton-principal" data-accion="instalar-ollama">Instalar Ollama</button>`;
   } else if (E.salud && !E.salud.ollama) {
-    html = `<span>Ollama está instalado pero detenido. Ábrelo y vuelve a intentarlo.</span>`;
+    html = `<span>Ollama está instalado pero detenido. Ábrelo (está en Aplicaciones) y Seudónimo lo detectará solo.</span>`;
   } else if (E.salud && E.salud.ollama && !E.modelos.length) {
-    html = `<span>No hay ningún modelo descargado. Elige uno para empezar.</span><button class="boton boton-principal" data-accion="abrir-modelos">Elegir modelo</button>`;
-  } else if (E.proyecto && E.modelos.length && !E.modelos.some((m) => m.nombre === (E.proyecto.modelo || E.modeloDefecto))) {
-    html = `<span>El modelo de este proyecto (${esc(E.proyecto.modelo)}) no está descargado.</span><button class="boton" data-accion="abrir-modelos">Gestionar modelos</button>`;
+    html = bajando ? `<span><b>Preparar este ordenador · paso 2 de 2.</b> Descargando el modelo… ${Math.round((bajando.progreso || 0) * 100)} %. Puedes ir creando el expediente mientras tanto.</span>`
+      : `<span><b>Preparar este ordenador · paso 2 de 2.</b> Descarga el modelo de IA${rec ? ` recomendado (${esc(rec.nombre)}, unos ${rec.memoria} GB de memoria)` : ""}. Después funciona sin conexión.</span>
+        ${rec ? `<button class="boton boton-principal" data-descargar="${esc(rec.nombre)}">Descargar el modelo</button>` : ""}<button class="boton-texto" data-accion="abrir-modelos">Elegir otro</button>`;
+    if (bajando) setTimeout(async () => { await refrescarModelos(); }, 2000);
+  } else if (E.proyecto && E.modelos.length && !E.modelos.some((m) => m.nombre === modeloActual())) {
+    html = `<span>El modelo de este expediente (${esc(E.proyecto.modelo)}) no está descargado.</span><button class="boton" data-accion="abrir-modelos">Gestionar modelos</button>`;
   }
   b.innerHTML = html;
   b.hidden = !html;
@@ -149,17 +155,17 @@ async function refrescarProyectos() {
 
 function pintarLateral() {
   const el = $("#lista-proyectos");
-  if (!E.proyectos.length) { el.innerHTML = `<p class="nota" style="padding:8px">Todavía no hay proyectos.</p>`; return; }
+  if (!E.proyectos.length) { el.innerHTML = `<p class="nota" style="padding:8px">Todavía no hay expedientes.</p>`; return; }
   el.innerHTML = E.proyectos.map((p) => {
     const activo = E.proyecto && E.proyecto.id === p.id;
     const convs = activo ? (E.conversaciones[p.id] || []) : [];
     return `<div class="proyecto${activo ? " activo" : ""}">
       <div class="fila">
         <button class="proyecto-cab" data-proyecto="${p.id}">${esc(p.nombre)}${p.temporal ? ' <span class="temporal">temporal</span>' : ""}</button>
-        <button class="mas" data-menu-proyecto="${p.id}" aria-label="Opciones del proyecto ${esc(p.nombre)}" title="Opciones">⋯</button>
+        <button class="mas" data-menu-proyecto="${p.id}" aria-label="Opciones del expediente ${esc(p.nombre)}" title="Opciones">⋯</button>
       </div>
       ${activo ? `<div class="conversaciones">
-        <button class="conv conv-nueva" data-nueva-conv="${p.id}">Nueva conversación</button>
+        <button class="conv conv-nueva" data-nueva-conv="${p.id}">+ Nueva conversación</button>
         ${convs.map((c) => `<div class="fila"><button class="conv${c.id === E.conversacion ? " activa" : ""}" data-conv="${c.id}" title="${esc(c.titulo)}">${esc(c.titulo)}</button><button class="mas" data-menu-conv="${c.id}" aria-label="Opciones de la conversación" title="Opciones">⋯</button></div>`).join("")}
       </div>` : ""}
     </div>`;
@@ -206,14 +212,14 @@ function menuProyecto(boton, pid) {
   const p = E.proyectos.find((x) => x.id === pid);
   abrirMenu(boton, [
     { texto: "Renombrar", accion: async () => {
-      const n = await pedirTexto("Renombrar el proyecto", p.nombre);
+      const n = await pedirTexto("Renombrar el expediente", p.nombre);
       if (!n) return;
       await api("PATCH", `/api/proyectos/${pid}`, { nombre: n });
       await refrescarProyectos();
       if (E.proyecto?.id === pid) { E.proyecto.nombre = n; $("#titulo-proyecto").textContent = n; }
     } },
-    { texto: "Ajustes del proyecto", accion: async () => { if (E.proyecto?.id !== pid) await abrirProyecto(pid); abrirDialogoProyecto(true); } },
-    { texto: "Eliminar proyecto", peligro: true, accion: () => eliminarProyecto(pid) },
+    { texto: "Ajustes del expediente", accion: async () => { if (E.proyecto?.id !== pid) await abrirProyecto(pid); abrirDialogoProyecto(true); } },
+    { texto: "Eliminar expediente", peligro: true, accion: () => eliminarProyecto(pid) },
   ]);
 }
 
@@ -227,9 +233,9 @@ function menuConversacion(boton, cid) {
       await api("PATCH", `/api/conversaciones/${cid}`, { titulo: n });
       await refrescarConversaciones();
     } },
-    ...(otros.length ? [{ texto: "Mover a otro proyecto…", accion: () => moverConversacion(cid, otros) }] : []),
+    ...(otros.length ? [{ texto: "Mover a otro expediente…", accion: () => moverConversacion(cid, otros) }] : []),
     { texto: "Eliminar conversación", peligro: true, accion: async () => {
-      if (!await confirmar("Eliminar la conversación", `Se eliminará «${c.titulo}» con todos sus mensajes. Los archivos del proyecto y las copias seudonimizadas no se tocan.`, "Eliminar")) return;
+      if (!await confirmar("Eliminar la conversación", `Se eliminará «${c.titulo}» con todos sus mensajes. Los documentos del expediente y las copias seudonimizadas no se tocan.`, "Eliminar")) return;
       await api("DELETE", `/api/conversaciones/${cid}`);
       await refrescarConversaciones();
       if (E.conversacion === cid) {
@@ -262,7 +268,7 @@ async function refrescarConversaciones() {
 
 async function eliminarProyecto(pid) {
   const p = E.proyectos.find((x) => x.id === pid);
-  const ok = await confirmar("Eliminar el proyecto", `Se eliminarán «${p.nombre}», sus conversaciones, su registro de datos y la tabla de correspondencias cifrada con su clave. Tus archivos originales y las copias ya exportadas no se tocan.`, "Eliminar proyecto");
+  const ok = await confirmar("Eliminar el expediente", `Se eliminarán «${p.nombre}», sus conversaciones, su registro de datos y la tabla de correspondencias cifrada con su clave. Tus archivos originales y las copias ya guardadas no se tocan.`, "Eliminar expediente");
   if (!ok) return;
   if ($("#dlg-proyecto").open) $("#dlg-proyecto").close("cancelar");
   await api("DELETE", `/api/proyectos/${pid}`);
@@ -278,10 +284,8 @@ async function abrirProyecto(pid, conv) {
   $("#titulo-conversacion").textContent = "";
   E.conversaciones[pid] = await api("GET", `/api/proyectos/${pid}/conversaciones`);
   $("#titulo-proyecto").textContent = E.proyecto.nombre;
-  $("#ajustes-proyecto").hidden = false;
-  $("#otra-ia").hidden = false;
+  $("#menu-expediente").hidden = false;
   $("#redactor").hidden = false;
-  $("#intensiva").checked = E.proyecto.perfil === "intensivo";
   await refrescarModelos();
   const convs = E.conversaciones[pid];
   E.conversacion = conv || (convs[0] && convs[0].id) || null;
@@ -290,7 +294,6 @@ async function abrirProyecto(pid, conv) {
   await refrescarOperaciones();
   if (E.conversacion) await abrirConversacion(E.conversacion);
   else pintarVacioProyecto();
-  if (!$("#panel-revision").hidden) pintarRevision();
 }
 
 async function abrirConversacion(cid) {
@@ -323,17 +326,29 @@ function pintarBienvenida() {
   $("#titulo-proyecto").textContent = "Seudónimo";
   $("#titulo-conversacion").textContent = "";
   $("#redactor").hidden = true;
-  $("#ajustes-proyecto").hidden = true;
-  $("#otra-ia").hidden = true;
-  $("#hilo").innerHTML = `<div class="vacio">
+  $("#menu-expediente").hidden = true;
+  $("#hilo").innerHTML = `<div class="vacio bienvenida">
     <h2>Tus expedientes, sin salir de este ordenador</h2>
     <p>Seudónimo cambia los nombres, DNI, direcciones y demás datos de tus documentos por marcadores ([PERSONA_001]…) para que puedas usarlos con otra IA sin que salgan datos de tus clientes. Todo ocurre en este ordenador.</p>
-    <p>Crea un proyecto por expediente, añade sus documentos y pulsa «Seudonimizar». Las copias quedan junto a los originales, en una carpeta «Seudonimizados».</p>
-    <button class="boton boton-principal" data-accion="nuevo-proyecto">Crear el primer proyecto</button>
+    <div class="zona-soltar grande"><b>Arrastra aquí la carpeta de un expediente</b><span>Se crea el expediente con el nombre de la carpeta. Los originales no se tocan.</span></div>
+    <div class="plan-acciones centrado"><button class="boton boton-principal" data-accion="nuevo-proyecto">Nuevo expediente</button><button class="boton" data-accion="expediente-desde-carpeta">Elegir la carpeta…</button></div>
+    ${ejemplosChat("Y después se lo pides al asistente con tus palabras, escribiendo o dictando:", false)}
   </div>`;
-  $("#panel-archivos").innerHTML = `<p class="nota">Crea un proyecto para añadir carpetas y archivos.</p>`;
-  $("#panel-operaciones").innerHTML = "";
-  $("#panel-revision").innerHTML = "";
+  $("#panel-archivos").innerHTML = `<p class="nota">Crea un expediente para añadir sus documentos.</p>`;
+}
+
+const EJEMPLOS = [
+  "Seudonimiza todos los documentos",
+  "Seudonimiza solo la página 6 del informe",
+  "En la página 2 se ve \"Rodríguez\", tápalo",
+  "¿Dónde está la copia de la carta de despido?",
+  "Guarda las copias en el Escritorio",
+  "¿Qué documentos necesitan revisión?",
+];
+
+function ejemplosChat(titulo, activos = true) {
+  return `<div class="ejemplos"><p>${esc(titulo)}</p><div class="sugerencias">${EJEMPLOS.map((x) => activos
+    ? `<button class="sugerencia" data-rellenar="${esc(x)}">${esc(x)}</button>` : `<span class="sugerencia muda">${esc(x)}</span>`).join("")}</div></div>`;
 }
 
 function pendientes() {
@@ -344,20 +359,20 @@ function pintarVacioProyecto() {
   const adm = (E.proyecto.archivos || []).filter((a) => a.admitido);
   const pend = pendientes();
   const hechos = adm.filter((a) => ["sin_hallazgos", "revision", "parcial"].includes(a.estado)).length;
-  const paso = (n, hecho, titulo, cuerpo) => `<li class="paso-guia${hecho ? " hecho" : ""}"><span class="num">${hecho ? "✓" : n}</span><div><b>${titulo}</b>${cuerpo}</div></li>`;
+  const enCurso = adm.filter((a) => ["en_cola", "procesando"].includes(a.estado)).length;
+  const situacion = enCurso
+    ? `<p>Seudonimizando ${enCurso === 1 ? "un documento" : enCurso + " documentos"}. El avance se ve en la lista de la derecha; al terminar te dejo aquí el resumen con las copias.</p>`
+    : !adm.length
+    ? `<p>Añade los documentos del asunto: arrástralos a esta ventana o pulsa «Añadir» en la lista de la derecha. Los originales nunca se modifican.</p>
+       <div class="plan-acciones centrado"><button class="boton boton-principal" data-accion="adjuntar-carpeta">Añadir una carpeta</button><button class="boton" data-accion="adjuntar-archivos">Añadir archivos</button></div>`
+    : pend.length
+    ? `<p>${pend.length === 1 ? "Hay un documento pendiente" : `Hay ${pend.length} documentos pendientes`}. Pulsa el botón o pídemelo abajo.</p>
+       <div class="plan-acciones centrado"><button class="boton boton-principal boton-grande" data-accion="seudonimizar-pendientes">Seudonimizar ${pend.length === 1 ? "el documento" : "los " + pend.length + " documentos"}</button></div>`
+    : hechos ? `<p>${hechos === 1 ? "El documento está seudonimizado" : `Los ${hechos} documentos están seudonimizados`}. Las copias están en la lista de la derecha: «Abrir copia» las abre.</p>` : "";
   $("#hilo").innerHTML = `<div class="vacio guia">
     <h2>${esc(E.proyecto.nombre)}</h2>
-    <ol class="pasos-guia">
-      ${paso(1, adm.length > 0, "Añade los documentos", adm.length
-        ? `<p>${adm.length} documento${adm.length === 1 ? "" : "s"} en el proyecto.</p><div class="plan-acciones"><button class="boton-texto" data-accion="adjuntar-archivos">Añadir más</button></div>`
-        : `<p>Una carpeta entera o archivos sueltos. También puedes arrastrarlos a esta ventana. Los originales nunca se modifican.</p><div class="plan-acciones"><button class="boton boton-principal" data-accion="adjuntar-carpeta">Añadir carpeta</button><button class="boton" data-accion="adjuntar-archivos">Añadir archivos</button></div>`)}
-      ${paso(2, adm.length > 0 && !pend.length && hechos > 0, "Seudonimízalos", pend.length
-        ? `<p>${pend.length === 1 ? "Un documento pendiente" : pend.length + " documentos pendientes"}.</p><div class="plan-acciones"><button class="boton boton-principal" data-accion="seudonimizar-pendientes">Seudonimizar ${pend.length === 1 ? "el documento" : "los " + pend.length + " documentos"}</button></div>`
-        : `<p>${adm.length ? "No queda ninguno pendiente." : "Cuando añadas documentos, un botón los seudonimiza todos."} También puedes pedirlo abajo, en el chat.</p>`)}
-      ${paso(3, false, "Revisa y guarda", `<p>Las copias quedan ${E.proyecto.guardar_efectivo === "carpeta" ? "en la carpeta que elegiste" : "junto a los originales, en una carpeta «Seudonimizados»"}. En la pestaña <b>Resultados</b> las abres, las ves en ${EXPLORADOR} o las guardas donde quieras.</p>
-        ${hechos ? `<div class="plan-acciones"><button class="boton" data-accion="ver-resultados">Ver los resultados</button><button class="boton-texto" data-accion="abrir-mesa">Revisar las copias</button></div>` : ""}`)}
-    </ol>
-    <p class="nota">En el chat puedes pedir, por ejemplo: «seudonimiza solo la página 3 del informe», «en la página 2 se ve "Rodríguez", tápalo», «¿dónde está el documento?» o «guárdalo en el Escritorio».</p>
+    ${situacion}
+    ${ejemplosChat("Pídeme lo que necesites con tus palabras, escribiendo o con el micrófono. Por ejemplo:")}
   </div>`;
 }
 
@@ -382,7 +397,7 @@ function nodoAsistente(m) {
 }
 
 function nombreHerramienta(n) {
-  return { inspeccionar_carpeta: "Inventario del proyecto", inspeccionar_documento: "Ficha del documento", extraer_texto: "Lectura del documento",
+  return { inspeccionar_carpeta: "Inventario del expediente", inspeccionar_documento: "Ficha del documento", extraer_texto: "Lectura del documento",
     seudonimizar: "Plan de seudonimización", estado_trabajos: "Estado de los trabajos", verificar_documento: "Auditoría del documento",
     tapar: "Datos para tapar", donde_esta: "Dónde están", guardar_copia: "Guardar en otra carpeta" }[n] || n;
 }
@@ -400,10 +415,9 @@ function filaResultado(c) {
     <span class="punto ${esc(c.estado)}" aria-hidden="true"></span>
     <div class="resultado-info"><b title="${esc(c.ruta || "")}">${esc(nombre)}</b><span class="nota">${esc(estado)} · original: ${esc(c.original || "")}</span></div>
     <div class="botones-fila">
-      <button class="boton-texto" data-abrir="${esc(c.ruta)}">Abrir</button>
-      <button class="boton-texto" data-mostrar="${esc(c.ruta)}">Mostrar en ${EXPLORADOR}</button>
-      <button class="boton-texto" data-guardar-en="${esc(c.ruta)}">Guardar en…</button>
-      ${c.id ? `<button class="boton-texto" data-revisar="${c.id}">Revisar</button><button class="boton-texto" data-contexto="${c.id}" title="Opcional: buscar datos indirectos que, juntos, podrían identificar a la persona">Riesgo por contexto</button>` : ""}
+      <button class="boton boton-chico" data-abrir="${esc(c.ruta)}">Abrir copia</button>
+      ${c.estado === "revision" && c.id ? `<button class="boton boton-chico aviso" data-revisar="${c.id}">Revisar</button>` : ""}
+      <button class="boton-texto mas-doc" data-menu-copia="${esc(c.ruta)}" data-doc="${c.id || ""}" data-nombre="${esc(c.original || nombre)}" aria-label="Más opciones" title="Más opciones">⋯</button>
     </div></div>`;
 }
 
@@ -427,7 +441,7 @@ function nodoResultado(res) {
     ${fallos.length ? `<ul class="doc-motivos">${fallos.map((x) => `<li>${esc(x.original)}: ${esc(ESTADOS[x.estado] || x.estado)}${x.motivos && x.motivos.length ? " — " + esc(x.motivos[0]) : ""}</li>`).join("")}</ul>` : ""}
     ${bloqueCarpetas(res.carpeta ? [res.carpeta] : [], res.certificado)}
     ${res.aviso ? `<p class="aviso-campo">${esc(res.aviso)}</p>` : ""}
-    ${hechos.length > 1 ? `<div class="plan-acciones"><button class="boton" data-guardar-en="${esc(hechos.map((x) => x.copia).join("\n"))}">Guardar todos en…</button></div>` : ""}`;
+    ${hechos.length > 1 ? `<div class="plan-acciones"><button class="boton" data-guardar-en="${esc(hechos.map((x) => x.copia).join("\n"))}">Guardar todas en…</button></div>` : ""}`;
   return d;
 }
 
@@ -447,7 +461,7 @@ function nodoGuardar(plan, mid, datos) {
   const titulo = `Guardar ${n === 1 ? "una copia" : n + " copias"} en ${plan.destino}`;
   if (plan.estado) {
     d.classList.add("cerrado");
-    d.innerHTML = `<h4>${esc(titulo)}</h4><p class="resultado">${plan.estado === "confirmado" ? "Hecho: copiadas en esa carpeta. Los originales y las copias del proyecto siguen donde estaban." : "Descartado."}</p>
+    d.innerHTML = `<h4>${esc(titulo)}</h4><p class="resultado">${plan.estado === "confirmado" ? "Hecho: copiadas en esa carpeta. Los originales y las copias del expediente siguen donde estaban." : "Descartado."}</p>
       ${plan.estado === "confirmado" ? `<div class="plan-acciones"><button class="boton-texto" data-abrir="${esc(plan.destino)}">Abrir la carpeta</button></div>` : ""}`;
     return d;
   }
@@ -499,8 +513,8 @@ async function riesgoContexto(aid) {
   const huerfanas = (r.aplicadas || []).filter((g) => !r.hallazgos.some((h) => h.aplicada && h.texto.toLowerCase() === g.texto.toLowerCase()));
   cuerpo.innerHTML = `<div class="contexto-nivel ${esc(r.nivel)}"><b>${NIVELES[r.nivel]}</b> · ${esc(r.documento)}<p>${esc(r.explicacion)}</p></div>
     ${r.hallazgos.length ? `<div class="contexto-lista">${filas}</div>
-      <p class="nota">Vienen marcados los datos que suelen identificar sin aportar nada al asunto (edad, municipio, familia, nacionalidad, rasgos). Las fechas, los importes, el puesto y la salud se dejan a tu criterio: pueden ser necesarios para el caso (plazos, cantidades, incapacidad). Puedes cambiar el texto de la derecha.</p>` : ""}
-    ${huerfanas.length ? `<h3>Ya generalizados en este proyecto</h3>${huerfanas.map((g) => `<label class="contexto-fila"><input type="checkbox" data-ya="${esc(g.texto)}" checked><span class="contexto-cat">${esc(g.categoria || "")}</span><span class="contexto-de">${esc(g.texto)}</span><span class="contexto-flecha">→</span><span>${esc(g.reemplazo)}</span></label>`).join("")}<p class="nota">Desmarca uno para volver a dejarlo como estaba.</p>` : ""}`;
+      <p class="nota">Vienen marcados los datos que suelen identificar sin aportar nada al asunto (edad, municipio, familia, nacionalidad, rasgos y ser «la única» o «el más…» del entorno). Las fechas, los importes, el puesto y la salud se dejan a tu criterio: pueden ser necesarios para el caso (plazos, cantidades, incapacidad). Puedes cambiar el texto de la derecha.</p>` : ""}
+    ${huerfanas.length ? `<h3>Ya generalizados en este expediente</h3>${huerfanas.map((g) => `<label class="contexto-fila"><input type="checkbox" data-ya="${esc(g.texto)}" checked><span class="contexto-cat">${esc(g.categoria || "")}</span><span class="contexto-de">${esc(g.texto)}</span><span class="contexto-flecha">→</span><span>${esc(g.reemplazo)}</span></label>`).join("")}<p class="nota">Desmarca uno para volver a dejarlo como estaba.</p>` : ""}`;
   const marcados = () => r.hallazgos.filter((h, i) => $(`input[data-i="${i}"]`, cuerpo).checked);
   const contar = () => {
     const poner = marcados().filter((h) => !h.aplicada).length;
@@ -513,9 +527,9 @@ async function riesgoContexto(aid) {
   contar();
   boton.onclick = async () => {
     const poner = r.hallazgos.map((h, i) => ({ h, i })).filter(({ i }) => $(`input[data-i="${i}"]`, cuerpo).checked)
-      .map(({ h, i }) => ({ texto: h.texto, reemplazo: $(`input[data-r="${i}"]`, cuerpo).value.trim(), categoria: h.categoria }))
+      .map(({ h, i }) => ({ texto: h.original || h.texto, reemplazo: $(`input[data-r="${i}"]`, cuerpo).value.trim(), categoria: h.categoria }))
       .filter((x) => x.reemplazo);
-    const quitar = r.hallazgos.filter((h, i) => h.aplicada && !$(`input[data-i="${i}"]`, cuerpo).checked).map((h) => h.texto)
+    const quitar = r.hallazgos.filter((h, i) => h.aplicada && !$(`input[data-i="${i}"]`, cuerpo).checked).map((h) => h.original || h.texto)
       .concat($$("input[data-ya]", cuerpo).filter((x) => !x.checked).map((x) => x.dataset.ya));
     try {
       await api("POST", `/api/proyectos/${E.proyecto.id}/contexto/aplicar`, { archivo: aid, poner, quitar, conversacion: E.conversacion });
@@ -537,12 +551,12 @@ function nodoTapar(plan, mid, datos) {
   if (plan.estado) {
     d.classList.add("cerrado");
     d.innerHTML = `<h4>${esc(titulo)}</h4><p class="resultado">${plan.estado === "confirmado"
-      ? "Confirmado. La copia se está rehaciendo; el avance está en la pestaña Progreso." : "Descartado."}</p>`;
+      ? "Confirmado. La copia se está rehaciendo; el avance se ve en la lista de documentos." : "Descartado."}</p>`;
     return d;
   }
   d.innerHTML = `<h4>${esc(titulo)}</h4>
     <ul class="plan-archivos">${plan.datos.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
-    <p class="nota">Se añaden al registro del proyecto y se rehace la copia${plan.pagina ? ` (mencionas la página ${plan.pagina}, pero se tapan en todo el documento)` : ""}, también dentro de las imágenes. El original no se toca.</p>
+    <p class="nota">Se añaden a los datos del expediente y se rehace la copia${plan.pagina ? ` (mencionas la página ${plan.pagina}, pero se tapan en todo el documento)` : ""}, también dentro de las imágenes. El original no se toca.</p>
     <div class="plan-acciones">
       <button class="boton boton-principal" data-confirmar>Tapar y rehacer la copia</button>
       <button class="boton" data-descartar>Descartar</button>
@@ -582,7 +596,7 @@ function nodoPlan(plan, mid, datos) {
   if (estado) {
     d.classList.add("cerrado");
     d.innerHTML = `<h4>${esc(pags ? titulo : `Seudonimización de ${n} archivo${n === 1 ? "" : "s"}`)}</h4>
-      <p class="resultado">${estado === "confirmado" ? `Confirmada (${plan.perfil === "intensivo" ? "verificación intensiva" : "verificación estándar"}). El avance está en la pestaña Progreso.` : estado === "otro_proyecto" ? "Este plan era del proyecto de origen de la conversación. Si lo necesitas aquí, vuelve a pedirlo." : "Descartada."}</p>`;
+      <p class="resultado">${estado === "confirmado" ? `Confirmada (${plan.perfil === "intensivo" ? "revisión a fondo" : "revisión normal"}). El avance se ve en la lista de documentos.` : estado === "otro_proyecto" ? "Este plan era del expediente de origen de la conversación. Si lo necesitas aquí, vuelve a pedirlo." : "Descartada."}</p>`;
     return d;
   }
   const intensivo = plan.perfil === "intensivo";
@@ -593,10 +607,10 @@ function nodoPlan(plan, mid, datos) {
       </fieldset>`
       : `<ul class="plan-archivos">${plan.nombres.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`}
     <div class="plan-opciones">
-      <label class="opcion"><input type="radio" name="perfil-${mid}" value="estandar"${intensivo ? "" : " checked"}> <span>Verificación estándar</span></label>
-      <label class="opcion"><input type="radio" name="perfil-${mid}" value="intensivo"${intensivo ? " checked" : ""}> <span>Verificación intensiva (más lenta)</span></label>
+      <label class="opcion"><input type="radio" name="perfil-${mid}" value="estandar"${intensivo ? "" : " checked"}> <span>Revisión normal</span></label>
+      <label class="opcion"><input type="radio" name="perfil-${mid}" value="intensivo"${intensivo ? " checked" : ""}> <span>Revisión a fondo (más lenta)</span></label>
     </div>
-    <p class="nota">Se crean copias en la carpeta de resultados del proyecto, separadas en «Aprobados» y «Para revisar». Los originales no se tocan.</p>
+    <p class="nota">Las copias se guardan ${E.proyecto?.guardar_efectivo === "carpeta" ? "en la carpeta elegida para este expediente" : "junto a los originales, en una carpeta «Seudonimizados»"}. Los originales no se tocan.</p>
     <div class="plan-acciones">
       <button class="boton boton-principal" data-confirmar>${pags ? "Confirmar" : `Seudonimizar ${n} archivo${n === 1 ? "" : "s"}`}</button>
       <button class="boton" data-descartar>Descartar</button>
@@ -633,7 +647,7 @@ async function enviar(texto) {
     const c = await api("POST", `/api/proyectos/${E.proyecto.id}/conversaciones`);
     E.conversacion = c.id;
   }
-  if ($("#intensiva").checked && /seudonim|anonim/i.test(texto) && !/intensiv/i.test(texto)) texto += " (con verificación intensiva)";
+  if (fondo() && /seudonim|anonim/i.test(texto) && !/intensiv|a fondo/i.test(texto)) texto += " (con verificación intensiva)";
   E.enviando = true;
   $("#enviar").disabled = true;
   const hilo = $("#hilo");
@@ -649,7 +663,7 @@ async function enviar(texto) {
   try {
     const r = await fetch(E.conexion.base + `/api/conversaciones/${E.conversacion}/mensajes`, {
       method: "POST", headers: { "Content-Type": "application/json", "X-Seudonimo-Token": E.conexion.token },
-      body: JSON.stringify({ texto, modelo: $("#selector-modelo").value }),
+      body: JSON.stringify({ texto, modelo: modeloActual() }),
     });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Error ${r.status}`);
     const lector = r.body.getReader();
@@ -725,23 +739,66 @@ function inline(s) {
 // ------------------------------------------------------------------ panel: archivos
 
 function pintarArchivos() {
+  // Una sola lista: cada documento con su estado y, si ya está hecho, «Abrir copia» y «⋯»
   const p = E.proyecto;
+  if (!p) return;
   const el = $("#panel-archivos");
   const adm = p.archivos.filter((a) => a.admitido);
-  el.innerHTML = `
-    <div class="acciones-panel">
-      <button class="boton" data-accion="adjuntar-carpeta">Añadir carpeta</button>
-      <button class="boton" data-accion="adjuntar-archivos">Añadir archivos</button>
-      ${p.carpetas.length ? `<button class="boton-texto" data-accion="actualizar-carpetas" title="Volver a leer las carpetas">Actualizar</button>` : ""}
-    </div>
-    ${p.carpetas.length ? `<h3>Carpetas y archivos autorizados</h3>${p.carpetas.map((c) => `<div class="carpeta"><span>${esc(c.ruta)}</span><button class="boton-texto" data-quitar-carpeta="${c.id}" title="Quitar del proyecto (no borra nada del disco)">Quitar</button></div>`).join("")}` : `<p class="nota">Los archivos que añadas se leen desde su sitio; nunca se modifican ni se mueven. También puedes arrastrarlos a la ventana.</p>`}
-    ${p.archivos.length ? `<h3>${adm.length} de ${p.archivos.length} archivo${p.archivos.length === 1 ? "" : "s"} admitido${adm.length === 1 ? "" : "s"}</h3>
-      ${p.archivos.some((a) => ["sin_hallazgos", "revision", "parcial"].includes(a.estado)) ? `<button class="boton boton-principal ancho" data-accion="abrir-mesa">Abrir la mesa de revisión</button>` : ""}
-      ${p.archivos.map((a) => `<div class="archivo"><span class="nombre">${esc(a.rel)}</span><span class="chip ${esc(a.estado)}">${esc(ESTADOS[a.estado] || a.estado)}</span>${a.motivo ? `<span class="motivo">${esc(a.motivo)}</span>` : ""}${["sin_hallazgos", "revision", "parcial"].includes(a.estado) ? `<button class="boton-texto revisar" data-revisar="${a.id}">Revisar la copia</button>` : ""}</div>`).join("")}` : ""}
-    ${p.vigilar ? `<p class="nota vigilada">Carpeta vigilada: lo que llegue a las carpetas del proyecto se seudonimiza solo.</p>` : ""}
-    <div class="zona-soltar">Arrastra aquí archivos o carpetas</div>`;
+  const fuera = p.archivos.filter((a) => !a.admitido);
+  const R = E.resultados || { copias: [], carpetas: [], certificados: [] };
+  const copia = Object.fromEntries((R.copias || []).map((c) => [c.id, c]));
+  const vivos = Object.values(E.trabajos).filter(Boolean).filter((t) => (E.historial || []).some((h) => h.id === t.id));
+  const activos = vivos.filter((t) => ["pendiente", "procesando"].includes(t.estado));
   const pend = pendientes();
-  if (pend.length) el.insertAdjacentHTML("afterbegin", `<button class="boton boton-principal boton-grande ancho" data-accion="seudonimizar-pendientes">Seudonimizar ${pend.length === 1 ? "el documento pendiente" : "los " + pend.length + " documentos pendientes"}</button>`);
+  let html = "";
+  html += activos.sort((a, b) => b.id.localeCompare(a.id)).map((t) => `<div class="trabajo en-curso">
+      <div class="trabajo-cab"><b><i class="punto-vivo"></i> Seudonimizando ${t.docs.length === 1 ? "un documento" : t.docs.length + " documentos"} · ${Math.round(t.progreso * 100)} %</b><button class="boton-texto peligro" data-cancelar="${t.id}">Cancelar</button></div>
+      <div class="progreso"><i style="width:${Math.round(t.progreso * 100)}%"></i></div><div class="trabajo-msg">${esc(t.mensaje)}</div></div>`).join("");
+  if (pend.length && !activos.length) html += `<button class="boton boton-principal boton-grande ancho" data-accion="seudonimizar-pendientes">Seudonimizar ${pend.length === 1 ? "el documento pendiente" : "los " + pend.length + " documentos pendientes"}</button>`;
+  html += `<div class="docs-cab"><h3>Documentos${adm.length ? ` · ${adm.length}` : ""}</h3><button class="boton boton-chico" data-accion="menu-anadir" aria-haspopup="menu">+ Añadir</button></div>`;
+  if (!adm.length) {
+    html += `<div class="zona-soltar grande"><b>Arrastra aquí documentos o una carpeta</b><span>PDF, Word, Excel, PowerPoint, correos, imágenes… Los originales no se tocan.</span>
+      <div class="plan-acciones centrado"><button class="boton boton-principal" data-accion="adjuntar-carpeta">Añadir una carpeta</button><button class="boton" data-accion="adjuntar-archivos">Añadir archivos</button></div></div>`;
+  }
+  const orden = { revision: 0, procesando: 1, en_cola: 2, error: 3, interrumpido: 3, nuevo: 4, cancelado: 4, parcial: 5, sin_hallazgos: 6 };
+  html += adm.slice().sort((a, b) => (orden[a.estado] ?? 9) - (orden[b.estado] ?? 9) || a.rel.localeCompare(b.rel)).map((a) => {
+    const c = copia[a.id];
+    const estado = a.estado === "nuevo" ? "Pendiente" : a.estado === "revision" ? "Revísala antes de usarla" : a.estado === "parcial" ? "Copia de algunas páginas" : ESTADOS[a.estado] || a.estado;
+    return `<div class="resultado-doc">
+      <span class="punto ${esc(a.estado)}" aria-hidden="true"></span>
+      <div class="resultado-info"><b title="${esc(a.rel)}">${esc(a.rel.split(/[\\/]/).pop())}</b><span class="nota">${esc(estado)}${a.motivo && !c ? " · " + esc(a.motivo) : ""}</span></div>
+      ${c ? `<div class="botones-fila">
+        <button class="boton boton-chico" data-abrir="${esc(c.ruta)}">Abrir copia</button>
+        ${a.estado === "revision" ? `<button class="boton boton-chico aviso" data-revisar="${a.id}">Revisar</button>` : ""}
+        <button class="boton-texto mas-doc" data-menu-copia="${esc(c.ruta)}" data-doc="${a.id}" data-nombre="${esc(a.rel.split(/[\\/]/).pop())}" aria-label="Más opciones" title="Más opciones">⋯</button></div>` : ""}
+    </div>`;
+  }).join("");
+  if (fuera.length) html += `<details class="plegable"><summary>${fuera.length === 1 ? "Un archivo no se puede tratar" : fuera.length + " archivos no se pueden tratar"}</summary>
+    ${fuera.map((a) => `<div class="archivo"><span class="nombre">${esc(a.rel)}</span><span class="chip no_admitido">No admitido</span>${a.motivo ? `<span class="motivo">${esc(a.motivo)}</span>` : ""}</div>`).join("")}</details>`;
+  // dónde están las copias
+  if ((R.copias || []).length) {
+    const donde = p.guardar_efectivo === "carpeta" ? "en la carpeta que elegiste" : "junto a los originales, en «Seudonimizados»";
+    html += `<div class="pie-docs"><p class="nota">Las copias se guardan ${donde}.</p>
+      <div class="plan-acciones">${(R.carpetas || []).slice(0, 3).map((c) => `<button class="boton-texto" data-abrir="${esc(c)}" title="${esc(c)}">Abrir ${R.carpetas.length > 1 ? "«" + esc(c.split(/[\\/]/).slice(-2, -1)[0] || c) + "»" : "la carpeta"}</button>`).join("")}
+        ${R.copias.length > 1 ? `<button class="boton-texto" data-guardar-en="${esc(R.copias.map((c) => c.ruta).join("\n"))}">Guardar todas en…</button>` : ""}
+        ${(R.certificados || []).length ? `<button class="boton-texto" data-abrir="${esc(R.certificados[0].ruta)}" title="Certificado de la última seudonimización">Certificado</button>` : ""}</div></div>`;
+  }
+  if (p.vigilar) html += `<p class="nota vigilada">Carpeta vigilada: lo que llegue a las carpetas del expediente se seudonimiza solo.</p>`;
+  if (p.carpetas.length) html += `<details class="plegable"><summary>Carpetas y archivos del expediente</summary>
+    ${p.carpetas.map((c) => `<div class="carpeta"><span>${esc(c.ruta)}</span><button class="boton-texto" data-quitar-carpeta="${c.id}" title="Quitar del expediente (no borra nada del disco)">Quitar</button></div>`).join("")}
+    <button class="boton-texto" data-accion="actualizar-carpetas" title="Volver a leer las carpetas">Volver a leer las carpetas</button></details>`;
+  html += detalleTecnico(activos);
+  el.innerHTML = html;
+}
+
+async function expedienteDesde(rutas) {
+  // Sin expediente abierto: se propone uno con el nombre de la carpeta (o del primer archivo)
+  if (!rutas.length) return;
+  const nombre = rutas[0].replace(/[\\/]+$/, "").split(/[\\/]/).pop().replace(/\.[^.]+$/, "");
+  E.rutasPendientes = rutas;
+  abrirDialogoProyecto(false);
+  $("#form-proyecto").nombre.value = nombre;
+  $("#form-proyecto").nombre.select();
 }
 
 async function anadirRutas(rutas) {
@@ -750,7 +807,6 @@ async function anadirRutas(rutas) {
     await api("POST", `/api/proyectos/${E.proyecto.id}/carpetas`, { rutas });
     E.proyecto = await api("GET", `/api/proyectos/${E.proyecto.id}`);
     pintarArchivos();
-    mostrarPestana("archivos");
     if ($("#hilo .vacio")) pintarVacioProyecto();
   } catch (e) { alerta(e.message); }
 }
@@ -768,8 +824,9 @@ async function refrescarOperaciones() {
   for (const h of vivos) {
     try { E.trabajos[h.id] = await api("GET", `/api/trabajos/${h.id}`); } catch (e) { /* de una sesión anterior */ }
   }
-  pintarOperaciones();
   const hayActivos = Object.values(E.trabajos).some((t) => t && ["pendiente", "procesando"].includes(t.estado));
+  if (hayActivos) { try { E.proyecto = await api("GET", `/api/proyectos/${E.proyecto.id}`); } catch (e) { /* sigue */ } }
+  pintarArchivos();
   clearTimeout(E.sondeo);
   if (hayActivos) E.sondeo = setTimeout(async () => {
     const antes = Object.values(E.trabajos).filter((t) => t && ["pendiente", "procesando"].includes(t.estado)).length;
@@ -778,11 +835,9 @@ async function refrescarOperaciones() {
     if (despues < antes) {            // algún trabajo ha terminado
       E.proyecto = await api("GET", `/api/proyectos/${E.proyecto.id}`);
       pintarArchivos();
-      if (!$("#panel-revision").hidden) pintarRevision();
       // la tarjeta «Listo» llega como mensaje a la conversación desde la que se pidió
       if (E.conversacion && !E.enviando) await abrirConversacion(E.conversacion);
-      avisoFlotante("Seudonimización terminada: los documentos están en la pestaña Resultados.");
-      mostrarPestana("operaciones");
+      avisoFlotante("Seudonimización terminada: «Abrir copia» en la lista de documentos.");
     }
   }, 2000);
 }
@@ -799,51 +854,68 @@ function pistaDoc(d) {
   }).join("");
 }
 
-function pintarOperaciones() {
-  const el = $("#panel-operaciones");
-  const vivos = Object.values(E.trabajos).filter(Boolean).filter((t) => (E.historial || []).some((h) => h.id === t.id));
-  const activos = vivos.filter((t) => ["pendiente", "procesando"].includes(t.estado));
+function detalleTecnico(activos) {
   const terminados = (E.historial || []).filter((h) => !activos.some((v) => v.id === h.id));
-  const R = E.resultados || { copias: [], carpetas: [], certificados: [] };
+  if (!terminados.length) return "";
+  return `<details class="tecnico plegable"><summary>Detalle técnico de cada seudonimización</summary>` + terminados.map((h) => {
+    const t = E.trabajos[h.id];
+    return `<div class="trabajo">
+      <div class="trabajo-cab"><b>${esc(new Date((h.terminado || h.creado) * 1000).toLocaleString("es-ES"))} · revisión ${h.perfil === "intensivo" ? "a fondo" : "normal"}</b>${h.certificado ? `<button class="boton-texto" data-abrir="${esc(h.certificado)}">Certificado</button>` : ""}</div>
+      ${h.resumen ? `<p class="nota">${h.resumen.recuento.sin_hallazgos} listos · ${h.resumen.recuento.revision} para revisar · ${h.resumen.recuento.error} con error</p>` : `<p class="nota">${esc(ESTADOS[h.estado] || h.estado)}</p>`}
+      ${t && t.docs ? t.docs.map((d) => `<div class="doc"><div class="doc-cab"><span>${esc(d.rel)}${d.paginas && d.paginas.length ? ` <span class="nota">· ${d.solo_paginas ? "solo" : "repaso de"} ${d.paginas.join(", ")}</span>` : ""}</span><span class="chip ${esc(d.estado)}">${esc(ESTADOS[d.estado] || d.estado)}</span></div>
+        <div class="pista">${pistaDoc(d)}</div>${d.motivos && d.motivos.length ? `<ul class="doc-motivos">${d.motivos.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}</div>`).join("") : ""}
+    </div>`;
+  }).join("") + `<p class="leyenda">D = lectura del documento · V = comprobación de la copia. Dorado: encontró datos nuevos; verde: limpia; ámbar: quedan restos.</p></details>`;
+}
+
+function menuCopia(boton) {
+  const d = boton.dataset;
+  const aid = +d.doc || null;
+  abrirMenu(boton, [
+    { texto: `Mostrar en ${EXPLORADOR}`, accion: () => api("POST", "/api/mostrar", { ruta: d.menuCopia }) },
+    { texto: "Guardar en…", accion: () => guardarEn([d.menuCopia]) },
+    ...(aid ? [
+      { texto: "Revisar y tapar a mano", accion: () => abrirMesa(aid) },
+      { texto: "Riesgo por contexto", accion: () => riesgoContexto(aid) },
+      { texto: "Pedírselo al asistente…", accion: () => rellenar(`En «${d.nombre}», `) },
+    ] : []),
+  ]);
+}
+
+function menuExpediente(boton) {
   const p = E.proyecto;
-  let html = "";
-  // 1 · lo que está en marcha
-  html += activos.sort((a, b) => b.id.localeCompare(a.id)).map((t) => `<div class="trabajo">
-      <div class="trabajo-cab"><b>Seudonimizando ${t.docs.length === 1 ? "un documento" : t.docs.length + " documentos"}</b><button class="boton-texto peligro" data-cancelar="${t.id}">Cancelar</button></div>
-      <div class="progreso"><i style="width:${Math.round(t.progreso * 100)}%"></i></div><div class="trabajo-msg">${esc(t.mensaje)}</div></div>`).join("");
-  // 2 · los documentos seudonimizados
-  html += `<h3>Documentos seudonimizados</h3>`;
-  html += R.copias.length ? R.copias.map((c) => filaResultado(c)).join("")
-    + (R.copias.length > 1 ? `<div class="plan-acciones"><button class="boton" data-guardar-en="${esc(R.copias.map((c) => c.ruta).join("\n"))}">Guardar todos en…</button></div>` : "")
-    : `<p class="nota">Aquí aparecerán los documentos seudonimizados, con botones para abrirlos, verlos en ${EXPLORADOR} o guardarlos donde quieras.</p>`;
-  // 3 · dónde se guardan
-  const donde = p.guardar_efectivo === "carpeta"
-    ? `En la carpeta <code>${esc(p.salida_efectiva)}</code>.`
-    : `Junto a los originales, en una carpeta <b>«Seudonimizados»</b> dentro de la carpeta de cada documento. Los originales no se tocan.`;
-  html += `<h3>Dónde se guardan</h3><p class="nota">${donde} Cada copia lleva el nombre del original con «(seudonimizado)»; si hay que revisarla, «(seudonimizado - revisar)». Las versiones anteriores pasan a «Anteriores».</p>
-    <div class="plan-acciones">${R.carpetas.slice(0, 4).map((c) => `<button class="boton-texto" data-abrir="${esc(c)}" title="${esc(c)}">Abrir ${R.carpetas.length > 1 ? esc(c.split(/[\\/]/).slice(-2).join("/")) : "la carpeta"}</button>`).join("")}
-    <button class="boton-texto" data-accion="cambiar-destino">Cambiar dónde se guardan</button></div>
-    ${p.salida_sincronizada ? `<p class="aviso-campo">Esa carpeta parece sincronizada con la nube: mejor una carpeta local.</p>` : ""}`;
-  // 4 · certificados
-  if (R.certificados.length) html += `<h3>Certificados</h3>` + R.certificados.slice(0, 5).map((c) => `<div class="archivo"><span class="nombre">${esc(c.nombre)}</span><span class="botones-fila"><button class="boton-texto" data-abrir="${esc(c.ruta)}">Abrir</button><button class="boton-texto" data-guardar-en="${esc(c.ruta)}">Guardar en…</button></span></div>`).join("");
-  // 5 · el detalle técnico, plegado
-  if (terminados.length) {
-    html += `<details class="tecnico"><summary>Detalle técnico de cada seudonimización</summary>` + terminados.map((h) => {
-      const t = E.trabajos[h.id];
-      return `<div class="trabajo">
-        <div class="trabajo-cab"><b>${esc(new Date((h.terminado || h.creado) * 1000).toLocaleString("es-ES"))} · revisión ${h.perfil === "intensivo" ? "a fondo" : "normal"}</b>${h.certificado ? `<button class="boton-texto" data-abrir="${esc(h.certificado)}">Certificado</button>` : ""}</div>
-        ${h.resumen ? `<p class="nota">${h.resumen.recuento.sin_hallazgos} listos · ${h.resumen.recuento.revision} para revisar · ${h.resumen.recuento.error} con error</p>` : `<p class="nota">${esc(ESTADOS[h.estado] || h.estado)}</p>`}
-        ${t && t.docs ? t.docs.map((d) => `<div class="doc"><div class="doc-cab"><span>${esc(d.rel)}${d.paginas && d.paginas.length ? ` <span class="nota">· ${d.solo_paginas ? "solo" : "repaso de"} ${d.paginas.join(", ")}</span>` : ""}</span><span class="chip ${esc(d.estado)}">${esc(ESTADOS[d.estado] || d.estado)}</span></div>
-          <div class="pista">${pistaDoc(d)}</div>${d.motivos && d.motivos.length ? `<ul class="doc-motivos">${d.motivos.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}</div>`).join("") : ""}
-      </div>`;
-    }).join("") + `<p class="leyenda">D = lectura del documento · V = comprobación de la copia. Dorado: encontró datos nuevos; verde: limpia; ámbar: quedan restos.</p></details>`;
-  }
-  el.innerHTML = html;
+  const hayCopias = (E.resultados?.copias || []).length > 0;
+  abrirMenu(boton, [
+    { texto: "Ajustes del expediente", accion: () => abrirDialogoProyecto(true) },
+    ...(hayCopias ? [{ texto: "Revisar las copias y los datos tapados", accion: () => abrirMesa() }] : []),
+    ...(hayCopias ? [{ texto: "Copiar las copias para otra IA", accion: copiarParaIA }] : []),
+    { texto: "Poner los nombres en una respuesta de otra IA…", accion: abrirNombres },
+    ...(p.tabla === "cifrada" ? [{ texto: "Exportar la tabla de correspondencias…", accion: () => accion("exportar-tabla") }] : []),
+    { texto: "Nueva conversación", accion: nuevaConversacion },
+  ]);
+}
+
+function menuAjustes(boton) {
+  abrirMenu(boton, [
+    { texto: "Modelos y dictado", accion: abrirModelos },
+    { texto: "Listas del despacho (nunca / siempre tapar)", accion: abrirListas },
+    ...(E.proyecto ? [{ texto: "Ajustes de este expediente", accion: () => abrirDialogoProyecto(true) }] : []),
+    { texto: "Buscar actualizaciones", accion: acercaDe },
+  ]);
+}
+
+function rellenar(texto) {
+  const e = $("#entrada");
+  if ($("#redactor").hidden) return;
+  e.value = texto;
+  e.dispatchEvent(new Event("input"));
+  e.focus();
+  e.setSelectionRange(e.value.length, e.value.length);
 }
 
 // ------------------------------------------------------------------ panel: revisión
 
-async function pintarRevision(el = $("#panel-revision"), enMesa = false) {
+async function pintarRevision(el = $("#mesa-datos"), enMesa = true) {
   if (!E.proyecto) return;
   let r;
   try { r = enMesa && MESA.registro ? MESA.registro : await api("GET", `/api/proyectos/${E.proyecto.id}/registro`); }
@@ -854,7 +926,7 @@ async function pintarRevision(el = $("#panel-revision"), enMesa = false) {
   const hayCopias = (E.proyecto.archivos || []).some((a) => ["sin_hallazgos", "revision"].includes(a.estado));
   el.innerHTML = `
     ${enMesa ? `<h3>Datos tapados</h3>` : `${hayCopias ? `<button class="boton boton-principal ancho" data-accion="abrir-mesa">Abrir la mesa de revisión</button>` : ""}
-    <p class="nota">Todos los datos que el proyecto tapa, con su marcador. En la mesa de revisión ves cada copia entera y puedes tapar lo que se haya escapado seleccionándolo con el ratón.</p>`}
+    <p class="nota">Todos los datos que el expediente tapa, con su marcador. En la mesa de revisión ves cada copia entera y puedes tapar lo que se haya escapado seleccionándolo con el ratón.</p>`}
     <form class="form-anadir">
       <input name="texto" placeholder="Dato que se ha escapado" required>
       <button class="boton">Añadir</button>
@@ -864,7 +936,7 @@ async function pintarRevision(el = $("#panel-revision"), enMesa = false) {
       <button class="boton" data-accion="regenerar" ${r.entidades.length ? "" : "disabled"}>Rehacer copias</button>
       ${E.proyecto.tabla === "cifrada" && r.entidades.length ? `<button class="boton-texto" data-accion="exportar-tabla">Exportar tabla…</button>` : ""}
     </div>`}
-    ${r.entidades.length ? "" : `<p class="nota">Todavía no hay datos detectados en este proyecto.</p>`}
+    ${r.entidades.length ? "" : `<p class="nota">Todavía no hay datos detectados en este expediente.</p>`}
     <div class="grupos-datos">${Object.entries(grupos).map(([tipo, ents]) => `<div class="grupo-tipo"><h3>${esc(r.etiquetas[tipo] || tipo)} · ${ents.filter((e) => e.activo).length}</h3>
       ${ents.map((e) => {
         const visible = !e.activo || e.conservado || e.en_lista;
@@ -935,8 +1007,9 @@ function abrirDialogoProyecto(editar) {
   const d = $("#dlg-proyecto");
   const f = $("#form-proyecto");
   d.className = "dialogo " + (editar ? "edicion" : "alta");
-  $("#dlg-proyecto-titulo").textContent = editar ? "Ajustes del proyecto" : "Nuevo proyecto";
-  $("#guardar-proyecto").textContent = editar ? "Guardar" : "Crear proyecto";
+  $("#dlg-proyecto-titulo").textContent = editar ? "Ajustes del expediente" : "Nuevo expediente";
+  $("#guardar-proyecto").textContent = editar ? "Guardar" : "Crear expediente";
+  $("#mas-opciones").open = !!editar;
   const sel = $("#proyecto-modelo");
   const nombres = E.modelos.map((m) => m.nombre);
   const actual = editar ? E.proyecto.modelo : E.modeloDefecto;
@@ -956,15 +1029,16 @@ function abrirDialogoProyecto(editar) {
   $("#aviso-salida").hidden = !(editar && p.salida_sincronizada);
   d.showModal();
   d.onclose = async () => {
-    if (d.returnValue !== "aceptar") return;
+    if (d.returnValue !== "aceptar") { E.rutasPendientes = null; return; }
     const datos = { nombre: f.nombre.value.trim(), modelo: sel.value, perfil: f.perfil.value, tabla: f.tabla.value,
       plantilla: f.plantilla.value, conservar: $$("#conservar-tipos input:checked").map((x) => x.value),
       guardar: f.guardar.value, salida: f.guardar.value === "carpeta" ? (f.salida.value || null) : null };
     if (datos.guardar === "carpeta" && !datos.salida) { alerta("Elige la carpeta donde quieres guardar las copias, o marca «Junto a los originales».", "Falta la carpeta"); return; }
+    if (!editar && E.rutasPendientes) datos.rutas = E.rutasPendientes;
     try {
       if (editar) {
         if (E.proyecto.tabla === "cifrada" && datos.tabla === "sin_tabla") {
-          const ok = await confirmar("Dejar de guardar la tabla", "Se destruirá la tabla de correspondencias cifrada de este proyecto. No se podrá deshacer la seudonimización de las copias ya generadas.", "Destruir la tabla");
+          const ok = await confirmar("Dejar de guardar la tabla", "Se destruirá la tabla de correspondencias cifrada de este expediente. No se podrá deshacer la seudonimización de las copias ya generadas.", "Destruir la tabla");
           if (!ok) return;
         }
         Object.assign(datos, { instrucciones: f.instrucciones.value, logos: f.logos.checked ? 1 : 0, vigilar: f.vigilar.checked });
@@ -973,9 +1047,12 @@ function abrirDialogoProyecto(editar) {
         await abrirProyecto(E.proyecto.id, E.conversacion);
       } else {
         datos.temporal = f.temporal.checked;
+        const rutas = datos.rutas; delete datos.rutas;
+        E.rutasPendientes = null;
         const nuevo = await api("POST", "/api/proyectos", datos);
         await refrescarProyectos();
         await abrirProyecto(nuevo.id);
+        if (rutas && rutas.length) await anadirRutas(rutas);
       }
     } catch (e) { alerta(e.message); }
   };
@@ -1033,11 +1110,10 @@ async function verLicencia(nombre) {
   } catch (e) { alerta(e.message); }
 }
 
-function mostrarPestana(n) {
-  $$(".pestana").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.pestana === n)));
-  for (const k of ["archivos", "operaciones", "revision"]) $(`#panel-${k}`).hidden = k !== n;
-  if (n === "revision") pintarRevision();
-  if (n === "operaciones") refrescarOperaciones();
+function mostrarPestana() {
+  // ya no hay pestañas: la lista de documentos lo enseña todo (en pantallas estrechas, se abre)
+  $("#app").classList.remove("sin-panel");
+  return refrescarOperaciones();
 }
 
 // ------------------------------------------------------------------ dictado por voz
@@ -1219,7 +1295,7 @@ const RE_MARCA = /\[(?:[A-Z_]+_\d{1,4}|LOGO O SELLO)\]/g;
 async function abrirMesa(aid) {
   if (!E.proyecto) return;
   MESA.copias = await api("GET", `/api/proyectos/${E.proyecto.id}/copias`);
-  if (!MESA.copias.length) return alerta("Todavía no hay copias seudonimizadas en este proyecto. Pide primero que seudonimice los documentos.", "Nada que revisar");
+  if (!MESA.copias.length) return alerta("Todavía no hay copias seudonimizadas en este expediente. Pide primero que seudonimice los documentos.", "Nada que revisar");
   $("#mesa").hidden = false;
   document.body.classList.add("con-mesa");
   await cargarRegistroMesa();
@@ -1230,13 +1306,12 @@ async function abrirMesa(aid) {
 
 function cerrarMesa() {
   if (MESA.pendientes && !MESA.trabajo) {
-    return confirmar("Cambios sin aplicar", `Has hecho ${MESA.pendientes} cambio${MESA.pendientes === 1 ? "" : "s"} que aún no están en las copias. Se aplicarán cuando las rehagas, aquí o en «Datos tapados».`, "Cerrar de todas formas")
+    return confirmar("Cambios sin aplicar", `Has hecho ${MESA.pendientes} cambio${MESA.pendientes === 1 ? "" : "s"} que aún no están en las copias. Se aplicarán cuando las rehagas.`, "Cerrar de todas formas")
       .then((ok) => { if (ok) { MESA.pendientes = 0; cerrarMesa(); } });
   }
   $("#mesa").hidden = true;
   $("#mesa-pop").hidden = true;
   document.body.classList.remove("con-mesa");
-  if (!$("#panel-revision").hidden) pintarRevision();
 }
 
 async function cargarRegistroMesa() {
@@ -1346,7 +1421,7 @@ function popTapar() {
   $("#mesa-pop").innerHTML = `<div class="pop-titulo">Tapar «${esc(s.length > 60 ? s.slice(0, 57) + "…" : s)}»</div>
     <div class="fila-campo"><select id="pop-tipo">${Object.entries(etiquetas).map(([k, v]) => `<option value="${k}"${k === tipo ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>
     <button type="button" class="boton boton-principal" id="pop-tapar">Tapar</button></div>
-    <p class="nota">Se tapará en todas las copias del proyecto al rehacerlas.</p>`;
+    <p class="nota">Se tapará en todas las copias del expediente al rehacerlas.</p>`;
   situarPop(sel.getRangeAt(0).getBoundingClientRect());
   $("#pop-tapar").onclick = async () => {
     try {
@@ -1399,16 +1474,16 @@ function pintarRepaso() {
 async function repasarPaginas() {
   const pags = [...MESA.paginas].sort((a, b) => a - b);
   if (!pags.length || !MESA.actual) return;
-  const intensiva = $("#intensiva").checked;
+  const intensiva = fondo();
   const ok = await confirmar(pags.length === 1 ? `Repasar la página ${pags[0]}` : `Repasar las páginas ${pags.join(", ")}`,
-    `El modelo vuelve a buscar datos solo en ${pags.length === 1 ? "esa página" : "esas páginas"}${intensiva ? ", con verificación intensiva" : ""}. Lo que encuentre se añade a los datos del proyecto y la copia se regenera y se verifica entera. Tarda bastante menos que repasar el documento completo.`, "Repasar");
+    `El modelo vuelve a buscar datos solo en ${pags.length === 1 ? "esa página" : "esas páginas"}${intensiva ? ", con revisión a fondo" : ""}. Lo que encuentre se añade a los datos del expediente y la copia se regenera y se verifica entera. Tarda bastante menos que repasar el documento completo.`, "Repasar");
   if (!ok) return;
   await rehacer([MESA.actual.id], pags);
   MESA.paginas.clear();
 }
 
 async function rehacer(ids, paginas) {
-  const perfil = $("#intensiva").checked ? "intensivo" : "estandar";
+  const perfil = fondo() ? "intensivo" : "estandar";
   const cuerpo = paginas ? { archivos: ids, paginas, perfil, conversacion: E.conversacion }
     : { archivos: ids, solo_ciclos: true, perfil, conversacion: E.conversacion };
   const r = await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, cuerpo);
@@ -1477,7 +1552,7 @@ async function copiarParaIA() {
 
 function abrirNombres() {
   const d = $("#dlg-nombres");
-  if (E.proyecto.tabla !== "cifrada") return alerta("Este proyecto no guarda la tabla de correspondencias, así que no se pueden recuperar los datos. Actívala en «Ajustes del proyecto» para los próximos trabajos.", "Sin tabla");
+  if (E.proyecto.tabla !== "cifrada") return alerta("Este expediente no guarda la tabla de correspondencias, así que no se pueden recuperar los datos. Actívala en «Ajustes del expediente» para los próximos trabajos.", "Sin tabla");
   $("#nombres-entrada").value = "";
   $("#nombres-salida").value = "";
   $("#nombres-resumen").textContent = "";
@@ -1493,7 +1568,7 @@ function abrirNombres() {
         $("#nombres-salida").value = r.texto;
         $("#nombres-copiar").disabled = false;
         $("#nombres-resumen").textContent = `${r.sustituidos} marcador${r.sustituidos === 1 ? "" : "es"} sustituido${r.sustituidos === 1 ? "" : "s"} (${r.distintos} dato${r.distintos === 1 ? "" : "s"} distinto${r.distintos === 1 ? "" : "s"}).`
-          + (r.desconocidos.length ? ` No son de este proyecto: ${r.desconocidos.join(", ")}.` : "");
+          + (r.desconocidos.length ? ` No son de este expediente: ${r.desconocidos.join(", ")}.` : "");
       } catch (e) { $("#nombres-resumen").textContent = e.message; }
     }, 250);
   };
@@ -1649,12 +1724,12 @@ async function actualizarAhora() {
   const r = ACTUALIZACION;
   if (!r) return;
   if (!r.instalable) {
-    const ok = await confirmar(`Actualizar a la ${r.version}`, "Se abrirá la descarga en el navegador. Después, instálala igual que la primera vez: tus proyectos y datos se conservan.", "Descargar");
+    const ok = await confirmar(`Actualizar a la ${r.version}`, "Se abrirá la descarga en el navegador. Después, instálala igual que la primera vez: tus expedientes y datos se conservan.", "Descargar");
     if (ok) await api("POST", "/api/actualizacion/descargar", { url: r.descarga || PAGINA_VERSIONES });
     return;
   }
   const ok = await confirmar(`Actualizar a la ${r.version}`,
-    "Seudónimo descargará la versión nueva desde GitHub, comprobará que el archivo es el publicado, se cerrará y volverá a abrirse ya actualizado. Tarda un minuto. Tus proyectos, conversaciones y datos se conservan.", "Actualizar ahora");
+    "Seudónimo descargará la versión nueva desde GitHub, comprobará que el archivo es el publicado, se cerrará y volverá a abrirse ya actualizado. Tarda un minuto. Tus expedientes, conversaciones y datos se conservan.", "Actualizar ahora");
   if (!ok) return;
   try { await api("POST", "/api/actualizacion/instalar"); } catch (e) { return alerta(e.message); }
   const banda = $("#banda-actualizacion");
@@ -1673,22 +1748,15 @@ async function actualizarAhora() {
 
 function enlazar() {
   $("#nuevo-proyecto").onclick = () => abrirDialogoProyecto(false);
-  $("#ajustes-proyecto").onclick = () => abrirDialogoProyecto(true);
-  $("#abrir-modelos").onclick = abrirModelos;
+  $("#ajustes").onclick = (ev) => { ev.stopPropagation(); menuAjustes($("#ajustes")); };
+  $("#menu-expediente").onclick = (ev) => { ev.stopPropagation(); menuExpediente($("#menu-expediente")); };
   $("#version").onclick = () => acercaDe().catch((e) => alerta(e.message));
   $("#cola").onclick = async () => {
     const pid = +$("#cola").dataset.colaProyecto;
     if (pid && (!E.proyecto || E.proyecto.id !== pid)) await abrirProyecto(pid);
     mostrarPestana("operaciones");
   };
-  $("#abrir-listas").onclick = () => abrirListas().catch((e) => alerta(e.message));
-  $("#otra-ia").onclick = (ev) => {
-    ev.stopPropagation();
-    abrirMenu($("#otra-ia"), [
-      { texto: "Copiar las copias seudonimizadas", accion: copiarParaIA },
-      { texto: "Poner los nombres en una respuesta…", accion: abrirNombres },
-    ]);
-  };
+
   $("#mesa-cerrar").onclick = cerrarMesa;
   $("#mesa-repasar").onclick = () => repasarPaginas().catch((e) => alerta(e.message));
   $("#mesa-rehacer-uno").onclick = () => MESA.actual && rehacer([MESA.actual.id]).catch((e) => alerta(e.message));
@@ -1703,13 +1771,7 @@ function enlazar() {
     app.classList.toggle("sin-panel");
     $("#alternar-panel").setAttribute("aria-expanded", String(!app.classList.contains("sin-panel")));
   };
-  $$(".pestana").forEach((b) => (b.onclick = () => mostrarPestana(b.dataset.pestana)));
-  $("#selector-modelo").onchange = async (ev) => {
-    if (E.proyecto) { await api("PATCH", `/api/proyectos/${E.proyecto.id}`, { modelo: ev.target.value }); E.proyecto.modelo = ev.target.value; pintarAviso(); }
-  };
-  $("#intensiva").onchange = async (ev) => {
-    if (E.proyecto) await api("PATCH", `/api/proyectos/${E.proyecto.id}`, { perfil: ev.target.checked ? "intensivo" : "estandar" });
-  };
+
   const entrada = $("#entrada");
   entrada.addEventListener("input", () => { entrada.style.height = "auto"; entrada.style.height = Math.min(entrada.scrollHeight, 240) + "px"; });
   entrada.addEventListener("keydown", (ev) => {
@@ -1722,8 +1784,7 @@ function enlazar() {
     // ⌘/Ctrl + Mayúsculas + D: empezar o terminar de dictar
     if ((ev.metaKey || ev.ctrlKey) && ev.shiftKey && ev.key.toLowerCase() === "d" && !$("#redactor").hidden) { ev.preventDefault(); alternarDictado().catch((e) => alerta(e.message)); }
   });
-  $("#adjuntar-archivos").onclick = async () => anadirRutas(await elegir("archivos"));
-  $("#adjuntar-carpeta").onclick = async () => anadirRutas(await elegir("carpeta"));
+
   $("#elegir-salida").onclick = async () => {
     const r = await elegir("carpeta_salida");
     if (r[0]) { $("#form-proyecto").salida.value = r[0]; $("#form-proyecto").guardar.value = "carpeta"; }
@@ -1756,6 +1817,8 @@ function enlazar() {
       else if (d.conv) await abrirConversacion(+d.conv);
       else if (d.nuevaConv) await nuevaConversacion();
       else if (d.sugerencia) enviar(d.sugerencia);
+      else if (d.rellenar) rellenar(d.rellenar);
+      else if (d.menuCopia) { ev.stopPropagation(); menuCopia(b); }
       else if (d.quitarCarpeta) { await api("DELETE", `/api/proyectos/${E.proyecto.id}/carpetas/${d.quitarCarpeta}`); E.proyecto = await api("GET", `/api/proyectos/${E.proyecto.id}`); pintarArchivos(); }
       else if (d.cancelar) { if (await confirmar("Cancelar la seudonimización", "Los documentos ya terminados se exportan; el resto queda cancelado.", "Cancelar el trabajo")) { await api("POST", `/api/trabajos/${d.cancelar}/cancelar`); refrescarOperaciones(); } }
       else if (d.abrir) await api("POST", "/api/abrir", { ruta: d.abrir });
@@ -1803,34 +1866,39 @@ async function accion(a) {
     seguir();
   }
   else if (a === "abrir-mesa") await abrirMesa();
-  else if (a === "ver-resultados") { await refrescarOperaciones(); mostrarPestana("operaciones"); }
+  else if (a === "ver-resultados") await mostrarPestana();
+  else if (a === "menu-anadir") abrirMenu($('[data-accion="menu-anadir"]'), [
+    { texto: "Una carpeta…", accion: async () => anadirRutas(await elegir("carpeta")) },
+    { texto: "Archivos sueltos…", accion: async () => anadirRutas(await elegir("archivos")) },
+  ]);
+  else if (a === "expediente-desde-carpeta") await expedienteDesde(await elegir("carpeta"));
   else if (a === "cambiar-destino") abrirDialogoProyecto(true);
   else if (a === "seudonimizar-pendientes") {
     const pend = pendientes();
     if (!pend.length) return;
-    const fondo = $("#intensiva").checked;
     const ok = await confirmar(pend.length === 1 ? "Seudonimizar el documento" : `Seudonimizar ${pend.length} documentos`,
-      `Revisión ${fondo ? "a fondo (más lenta)" : "normal"}. Las copias se guardan ${E.proyecto.guardar_efectivo === "carpeta" ? "en " + E.proyecto.salida_efectiva : "junto a los originales, en una carpeta «Seudonimizados»"}; los originales no se tocan.`, "Seudonimizar");
+      `Revisión ${fondo() ? "a fondo (más lenta)" : "normal"}. Las copias se guardan ${E.proyecto.guardar_efectivo === "carpeta" ? "en " + E.proyecto.salida_efectiva : "junto a los originales, en una carpeta «Seudonimizados»"}; los originales no se tocan.`, "Seudonimizar");
     if (!ok) return;
     if (!E.conversacion) {
-      const c = await api("POST", `/api/proyectos/${E.proyecto.id}/conversaciones`);
+      const c = await api("POST", `/api/proyectos/${E.proyecto.id}/conversaciones`, { titulo: `Seudonimización · ${new Date().toLocaleDateString("es-ES")}` });
       E.conversacion = c.id;
     }
-    await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, { archivos: pend.map((x) => x.id), perfil: fondo ? "intensivo" : "estandar", conversacion: E.conversacion });
+    await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, { archivos: pend.map((x) => x.id), perfil: fondo() ? "intensivo" : "estandar", conversacion: E.conversacion });
     E.proyecto = await api("GET", `/api/proyectos/${E.proyecto.id}`);
     pintarArchivos();
     await refrescarConversaciones();
     mostrarPestana("operaciones");
     await refrescarOperaciones();
-    avisoFlotante("Seudonimizando… al terminar verás aquí los documentos, y un resumen en el chat.");
+    if ($("#hilo .vacio")) pintarVacioProyecto();
+    avisoFlotante("Seudonimizando… el avance se ve en la lista de documentos; al terminar tendrás un resumen en el chat.");
   }
   else if (a === "regenerar") {
     const ultimos = (E.proyecto.archivos || []).filter((x) => ["sin_hallazgos", "revision"].includes(x.estado));
-    if (!ultimos.length) { alerta("Todavía no hay copias generadas en este proyecto.", "Nada que regenerar"); return; }
-    const ok = await confirmar("Regenerar copias", `Se vuelven a generar y verificar ${ultimos.length} copia${ultimos.length === 1 ? "" : "s"} con los datos revisados, en una carpeta de resultados nueva, con verificación ${$("#intensiva").checked ? "intensiva" : "estándar"}. No se repite la detección.`, "Regenerar");
+    if (!ultimos.length) { alerta("Todavía no hay copias generadas en este expediente.", "Nada que regenerar"); return; }
+    const ok = await confirmar("Regenerar copias", `Se vuelven a generar y verificar ${ultimos.length} copia${ultimos.length === 1 ? "" : "s"} con los datos revisados, en una carpeta de resultados nueva, con revisión ${fondo() ? "a fondo" : "normal"}. No se repite la detección.`, "Regenerar");
     if (!ok) return;
     await api("POST", `/api/proyectos/${E.proyecto.id}/trabajos`, { archivos: ultimos.map((x) => x.id), solo_ciclos: true,
-      perfil: $("#intensiva").checked ? "intensivo" : "estandar", conversacion: E.conversacion });
+      perfil: fondo() ? "intensivo" : "estandar", conversacion: E.conversacion });
     mostrarPestana("operaciones");
   }
   else if (a === "exportar-tabla") {
