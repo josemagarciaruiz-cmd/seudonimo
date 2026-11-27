@@ -49,6 +49,12 @@ Pulsa **«Abrir la mesa de revisión»** (en Documentos o en Datos tapados) o «
 
 El panel de la derecha se ensancha arrastrando su borde izquierdo (doble clic para alternar entre estrecho y ancho).
 
+## Riesgo por contexto (opcional)
+
+Una copia sin nombres ni DNI puede seguir identificando a alguien por la suma de datos indirectos: «jefa de almacén de 54 años en el centro de Arrecife, de baja desde el 12 de febrero por un trastorno adaptativo». Si quieres revisarlo, pulsa **«Riesgo por contexto»** junto a la copia (pestaña Resultados, tarjeta «Listo» o mesa de revisión).
+
+El modelo local lee la copia ya seudonimizada y muestra el nivel de riesgo, los datos indirectos que quedan y una versión más general de cada uno. Vienen marcados los que suelen identificar sin aportar nada al asunto (edad, municipio, familia, nacionalidad, rasgos); las fechas, los importes, el puesto y la salud quedan a tu criterio, porque pueden ser necesarios (plazos, cantidades, incapacidad). Puedes cambiar el texto propuesto. Al pulsar «Generalizar y rehacer la copia» se cambian en la copia y se vuelve a verificar. Las generalizaciones valen para todo el proyecto y se pueden quitar desde el mismo cuadro. Si no pulsas el botón, la aplicación no hace nada de esto.
+
 ## Usar las copias con otra IA
 
 En **«Usar con otra IA»** (arriba):

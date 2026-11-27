@@ -33,6 +33,7 @@ import threading
 import time
 import traceback
 
+import contexto
 import formatos
 import motor
 import registro as registro_mod
@@ -268,7 +269,9 @@ class TrabajoDocumento:
         ciclo = ciclo0
         while ciclo < ciclo0 + lim["max_ciclos"]:
             self.comprobar()
-            mapa = self.registro.mapa()
+            # los datos personales del registro y, si el profesional lo ha pedido, las generalizaciones
+            # de datos indirectos (riesgo por contexto)
+            mapa = self.registro.mapa() + contexto.como_mapa(lim.get("generalizaciones") or [])
             version = self.registro.version
             dest = os.path.join(self.carpeta, "ciclo-%d" % ciclo)
             shutil.rmtree(dest, ignore_errors=True)

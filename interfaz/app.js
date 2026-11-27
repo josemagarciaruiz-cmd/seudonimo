@@ -403,7 +403,7 @@ function filaResultado(c) {
       <button class="boton-texto" data-abrir="${esc(c.ruta)}">Abrir</button>
       <button class="boton-texto" data-mostrar="${esc(c.ruta)}">Mostrar en ${EXPLORADOR}</button>
       <button class="boton-texto" data-guardar-en="${esc(c.ruta)}">Guardar en…</button>
-      ${c.id ? `<button class="boton-texto" data-revisar="${c.id}">Revisar</button>` : ""}
+      ${c.id ? `<button class="boton-texto" data-revisar="${c.id}">Revisar</button><button class="boton-texto" data-contexto="${c.id}" title="Opcional: buscar datos indirectos que, juntos, podrían identificar a la persona">Riesgo por contexto</button>` : ""}
     </div></div>`;
 }
 
@@ -472,6 +472,60 @@ async function guardarEn(rutas) {
   if (!r[0]) return;
   const res = await api("POST", "/api/guardar_en", { rutas, destino: r[0] });
   avisoFlotante(`${res.copiados.length === 1 ? "Guardado" : res.copiados.length + " archivos guardados"} en ${res.carpeta}`);
+}
+
+// ------------------------------------------------------------------ riesgo por contexto (opcional)
+
+const NIVELES = { bajo: "Riesgo bajo", medio: "Riesgo medio", alto: "Riesgo alto" };
+
+async function riesgoContexto(aid) {
+  const d = $("#dlg-contexto");
+  const cuerpo = $("#contexto-cuerpo");
+  const boton = $("#contexto-aplicar");
+  boton.disabled = true;
+  $("#contexto-nota").textContent = "";
+  cuerpo.innerHTML = `<p class="cargando">Leyendo la copia con el modelo local para buscar datos indirectos… En un documento largo puede tardar un par de minutos.</p>`;
+  if (!d.open) d.showModal();
+  let r;
+  try { r = await api("POST", `/api/proyectos/${E.proyecto.id}/contexto/${aid}/analizar`); }
+  catch (e) { cuerpo.innerHTML = `<p class="aviso-campo">${esc(e.message)}</p>`; return; }
+  const filas = r.hallazgos.map((h, i) => `<label class="contexto-fila">
+      <input type="checkbox" data-i="${i}"${h.aplicada || h.recomendado ? " checked" : ""}>
+      <span class="contexto-cat">${esc(h.nombre_categoria)}</span>
+      <span class="contexto-de">${esc(h.texto)}${h.veces > 1 ? ` <span class="nota">×${h.veces}</span>` : ""}</span>
+      <span class="contexto-flecha" aria-hidden="true">→</span>
+      <input class="contexto-a" data-r="${i}" value="${esc(h.generalizado)}" aria-label="Cómo queda">
+    </label>`).join("");
+  const huerfanas = (r.aplicadas || []).filter((g) => !r.hallazgos.some((h) => h.aplicada && h.texto.toLowerCase() === g.texto.toLowerCase()));
+  cuerpo.innerHTML = `<div class="contexto-nivel ${esc(r.nivel)}"><b>${NIVELES[r.nivel]}</b> · ${esc(r.documento)}<p>${esc(r.explicacion)}</p></div>
+    ${r.hallazgos.length ? `<div class="contexto-lista">${filas}</div>
+      <p class="nota">Vienen marcados los datos que suelen identificar sin aportar nada al asunto (edad, municipio, familia, nacionalidad, rasgos). Las fechas, los importes, el puesto y la salud se dejan a tu criterio: pueden ser necesarios para el caso (plazos, cantidades, incapacidad). Puedes cambiar el texto de la derecha.</p>` : ""}
+    ${huerfanas.length ? `<h3>Ya generalizados en este proyecto</h3>${huerfanas.map((g) => `<label class="contexto-fila"><input type="checkbox" data-ya="${esc(g.texto)}" checked><span class="contexto-cat">${esc(g.categoria || "")}</span><span class="contexto-de">${esc(g.texto)}</span><span class="contexto-flecha">→</span><span>${esc(g.reemplazo)}</span></label>`).join("")}<p class="nota">Desmarca uno para volver a dejarlo como estaba.</p>` : ""}`;
+  const marcados = () => r.hallazgos.filter((h, i) => $(`input[data-i="${i}"]`, cuerpo).checked);
+  const contar = () => {
+    const poner = marcados().filter((h) => !h.aplicada).length;
+    const quitar = r.hallazgos.filter((h, i) => h.aplicada && !$(`input[data-i="${i}"]`, cuerpo).checked).length + $$("input[data-ya]", cuerpo).filter((x) => !x.checked).length;
+    const cambios = r.hallazgos.filter((h, i) => h.aplicada && $(`input[data-i="${i}"]`, cuerpo).checked && $(`input[data-r="${i}"]`, cuerpo).value !== h.generalizado).length;
+    boton.disabled = !(poner || quitar || cambios);
+    $("#contexto-nota").textContent = poner || quitar || cambios ? `${poner ? poner + " para generalizar" : ""}${poner && quitar ? " · " : ""}${quitar ? quitar + " para quitar" : ""}` : "";
+  };
+  cuerpo.oninput = contar;
+  contar();
+  boton.onclick = async () => {
+    const poner = r.hallazgos.map((h, i) => ({ h, i })).filter(({ i }) => $(`input[data-i="${i}"]`, cuerpo).checked)
+      .map(({ h, i }) => ({ texto: h.texto, reemplazo: $(`input[data-r="${i}"]`, cuerpo).value.trim(), categoria: h.categoria }))
+      .filter((x) => x.reemplazo);
+    const quitar = r.hallazgos.filter((h, i) => h.aplicada && !$(`input[data-i="${i}"]`, cuerpo).checked).map((h) => h.texto)
+      .concat($$("input[data-ya]", cuerpo).filter((x) => !x.checked).map((x) => x.dataset.ya));
+    try {
+      await api("POST", `/api/proyectos/${E.proyecto.id}/contexto/aplicar`, { archivo: aid, poner, quitar, conversacion: E.conversacion });
+      d.close();
+      avisoFlotante("Rehaciendo la copia con los datos generalizados…");
+      if (!$("#mesa").hidden) cerrarMesa();
+      mostrarPestana("operaciones");
+      await refrescarOperaciones();
+    } catch (e) { alerta(e.message); }
+  };
 }
 
 function nodoTapar(plan, mid, datos) {
@@ -1639,6 +1693,7 @@ function enlazar() {
   $("#mesa-repasar").onclick = () => repasarPaginas().catch((e) => alerta(e.message));
   $("#mesa-rehacer-uno").onclick = () => MESA.actual && rehacer([MESA.actual.id]).catch((e) => alerta(e.message));
   $("#mesa-rehacer-todas").onclick = () => rehacer(MESA.copias.map((c) => c.id)).catch((e) => alerta(e.message));
+  $("#mesa-contexto").onclick = () => MESA.actual && riesgoContexto(MESA.actual.id).catch((e) => alerta(e.message));
   $("#mesa-abrir").onclick = () => MESA.actual && api("POST", "/api/abrir", { ruta: MESA.actual.ruta }).catch((e) => alerta(e.message));
   $("#mesa-texto").addEventListener("mouseup", () => setTimeout(popTapar, 0));
   $("#mesa-hoja").addEventListener("scroll", () => { $("#mesa-pop").hidden = true; });
@@ -1705,6 +1760,7 @@ function enlazar() {
       else if (d.cancelar) { if (await confirmar("Cancelar la seudonimización", "Los documentos ya terminados se exportan; el resto queda cancelado.", "Cancelar el trabajo")) { await api("POST", `/api/trabajos/${d.cancelar}/cancelar`); refrescarOperaciones(); } }
       else if (d.abrir) await api("POST", "/api/abrir", { ruta: d.abrir });
       else if (d.mostrar) await api("POST", "/api/mostrar", { ruta: d.mostrar });
+      else if (d.contexto) await riesgoContexto(+d.contexto);
       else if (d.guardarEn) await guardarEn(d.guardarEn.split("\n"));
       else if (d.descartarEnt || d.reactivarEnt) {
         await api("POST", `/api/proyectos/${E.proyecto.id}/registro/${d.descartarEnt || d.reactivarEnt}/${d.descartarEnt ? "descartar" : "reactivar"}`);

@@ -97,6 +97,7 @@
       <button class="boton boton-principal" id="mesa-repasar" hidden>Repasar páginas</button>
       <button class="boton" id="mesa-rehacer-uno" disabled>Rehacer esta copia</button>
       <button class="boton boton-principal" id="mesa-rehacer-todas" disabled>Rehacer todas</button>
+      <button class="boton-texto" id="mesa-contexto" title="Buscar datos indirectos que, juntos, podrían identificar a la persona">Riesgo por contexto</button>
       <button class="boton-texto" id="mesa-abrir" title="Abrir la copia con su programa">Abrir la copia</button>
       <button class="boton" id="mesa-cerrar">Cerrar</button>
     </div>
@@ -217,6 +218,20 @@
     <div class="dialogo-pie"><span class="hueco"></span>
       <button value="no" class="boton">Cancelar</button>
       <button value="si" class="boton boton-principal">Mover</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-contexto" class="dialogo dialogo-ancho">
+  <form method="dialog" id="form-contexto">
+    <h2>Riesgo de identificación por contexto</h2>
+    <p class="nota">Aunque no aparezcan nombres ni DNI, la suma de datos indirectos (edad, puesto, municipio, salud, fechas…) puede permitir que alguien del entorno reconozca a la persona. Marca lo que quieras generalizar: se cambia en la copia por una expresión más general y la copia se rehace. Es opcional y no cambia nada si no lo aplicas.</p>
+    <div id="contexto-cuerpo"></div>
+    <div class="dialogo-pie">
+      <span class="nota" id="contexto-nota"></span>
+      <span class="hueco"></span>
+      <button value="cancelar" class="boton">Cerrar sin cambios</button>
+      <button type="button" class="boton boton-principal" id="contexto-aplicar" disabled>Generalizar y rehacer la copia</button>
     </div>
   </form>
 </dialog>

@@ -394,3 +394,19 @@ body.soltando .zona-soltar { border-color: var(--oro); color: var(--oro-hondo); 
 .vacio.guia > .nota { text-align: center; }
 details.avanzadas > summary { cursor: pointer; font-weight: 600; margin-bottom: 6px; }
 details.avanzadas[open] { padding-bottom: 4px; }
+
+/* 0.5.0 · riesgo por contexto */
+.contexto-nivel { border-radius: var(--r-medio); padding: 10px 14px; margin: 8px 0 12px; background: var(--carton); }
+.contexto-nivel p { margin: 4px 0 0; color: var(--tinta-2); }
+.contexto-nivel.bajo { background: var(--verde-claro); }
+.contexto-nivel.medio { background: var(--ambar-claro); }
+.contexto-nivel.alto { background: var(--rojo-claro); }
+.contexto-nivel.alto b { color: var(--rojo); }
+.contexto-lista { max-height: 46vh; overflow: auto; border: 1px solid var(--linea-suave); border-radius: var(--r-medio); }
+.contexto-fila { display: grid; grid-template-columns: 22px 150px 1fr 16px 1fr; gap: 8px; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--linea-suave); font-size: 13px; }
+.contexto-fila:last-child { border-bottom: 0; }
+.contexto-cat { color: var(--tinta-3); font-size: 12px; }
+.contexto-de { overflow-wrap: anywhere; }
+.contexto-a { width: 100%; font: inherit; padding: 4px 6px; border: 1px solid var(--linea); border-radius: var(--r-pequeno); background: var(--papel); color: var(--tinta); }
+.contexto-flecha { color: var(--tinta-3); }
+.cargando { color: var(--tinta-2); padding: 18px 0; }

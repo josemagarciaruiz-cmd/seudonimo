@@ -1,5 +1,10 @@
 # Cambios
 
+## 0.5.0 · 27 de noviembre de 2026
+
+- **Riesgo por contexto (opcional, con un botón).** En cada documento seudonimizado (pestaña Resultados, tarjeta «Listo» y mesa de revisión), «Riesgo por contexto» busca en la copia los datos indirectos que, juntos, podrían permitir reconocer a la persona aunque no aparezca su nombre: edad, fechas de hechos personales, salario exacto, municipio, puesto concreto, centro de trabajo, salud, situación familiar, nacionalidad, representación sindical y rasgos singulares (considerando 26 RGPD). Da un nivel de riesgo (bajo, medio o alto) con la explicación y propone una versión más general de cada dato («54 años» → «entre 50 y 59 años»; «Arrecife» → «un municipio de Lanzarote»). El profesional marca lo que quiere generalizar, puede cambiar el texto propuesto y la copia se rehace. Si no se pulsa, no cambia nada.
+- Las generalizaciones valen para todo el proyecto (la misma persona en otros documentos) y se pueden quitar desde el mismo cuadro.
+
 ## 0.4.2 · 27 de noviembre de 2026
 
 - **La comprobación final busca caras en la copia.** En cada ciclo, después de generar la copia, el detector vuelve a buscar caras desde cero en sus páginas (PDF) o imágenes (Word, PowerPoint y Excel). Si encuentra alguna que se escapó, el ciclo siguiente la tapa en ese sitio; si sigue viéndola donde ya se tapó, el documento queda «Para revisar» con el motivo, en vez de darse por bueno.

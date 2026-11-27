@@ -103,6 +103,7 @@ class Gestor:
                                        destino=destino, al_terminar=self._terminado, guardar=guardar,
                                        proyecto=proyecto["nombre"])
         lote.ajustes["solo_ciclos"] = solo_ciclos
+        lote.ajustes["generalizaciones"] = generalizaciones(proyecto)
         self.vivos[tid] = lote
         self.meta[tid] = {"proyecto": proyecto["id"], "conversacion": conversacion, "creado": time.time(),
                           "tabla": proyecto["tabla"]}
@@ -199,6 +200,15 @@ def texto_listo(lote):
     if n_err:
         partes.append("%d con error" % n_err)
     return "**Seudonimización terminada:** %s." % (", ".join(partes) or "sin documentos")
+
+
+def generalizaciones(proyecto):
+    """Datos indirectos que el profesional ha decidido generalizar en este proyecto (riesgo por contexto)."""
+    import json
+    try:
+        return [g for g in json.loads(proyecto.get("generalizaciones") or "[]") if g.get("texto") and g.get("reemplazo")]
+    except ValueError:
+        return []
 
 
 def modo_guardar(proyecto):

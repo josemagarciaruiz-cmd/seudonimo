@@ -36,6 +36,7 @@ import actualizar  # noqa: E402
 import almacen as almacen_mod  # noqa: E402
 import asistente  # noqa: E402
 import cifrado  # noqa: E402
+import contexto  # noqa: E402
 import formatos  # noqa: E402
 import herramientas  # noqa: E402
 import instalacion  # noqa: E402
@@ -465,19 +466,69 @@ def tapar_y_rehacer(pid):
     for x in datos:
         reg.anadir_manual(x, tipo, a["id"])
     trabajos.guardar_registro(pid, p["tabla"])
+    tid = _rehacer(p, a, d.get("perfil"), d.get("conversacion"))
+    return jsonify(id=tid, estado=GESTOR.estado(tid))
+
+
+def _rehacer(p, a, perfil=None, conversacion=None):
+    """Rehace la copia de un documento con el mismo alcance que la última (entera o solo unas páginas)."""
     paginas = None
     if a.get("estado") == "parcial":          # la última copia era de solo unas páginas: se repite igual
-        for t in ALM.trabajos(pid):
+        for t in ALM.trabajos(p["id"]):
             doc = next((x for x in ((t.get("resumen") or {}).get("documentos") or []) if x.get("id") == a["id"]), None)
             if doc is not None:
                 paginas = doc.get("paginas")
                 break
-    perfil = d.get("perfil") if d.get("perfil") in multipasada.PERFILES else p["perfil"]
+    perfil = perfil if perfil in multipasada.PERFILES else p["perfil"]
     modelo = p.get("modelo") or ALM.ajuste("modelo_defecto", motor.MODELO)
     ya_tratado = a.get("estado") in ("sin_hallazgos", "revision")
-    tid = GESTOR.lanzar(p, [a], perfil, modelo, d.get("conversacion"), solo_ciclos=ya_tratado and not paginas,
-                        paginas={a["id"]: paginas} if paginas else None, solo_paginas=bool(paginas))
-    return jsonify(id=tid, estado=GESTOR.estado(tid))
+    return GESTOR.lanzar(p, [a], perfil, modelo, conversacion, solo_ciclos=ya_tratado and not paginas,
+                         paginas={a["id"]: paginas} if paginas else None, solo_paginas=bool(paginas))
+
+
+# ---------------------------------------------------------------- riesgo por contexto (opcional)
+
+@app.post("/api/proyectos/<int:pid>/contexto/<int:aid>/analizar")
+def analizar_contexto(pid, aid):
+    """Solo cuando el profesional pulsa «Riesgo por contexto»: busca en la copia seudonimizada los
+    datos indirectos que, juntos, podrían identificar a la persona, y propone cómo generalizarlos."""
+    p = _proyecto(pid)
+    c = _copias(pid).get(aid)
+    if not c:
+        return jsonify(error="Ese documento todavía no tiene una copia seudonimizada."), 400
+    texto = _texto_copia(c)
+    modelo = p.get("modelo") or ALM.ajuste("modelo_defecto", motor.MODELO)
+    gens = trabajos.generalizaciones(p)
+    try:
+        r = contexto.analizar(texto, modelo, aplicadas=gens)
+    except Exception as e:  # noqa
+        return jsonify(error="No se ha podido analizar: %s" % str(e)[:200]), 500
+    r["aplicadas"] = gens
+    r["documento"] = c["copia"]
+    return jsonify(r)
+
+
+@app.post("/api/proyectos/<int:pid>/contexto/aplicar")
+def aplicar_contexto(pid):
+    """Guarda las generalizaciones que el profesional ha elegido (y quita las que ha desmarcado) y
+    rehace la copia del documento. Valen para todo el proyecto: la misma persona en otros documentos."""
+    p = _proyecto(pid)
+    d = _json()
+    a = next((x for x in ALM.archivos(pid) if x["id"] == d.get("archivo") and x["admitido"]), None)
+    if not a:
+        return jsonify(error="Ese documento ya no está en el proyecto."), 400
+    gens = {motor.clave(g["texto"]): g for g in trabajos.generalizaciones(p)}
+    for q in d.get("quitar") or []:
+        gens.pop(motor.clave(str(q)), None)
+    for g in d.get("poner") or []:
+        t = re.sub(r"\s+", " ", str(g.get("texto") or "")).strip()
+        r = re.sub(r"\s+", " ", str(g.get("reemplazo") or "")).strip()
+        if 2 <= len(t) <= 200 and 1 <= len(r) <= 120 and "[" not in t:
+            gens[motor.clave(t)] = {"texto": t, "reemplazo": r, "categoria": g.get("categoria") or "otro"}
+    ALM.actualizar_proyecto(pid, generalizaciones=json.dumps(list(gens.values()), ensure_ascii=False))
+    p = _proyecto(pid)
+    tid = _rehacer(p, a, d.get("perfil"), d.get("conversacion"))
+    return jsonify(id=tid, estado=GESTOR.estado(tid), generalizaciones=len(gens))
 
 
 @app.get("/api/trabajos/activos")

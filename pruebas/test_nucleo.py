@@ -384,3 +384,35 @@ def test_verificacion_de_caras_y_segundo_ciclo():
     s2 = os.path.join(d, "s2.docx")
     formatos.aplicar(ruta, s2, ".docx", [], {"logos": False, "extra_medios": medios})
     assert not formatos.caras_en(s2, ".docx")
+
+
+def test_riesgo_por_contexto_reglas_modelo_y_generalizacion():
+    import contexto
+    import proveedores
+    texto = ("[PERSONA_001], de 54 años, trabaja como jefa de almacén en el centro de Arrecife desde el "
+             "3 de marzo de 2015 con un salario de 1.832,45 €. Tiene una antigüedad de 11 años. "
+             "Está de baja desde el 12/02/2026 por un trastorno adaptativo.")
+    r = {(h["categoria"], h["texto"]) for h in contexto.por_reglas(texto)}
+    assert ("edad", "54 años") in r and ("fecha", "3 de marzo de 2015") in r and ("fecha", "12/02/2026") in r
+    assert ("importe", "1.832,45 €") in r and not any(t == "11 años" for _, t in r)
+
+    class Falso:
+        def estructurado(self, modelo, mensajes, esquema):
+            return {"datos": [{"texto": "jefa de almacén", "categoria": "puesto", "generalizado": "mando intermedio"},
+                              {"texto": "Arrecife", "categoria": "lugar", "generalizado": "un municipio de Lanzarote"},
+                              {"texto": "trastorno adaptativo", "categoria": "salud", "generalizado": "un proceso de salud mental"},
+                              {"texto": "inventado por el modelo", "categoria": "otro", "generalizado": "x"},
+                              {"texto": "[PERSONA_001]", "categoria": "otro", "generalizado": "alguien"}]}
+    antes = proveedores.actual
+    proveedores.actual = lambda: Falso()
+    try:
+        a = contexto.analizar(texto)
+    finally:
+        proveedores.actual = antes
+    textos = {h["texto"] for h in a["hallazgos"]}
+    assert {"jefa de almacén", "Arrecife", "trastorno adaptativo", "54 años"} <= textos
+    assert "inventado por el modelo" not in textos and "[PERSONA_001]" not in textos
+    assert a["nivel"] == "alto"
+    mapa = contexto.como_mapa([{"texto": "54 años", "reemplazo": "entre 50 y 59 años"},
+                               {"texto": "Arrecife", "reemplazo": "un municipio de Lanzarote"}])
+    assert motor.reemplazar_texto(texto, mapa).startswith("[PERSONA_001], de entre 50 y 59 años, trabaja como jefa de almacén en el centro de un municipio de Lanzarote")
