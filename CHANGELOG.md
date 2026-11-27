@@ -1,5 +1,10 @@
 # Cambios
 
+## 0.3.6 · 27 de noviembre de 2026
+
+- El asistente encuentra el archivo aunque el modelo escriba su nombre con alguna letra de menos o sin tildes, y si el proyecto tiene un solo archivo entiende «el documento». En la batería de pruebas, un «seudonimiza solo la página 3» fallaba por eso.
+- Avisos de adjuntos y fotos de WhatsApp en singular o plural según corresponda.
+
 ## 0.3.5 · 27 de noviembre de 2026
 
 - **Seudonimizar solo unas páginas.** Si pides «seudonimiza solo la página 6», la copia es un PDF con únicamente esa página, seudonimizada y verificada. El plan del chat deja elegir entre «Solo esas páginas» y «Documento completo» (repasar esas páginas dentro del documento ya seudonimizado). En la lista de documentos, el archivo aparece como «Copia de algunas páginas».

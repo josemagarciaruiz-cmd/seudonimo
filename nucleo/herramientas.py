@@ -11,6 +11,7 @@ un PLAN que la interfaz muestra con su alcance y que el usuario confirma.
 
 El texto de los documentos se entrega al modelo envuelto como DATOS NO CONFIABLES."""
 import os
+import re
 
 import correo
 import formatos
@@ -83,6 +84,17 @@ def _resolver(archivos, ref):
     if len(parciales) == 1:
         return parciales[0]
     if not parciales:
+        # el modelo a veces copia mal el nombre (una letra de menos, sin tildes, otro paréntesis):
+        # se busca el más parecido, y si solo hay un archivo, «el documento» es ese
+        import difflib
+        norma = lambda s: re.sub(r"[^a-z0-9]+", " ", motor.clave(s or "")).strip()
+        objetivo = norma(ref)
+        puntos = sorted(((difflib.SequenceMatcher(None, objetivo, norma(a["rel"] or a["nombre"])).ratio(), a) for a in archivos),
+                        key=lambda x: -x[0])
+        if puntos and puntos[0][0] >= 0.8 and (len(puntos) == 1 or puntos[0][0] - puntos[1][0] >= 0.05):
+            return puntos[0][1]
+        if len(archivos) == 1:
+            return archivos[0]
         raise ErrorHerramienta("No hay ningún archivo en el proyecto que se llame «%s»." % ref)
     raise ErrorHerramienta("Hay %d archivos que coinciden con «%s»: %s. Pide al usuario que concrete." % (
         len(parciales), ref, "; ".join(a["rel"] for a in parciales[:8])))

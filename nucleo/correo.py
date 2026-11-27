@@ -111,21 +111,31 @@ def es_chat_zip(ruta):
         return False
 
 
+def _adjuntos(n):
+    if not n:
+        return ""
+    if n == 1:
+        return " Su adjunto no se ha tratado: añádelo aparte si hace falta."
+    return " Sus %d adjuntos no se han tratado: añádelos aparte si hacen falta." % n
+
+
 def a_texto(ruta, carpeta):
     """Convierte el correo o el chat a .txt en la carpeta de trabajo. Devuelve (ruta, aviso)."""
     ext = os.path.splitext(ruta)[1].lower()
     aviso = None
     if ext == ".eml":
         texto, adj = eml_a_texto(ruta)
-        aviso = "El correo se entrega como texto (.txt)." + (" Sus %d adjunto(s) no se han tratado: añádelos aparte si hacen falta." % len(adj) if adj else "")
+        aviso = "El correo se entrega como texto (.txt)." + _adjuntos(len(adj))
     elif ext == ".msg":
         texto, adj = msg_a_texto(ruta)
-        aviso = "El correo de Outlook se entrega como texto (.txt)." + (" Sus %d adjunto(s) no se han tratado: añádelos aparte si hacen falta." % len(adj) if adj else "")
+        aviso = "El correo de Outlook se entrega como texto (.txt)." + _adjuntos(len(adj))
     elif ext == ".zip":
         texto, otros = chat_de_zip(ruta)
         if texto is None:
             raise ErrorCorreo("El .zip no contiene un chat exportado de WhatsApp.")
-        aviso = "Se ha tratado el texto del chat." + (" Las %d foto(s), audio(s) o archivo(s) del .zip no se han tratado." % otros if otros else "")
+        aviso = "Se ha tratado el texto del chat." + (
+            " Las fotos, audios u otros archivos del .zip (%d) no se han tratado." % otros if otros > 1 else
+            " La foto, audio u otro archivo que trae el .zip no se ha tratado." if otros == 1 else "")
     else:
         raise ErrorCorreo("Formato de correo no admitido: %s" % ext)
     if not texto.strip():
