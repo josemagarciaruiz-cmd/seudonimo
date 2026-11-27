@@ -46,10 +46,20 @@ ESQUEMAS = [
             "perfil": {"type": "string", "enum": ["estandar", "intensivo"],
                        "description": "«intensivo» = verificación intensiva: más ciclos y un modelo auditor en cada verificación"},
             "paginas": {"type": "array", "items": {"type": "integer"},
-                        "description": "Solo si el usuario se refiere a páginas concretas de UN PDF: números de página, empezando en 1."},
+                        "description": "Solo si el usuario se refiere a partes concretas de UN documento: páginas de un PDF o de un Word, diapositivas de un PowerPoint u hojas de un Excel. Números empezando en 1."},
             "solo_paginas": {"type": "boolean",
                              "description": "true si quiere una copia con SOLO esas páginas («seudonimiza solo la página 6», «sácame la página 6 seudonimizada»); false si quiere repasar esas páginas dentro del documento completo ya seudonimizado («repasa la página 6»)."}},
             "required": ["archivos"]}}},
+    {"type": "function", "function": {
+        "name": "tapar",
+        "description": "Cuando el usuario dice que en una copia ya seudonimizada se ha quedado a la vista algún dato y pide taparlo («en la página 2 se ve el apellido Rodríguez, tápalo», «tapa también josemaria.ai»). Prepara un plan que añade esos datos al registro del proyecto y rehace la copia tapándolos en todo el documento, también dentro de las imágenes. NO lo ejecuta: el usuario lo confirma.",
+        "parameters": {"type": "object", "properties": {
+            "archivo": {"type": "string", "description": "Documento del proyecto al que se refiere"},
+            "datos": {"type": "array", "items": {"type": "string"},
+                      "description": "Cada dato que hay que tapar, copiado tal como lo escribe el usuario (sin comillas), por ejemplo [\"Rodríguez\", \"josemaria.ai\"]"},
+            "tipo": {"type": "string", "enum": motor.TIPOS, "description": "Tipo del dato si está claro (PERSONA para nombres y apellidos); si no, OTRO"},
+            "pagina": {"type": "integer", "description": "Página que menciona el usuario, si la menciona"}},
+            "required": ["archivo", "datos"]}}},
     {"type": "function", "function": {
         "name": "verificar_documento",
         "description": "Audita un archivo del proyecto que YA está seudonimizado (por esta aplicación o por otra vía): busca los datos originales conocidos del proyecto, aplica las reglas fijas e inspecciona metadatos, comentarios, cambios controlados y objetos ocultos. No modifica nada.",
@@ -64,7 +74,7 @@ ESQUEMAS = [
 ]
 
 NOMBRES = {e["function"]["name"] for e in ESQUEMAS}
-CONFIRMACION = {"seudonimizar"}
+CONFIRMACION = {"seudonimizar", "tapar"}
 
 
 class ErrorHerramienta(Exception):
@@ -124,6 +134,17 @@ def ejecutar(nombre, args, ctx):
         a = _resolver(archivos, args.get("archivo"))
         ficha = {"archivo": a["rel"], "formato": a["ext"], "tamano_kb": round((a["tamano"] or 0) / 1024),
                  "admitido": bool(a["admitido"]), "estado": a["estado"]}
+        if a["ext"] in formatos.ZIP and os.path.isfile(a["ruta"]):
+            import paginas_office
+            n = paginas_office.numero(a["ruta"], a["ext"])
+            if n:
+                ficha[formatos.unidad(a["ext"], True)] = n
+            if formatos.ZIP[a["ext"]] == "docx" and n == 1:
+                try:
+                    if paginas_office.word_sin_paginas(a["ruta"]):
+                        ficha["aviso"] = "Este Word no guarda dónde empieza cada página: no se pueden pedir páginas sueltas."
+                except Exception:  # noqa
+                    pass
         if a["ext"] == ".pdf" and os.path.isfile(a["ruta"]):
             try:
                 with pdfdoc.abrir(a["ruta"]) as d:
@@ -171,7 +192,11 @@ def ejecutar(nombre, args, ctx):
             a = elegidos[0]
             tratado = a.get("estado") in ("sin_hallazgos", "revision", "parcial")
             solo = bool(args["solo_paginas"]) if isinstance(args.get("solo_paginas"), bool) else not tratado
+            if a["ext"] not in formatos.ZIP and a["ext"] != ".pdf" and a["ext"] not in formatos.CONVERTIBLES:
+                raise ErrorHerramienta("Este tipo de archivo no tiene páginas: hay que seudonimizarlo entero.")
+            ext_final = formatos.CONVERTIBLES.get(a["ext"], a["ext"])
             return {"plan": True, "accion": "paginas", "perfil": perfil, "archivos": [a["id"]],
+                    "unidad": formatos.unidad(ext_final), "unidades": formatos.unidad(ext_final, True),
                     "nombres": [a["rel"]], "paginas": sorted(set(paginas)), "solo_paginas": solo,
                     "parametros": multipasada.PERFILES[perfil],
                     "mensaje": ("Plan preparado: copia con solo esas páginas." if solo else
@@ -180,6 +205,26 @@ def ejecutar(nombre, args, ctx):
         return {"plan": True, "accion": "seudonimizar", "perfil": perfil, "archivos": [a["id"] for a in elegidos],
                 "nombres": [a["rel"] for a in elegidos], "parametros": multipasada.PERFILES[perfil],
                 "mensaje": "Plan preparado: el usuario debe confirmarlo en la aplicación antes de ejecutarse."}
+
+    if nombre == "tapar":
+        a = _resolver(admitidos, args.get("archivo"))
+        crudos = args.get("datos") or []
+        if isinstance(crudos, str):
+            crudos = [crudos]
+        datos, vistos = [], set()
+        for x in crudos:
+            t = re.sub(r"\s+", " ", str(x or "")).strip().strip("\"'«»“”")
+            if 2 <= len(t) <= 120 and motor.clave(t) not in vistos:
+                vistos.add(motor.clave(t))
+                datos.append(t)
+        if not datos:
+            raise ErrorHerramienta("Dime exactamente qué palabras hay que tapar.")
+        tipo = args.get("tipo") if args.get("tipo") in motor.TIPOS else "OTRO"
+        pagina = args.get("pagina") if isinstance(args.get("pagina"), int) and args.get("pagina") > 0 else None
+        perfil = pr.get("perfil") or "estandar"
+        return {"plan": True, "accion": "tapar", "perfil": perfil, "archivos": [a["id"]], "nombres": [a["rel"]],
+                "datos": datos[:20], "tipo": tipo, "pagina": pagina, "parametros": multipasada.PERFILES[perfil],
+                "mensaje": "Plan preparado: tapar %d dato(s) y rehacer la copia. El usuario debe confirmarlo en la aplicación." % len(datos[:20])}
 
     if nombre == "verificar_documento":
         import tempfile

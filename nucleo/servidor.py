@@ -436,6 +436,41 @@ def lanzar_trabajo(pid):
     return jsonify(id=tid, estado=GESTOR.estado(tid))
 
 
+@app.post("/api/proyectos/<int:pid>/tapar")
+def tapar_y_rehacer(pid):
+    """Plan «tapar» del chat, confirmado: añade los datos que indica el usuario al registro y
+    rehace la copia de ese documento con el mismo alcance que la última (entera o solo unas páginas)."""
+    p = _proyecto(pid)
+    d = _json()
+    a = next((x for x in ALM.archivos(pid) if x["id"] == d.get("archivo") and x["admitido"]), None)
+    if not a:
+        return jsonify(error="Ese documento ya no está en el proyecto."), 400
+    if not os.path.isfile(a["ruta"]):
+        return jsonify(error="El documento ya no está en su carpeta: %s" % a["rel"]), 400
+    datos = [re.sub(r"\s+", " ", str(x or "")).strip() for x in (d.get("datos") or [])]
+    datos = [x for x in datos if 2 <= len(x) <= 120][:20]
+    if not datos:
+        return jsonify(error="No hay ningún dato que tapar."), 400
+    tipo = d.get("tipo") if d.get("tipo") in motor.TIPOS else "OTRO"
+    reg = trabajos.registro(pid, p["tabla"])
+    for x in datos:
+        reg.anadir_manual(x, tipo, a["id"])
+    trabajos.guardar_registro(pid, p["tabla"])
+    paginas = None
+    if a.get("estado") == "parcial":          # la última copia era de solo unas páginas: se repite igual
+        for t in ALM.trabajos(pid):
+            doc = next((x for x in ((t.get("resumen") or {}).get("documentos") or []) if x.get("id") == a["id"]), None)
+            if doc is not None:
+                paginas = doc.get("paginas")
+                break
+    perfil = d.get("perfil") if d.get("perfil") in multipasada.PERFILES else p["perfil"]
+    modelo = p.get("modelo") or ALM.ajuste("modelo_defecto", motor.MODELO)
+    ya_tratado = a.get("estado") in ("sin_hallazgos", "revision")
+    tid = GESTOR.lanzar(p, [a], perfil, modelo, d.get("conversacion"), solo_ciclos=ya_tratado and not paginas,
+                        paginas={a["id"]: paginas} if paginas else None, solo_paginas=bool(paginas))
+    return jsonify(id=tid, estado=GESTOR.estado(tid))
+
+
 @app.get("/api/trabajos/activos")
 def trabajos_activos():
     """Lo que está en marcha y en cola en TODOS los proyectos (la cola es única: un trabajo cada vez)."""
@@ -623,7 +658,9 @@ def texto_copia(pid, aid):
             escapados.append({"ini": m.start(), "fin": m.end(), "marcador": e["marcador"]})
             if len(escapados) > 500:
                 break
-    return jsonify(dict(c, texto=texto, escapados=escapados, paginas=cortes if len(paginas) > 1 else []))
+    ext = os.path.splitext(c["ruta"])[1].lower()
+    return jsonify(dict(c, texto=texto, escapados=escapados, paginas=cortes if len(paginas) > 1 else [],
+                        unidad=formatos.unidad(ext), unidades=formatos.unidad(ext, True)))
 
 
 def _texto_para_ia(pid, ids=None):

@@ -3,6 +3,7 @@
 import os
 import sys
 import tempfile
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nucleo"))
 os.environ.setdefault("SEUDONIMO_DATOS", tempfile.mkdtemp())
@@ -155,3 +156,75 @@ def test_recortar_pdf_solo_unas_paginas():
         assert False, "debería fallar"
     except formatos.ErrorFormato as e:
         assert "7 páginas" in str(e)
+
+
+def test_escritura_fallida_no_bloquea_la_base():
+    import sqlite3
+    import threading
+    import almacen
+    ruta = os.path.join(tempfile.mkdtemp(), "b.sqlite3")
+    alm = almacen.Almacen(ruta)
+    error = []
+
+    def hilo():   # como un trabajo que escribe en un proyecto que ya no existe
+        try:
+            alm._x("INSERT INTO archivos(proyecto, carpeta, ruta, nombre) VALUES (?,?,?,?)", (999, 999, "x", "x"))
+        except sqlite3.Error as e:
+            error.append(e)
+        alm._q("SELECT 1")          # el hilo sigue vivo con su conexión, como el gestor de trabajos
+        evento.wait(5)
+
+    evento = threading.Event()
+    t = threading.Thread(target=hilo)
+    t.start()
+    time.sleep(0.3)
+    otra = sqlite3.connect(ruta, timeout=1)
+    otra.execute("CREATE TABLE IF NOT EXISTS prueba(x)")    # fallaría con «database is locked»
+    otra.commit()
+    evento.set()
+    t.join()
+    assert error
+
+
+def test_colegiado_y_webs():
+    hallados = {(e["tipo"], e["texto"]) for e in motor.detectar_regex(
+        "Graduado Social nº 88. Colegiada nº 1234. Visita josemaria.ai o www.despacho-ejemplo.es/contacto. "
+        "Importe 88,50 €. Sede en sede.seg-social.gob.es y www.boe.es. Escribe a ana@josemaria.ai")}
+    assert ("COLEGIADO", "nº 88") in hallados and ("COLEGIADO", "Colegiada nº 1234") in hallados
+    assert ("WEB", "josemaria.ai") in hallados and ("WEB", "www.despacho-ejemplo.es/contacto") in hallados
+    assert not any("seg-social" in t or "boe.es" in t for _, t in hallados)
+    assert ("EMAIL", "ana@josemaria.ai") in hallados
+    mapa = [{"texto": "nº 88", "tipo": "COLEGIADO", "marcador": "[COLEGIADO_001]"}]
+    assert motor.reemplazar_texto("nº 88 y 88,50 €", mapa) == "[COLEGIADO_001] y 88,50 €"
+
+
+def test_partes_de_office_y_recorte_sin_restos():
+    import zipfile
+    import pytest
+    docx = pytest.importorskip("docx")
+    openpyxl = pytest.importorskip("openpyxl")
+    pptx = pytest.importorskip("pptx")
+    import formatos
+    d = tempfile.mkdtemp()
+    w = docx.Document()
+    for i, t in enumerate(["Uno Ana Ruiz Gil", "Dos Pedro Sanz López", "Tres Lucía Ferrer Gil"]):
+        if i:
+            w.add_page_break()
+        w.add_paragraph(t)
+    w.save(os.path.join(d, "w.docx"))
+    p = pptx.Presentation()
+    for t in ["Uno Ana", "Dos Pedro Sanz", "Tres Lucía"]:
+        p.slides.add_slide(p.slide_layouts[1]).shapes.title.text = t
+    p.save(os.path.join(d, "p.pptx"))
+    wb = openpyxl.Workbook()
+    wb.active["A1"] = "Uno"
+    wb.create_sheet("B")["A1"] = "Pedro Sanz López"
+    wb.create_sheet("C")["A1"] = "Uno"
+    wb.save(os.path.join(d, "x.xlsx"))
+    for nombre in ("w.docx", "p.pptx", "x.xlsx"):
+        ruta, ext = os.path.join(d, nombre), os.path.splitext(nombre)[1]
+        assert len(formatos.extraer_paginas(ruta, ext)) == 3
+        corte = formatos.recortar(ruta, ext, [1, 3], d)
+        assert len(formatos.extraer_paginas(corte, ext)) == 2
+        with zipfile.ZipFile(corte) as z:
+            assert not any(b"Pedro" in z.read(n) for n in z.namelist())

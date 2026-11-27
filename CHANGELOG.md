@@ -1,5 +1,15 @@
 # Cambios
 
+## 0.3.7 · 27 de noviembre de 2026
+
+- **Pedir en el chat que tape algo.** «En la página 2 se ve "Rodríguez" en la firma, tápalo»: el asistente prepara una tarjeta con lo que va a tapar y, al confirmarla, lo añade a los datos del proyecto y rehace la copia con el mismo alcance (entera o solo esas páginas).
+- **Texto dentro de las imágenes.** En los PDF con texto, las imágenes grandes (la firma de un correo, un pie legal, una foto con un nombre) se leen con OCR y lo que pone en ellas se tapa. Antes solo se tapaban enteras las imágenes pequeñas (logos y sellos).
+- **Webs y números de colegiado.** Se tapan solos los dominios y direcciones web (josemaria.ai, www…) salvo los de organismos públicos, y los números de colegiado («Graduado Social nº 88», «Col. 1234»), sin tocar un «88» suelto que pueda ser un importe.
+- **Páginas en Word, PowerPoint y Excel.** Se puede pedir una página de un Word, una diapositiva de un PowerPoint o una hoja de un Excel, tanto para repasarla como para sacar una copia solo con ella. En la copia recortada no queda nada de lo quitado: ni las diapositivas, hojas, imágenes, notas o comentarios, ni los textos compartidos de Excel. Las páginas de Word son las que Word apuntó al guardar el documento; si no las tiene, la aplicación lo dice.
+- **El nombre del archivo también se seudonimiza** aunque la persona no salga en las páginas tratadas (antes, al pedir solo una página, la copia podía llevar el nombre del original).
+- Los títulos de las diapositivas y los nombres de las hojas que Office guarda en las propiedades del archivo pasan también por la seudonimización.
+- Corregido: borrar un proyecto mientras se seudonimizaba bloqueaba la base de datos y no dejaba crear nada más hasta reiniciar.
+
 ## 0.3.6 · 27 de noviembre de 2026
 
 - El asistente encuentra el archivo aunque el modelo escriba su nombre con alguna letra de menos o sin tildes, y si el proyecto tiene un solo archivo entiende «el documento». En la batería de pruebas, un «seudonimiza solo la página 3» fallaba por eso.

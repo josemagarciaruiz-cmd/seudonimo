@@ -113,7 +113,7 @@ class TrabajoDocumento:
         self.ext = None
         self.ext_original = os.path.splitext(doc["nombre"])[1].lower()
         self.texto_original = None  # solo en memoria; nunca se guarda en disco
-        self.paginas_texto = None   # texto por página (PDF), para repasar solo unas páginas
+        self.paginas_texto = None   # texto por página (PDF, Word), diapositiva u hoja, para repasar solo unas
         self.zonas_extra = {}       # {página: [(Rect, marcador)]}: restos localizados en la copia por la verificación
         self.version_registro = -1
         self.aplicado = set()       # (forma, marcador) aplicados en el último ciclo
@@ -137,7 +137,8 @@ class TrabajoDocumento:
                     {k: v for k, v in p.items() if k != "detalle"} for p in self.pasadas],
                 "incidencias": [{k: v for k, v in i.items()} for i in self.incidencias],
                 "aviso": self.aviso, "tiempos": self.crono.t,
-                "ciclos": sum(1 for p in self.pasadas if p["tipo"] == "verificacion")}
+                "ciclos": sum(1 for p in self.pasadas if p["tipo"] == "verificacion"),
+                "paginas": self.doc.get("paginas") if self.doc.get("solo_paginas") else None}
 
     # ------------------------------------------------------------ flujo
     def ejecutar(self):
@@ -174,7 +175,7 @@ class TrabajoDocumento:
             self.estado = "revision"
             self.motivos.append("El modelo solo ha buscado datos en %s. El resto del documento no se ha revisado con "
                                 "el modelo: no compartas esta copia completa. Pide solo esas páginas o seudonimiza el "
-                                "documento entero." % formatos.texto_paginas(pags))
+                                "documento entero." % formatos.texto_partes(self.ext or ".pdf", pags))
 
     def _preparar(self):
         self.avisar(0.0, "preparando una copia de trabajo…")
@@ -187,11 +188,10 @@ class TrabajoDocumento:
             self.ruta, self.ext, self.aviso = formatos.preparar(copia, orig)
         pags = self.doc.get("paginas")
         if pags and self.doc.get("solo_paginas"):
-            if self.ext != ".pdf":
-                raise formatos.ErrorFormato("Solo se pueden separar páginas de un PDF; este documento no tiene páginas fijas.")
-            # se trabaja con un PDF que solo tiene esas páginas: la copia y la verificación son de esas páginas
-            self.ruta = formatos.recortar_pdf(self.ruta, pags, orig)
-            self.aviso = "La copia contiene solo %s del original." % formatos.texto_paginas(pags)
+            # se trabaja con una copia que solo tiene esas páginas (PDF, Word), diapositivas (PowerPoint)
+            # u hojas (Excel): la copia y la verificación son solo de eso
+            self.ruta = formatos.recortar(self.ruta, self.ext, pags, orig)
+            self.aviso = "La copia contiene solo %s del original." % formatos.texto_partes(self.ext, pags)
         with self.crono.medir("extraccion_ocr"):
             self.paginas_texto = formatos.extraer_paginas(
                 self.ruta, self.ext,
@@ -211,14 +211,28 @@ class TrabajoDocumento:
     def _detectar(self):
         texto = self.texto_original
         pags = self.doc.get("paginas")
+        if pags and not self.doc.get("solo_paginas") and self.paginas_texto and len(self.paginas_texto) == 1 \
+                and max(pags) > 1:
+            if formatos.ZIP.get(self.ext) == "docx":
+                raise formatos.ErrorFormato("Este Word no guarda dónde empieza cada página (no se guardó con Word). "
+                                            "Ábrelo y guárdalo con Word, o seudonimízalo entero.")
+            if self.ext == ".pdf" or self.ext in formatos.ZIP:
+                raise formatos.ErrorFormato("Este documento solo tiene una %s." % formatos.unidad(self.ext))
+            raise formatos.ErrorFormato("Este tipo de archivo no tiene páginas: se seudonimiza entero.")
         if pags and not self.doc.get("solo_paginas") and self.paginas_texto and len(self.paginas_texto) > 1:
             # repaso de unas páginas concretas: el modelo solo lee esas páginas; la copia se
             # regenera entera desde el original con todo lo que ya sabe el registro
             validas = [p for p in pags if 1 <= p <= len(self.paginas_texto)]
             if not validas:
-                raise formatos.ErrorFormato("El documento tiene %d páginas: no existe la página %s." % (
-                    len(self.paginas_texto), ", ".join(map(str, pags))))
+                raise formatos.ErrorFormato("El documento tiene %d %s: no existe %s." % (
+                    len(self.paginas_texto), formatos.unidad(self.ext, True), formatos.texto_partes(self.ext, pags)))
             texto = "\n".join(self.paginas_texto[p - 1] for p in validas)
+        # El nombre del archivo (y de sus carpetas) también se lee: la copia se llama como el
+        # original con los datos sustituidos, y un nombre que no sale en las páginas tratadas
+        # («Documentación INSS Ana Pérez», repasando solo la página 6) quedaría a la vista.
+        ruta_rel = os.path.splitext(self.doc.get("rel") or self.doc.get("nombre") or "")[0].replace("\\", "/")
+        if ruta_rel.strip():
+            texto = texto + "\n\nNombre del archivo: " + ruta_rel.replace("/", " / ").replace("_", " ")
         # Pasada de detección 1: reglas + modelo con el prompt de detección
         self.comprobar()
         ents = motor.detectar_regex(texto) + registro_mod.de_la_lista(texto)
@@ -458,7 +472,8 @@ class TrabajoLote:
             os.makedirs(carpeta, exist_ok=True)
             nombre = nombre_salida(os.path.splitext(d.doc["nombre"])[0] + d.ext, mapa)
             if d.doc.get("solo_paginas") and d.doc.get("paginas"):
-                nombre = nombre.replace(" (seudonimizado)", " (pag. %s) (seudonimizado)" % "-".join(map(str, d.doc["paginas"]))[:60], 1)
+                abrev = {"pptx": "diap.", "xlsx": "hoja"}.get(formatos.ZIP.get(d.ext), "pag.")
+                nombre = nombre.replace(" (seudonimizado)", " (%s %s) (seudonimizado)" % (abrev, "-".join(map(str, d.doc["paginas"]))[:60]), 1)
             final = _ruta_libre(os.path.join(carpeta, nombre))
             shutil.copyfile(d.salida, final)
             d.final = final

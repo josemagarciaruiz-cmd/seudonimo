@@ -143,7 +143,7 @@ class Gestor:
                                       "resumen": lote.informe and {"recuento": lote.informe["recuento"],
                                                                    "registro": lote.informe["registro"],
                                                                    "duracion_s": lote.informe["duracion_s"],
-                                                                   "documentos": [{"id": d["id"], "rel": d["rel"], "estado": d["estado"]}
+                                                                   "documentos": [{"id": d["id"], "rel": d["rel"], "estado": d["estado"], "paginas": d.get("paginas")}
                                                                                   for d in lote.informe["documentos"]],
                                                                    "certificado": bool(getattr(lote, "certificado", None))},
                                       "creado": m.get("creado"), "terminado": time.time()})

@@ -14,6 +14,7 @@ from PIL import Image, ImageOps
 import correo
 import motor
 import ocr
+import paginas_office
 import pdfdoc
 import rutas
 from pdfdoc import Rect
@@ -301,10 +302,52 @@ def _abrir_pdf(ruta):
 
 
 def extraer_paginas(ruta, ext, progreso=None, verificar=False, dpi=None):
-    """Texto de cada página (PDF); para el resto de formatos, una sola «página» con todo el texto."""
+    """Texto de cada página (PDF y Word), diapositiva (PowerPoint) u hoja (Excel); para el resto
+    de formatos, una sola «página» con todo el texto."""
     if ext == ".pdf":
         return _paginas_pdf(ruta, progreso, verificar, dpi)
+    if ext in ZIP:
+        completo = extraer_texto(ruta, ext, comprobar=False)
+        try:
+            partes = paginas_office.partes(ruta, ext)
+        except Exception:  # noqa  (un archivo raro: se trata entero, como antes)
+            return [completo]
+        # el conjunto tiene que ser el documento entero: lo que no se haya repartido va a la primera
+        repartido = set("\n".join(partes).split("\n"))
+        resto = [l for l in completo.split("\n") if l.strip() and l not in repartido]
+        if resto:
+            partes[0] = "\n".join([partes[0]] + resto)
+        return partes
     return [extraer_texto(ruta, ext, comprobar=False, progreso=progreso, verificar=verificar, dpi=dpi)]
+
+
+def unidad(ext, plural=False):
+    """Cómo se llaman las partes de un documento: páginas, diapositivas u hojas."""
+    return paginas_office.unidad(ext, plural)
+
+
+def texto_partes(ext, numeros):
+    """«la página 6», «las diapositivas 2 y 3», «la hoja 1»."""
+    u1, u2 = unidad(ext), unidad(ext, True)
+    p = [str(x) for x in numeros]
+    if len(p) == 1:
+        return "la %s %s" % (u1, p[0])
+    return "las %s %s y %s" % (u2, ", ".join(p[:-1]), p[-1])
+
+
+def recortar(ruta, ext, paginas, carpeta):
+    """Copia con solo esas páginas (PDF, Word), diapositivas (PowerPoint) u hojas (Excel)."""
+    if ext == ".pdf":
+        return recortar_pdf(ruta, paginas, carpeta)
+    if ext not in ZIP:
+        raise ErrorFormato("Este tipo de archivo no tiene páginas: se seudonimiza entero.")
+    base = os.path.splitext(os.path.basename(ruta))[0]
+    abrev = {"docx": "pag.", "pptx": "diap.", "xlsx": "hoja"}[ZIP[ext]]
+    salida = os.path.join(carpeta, "%s (%s %s)%s" % (base, abrev, "-".join(map(str, paginas))[:60], ext))
+    try:
+        return paginas_office.recortar(ruta, ext, paginas, salida)
+    except paginas_office.ErrorPaginas as e:
+        raise ErrorFormato(str(e))
 
 
 def _extraer_pdf(ruta, comprobar=True, progreso=None, verificar=False, dpi=None):
@@ -328,6 +371,12 @@ def _paginas_pdf(ruta, progreso=None, verificar=False, dpi=None):
                 lineas = ocr.leer_pagina(page, None if verificar else (ruta, page.number), dpi=dpi)
                 t_ocr = "\n".join(l["texto"] for l in lineas)
                 t = (t + "\n" + t_ocr) if verificar else t_ocr
+            else:
+                # una firma en banda, un pie legal o una foto con texto dentro de una página con
+                # texto: no se tapan enteras como los logos, así que se leen con OCR
+                lineas = _ocr_imagenes(page, None if verificar else (ruta, page.number), dpi=dpi)
+                if lineas:
+                    t = t + "\n" + "\n".join(l["texto"] for l in lineas)
             partes.append(t)
     return partes
 
@@ -379,7 +428,8 @@ def _aplicar_zip(origen, destino, familia, mapa):
             elif item.filename == "docProps/core.xml":
                 data = _limpiar_propiedades(data, mapa, borrar={"creator", "lastModifiedBy"})
             elif item.filename == "docProps/app.xml":
-                data = _limpiar_propiedades(data, mapa, borrar={"Company", "Manager"})
+                # «lpstr»: títulos de las diapositivas y nombres de las hojas (TitlesOfParts)
+                data = _limpiar_propiedades(data, mapa, borrar={"Company", "Manager"}, extra={"lpstr"})
             elif item.filename.endswith(".rels"):
                 data = _limpiar_rels(data, mapa)
             elif item.filename == "docProps/custom.xml":
@@ -418,7 +468,7 @@ def _limpiar_autoria(data):
     return etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
 
 
-def _limpiar_propiedades(data, mapa, borrar, todas=False):
+def _limpiar_propiedades(data, mapa, borrar, todas=False, extra=()):
     try:
         root = etree.fromstring(data, PARSER)
     except Exception:
@@ -429,7 +479,7 @@ def _limpiar_propiedades(data, mapa, borrar, todas=False):
         local = etree.QName(el).localname
         if local in borrar:
             el.text = ""
-        elif el.text and (todas or local in {"title", "subject", "description", "keywords", "category"}):
+        elif el.text and (todas or local in {"title", "subject", "description", "keywords", "category"} or local in extra):
             el.text = motor.reemplazar_texto(el.text, mapa)
     return etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
 
@@ -580,6 +630,49 @@ def _logos_incrustados(page):
     return res
 
 
+def _imagenes_contenido(page):
+    """Las imágenes que _logos_incrustados deja como contenido (grandes o en banda ancha)."""
+    W, H = page.width, page.height
+    return [r for r in page.imagenes() if r.width >= 8 and r.height >= 8 and
+            (r.get_area() > 0.12 * W * H or r.width > 0.6 * W or r.height > 0.45 * H)]
+
+
+def _ocr_imagenes(page, clave=None, dpi=None):
+    """Líneas de OCR que caen dentro de las imágenes grandes de una página que tiene texto:
+    la firma de un correo hecha imagen, el pie legal, una foto con un nombre. Sin esto, lo
+    que pone en ellas no lo ve ni la detección ni la verificación."""
+    if not ocr.DISPONIBLE:
+        return []
+    rects = [r.ampliar(2, 2) for r in _imagenes_contenido(page)]
+    if not rects:
+        return []
+    try:
+        lineas = ocr.leer_pagina(page, clave, dpi=dpi)
+    except Exception:  # noqa
+        return []
+    return [l for l in lineas if any(_dentro(l["rect"], r) for r in rects)]
+
+
+def _tachar_lineas(lineas, mapa):
+    """Tachones sobre los datos conocidos que aparecen en unas líneas de OCR."""
+    if not lineas:
+        return []
+    offs, acc = [], 0
+    for l in lineas:
+        offs.append(acc)
+        acc += len(l["texto"]) + 1
+    completo = "\n".join(l["texto"] for l in lineas)
+    res = []
+    for ini, fin, marc in motor.coincidencias(completo, mapa):
+        primero = True
+        for l, o in zip(lineas, offs):
+            a, b = max(ini, o), min(fin, o + len(l["texto"]))
+            if a < b:
+                res.append((ocr.rect_fragmento(l, a - o, b - o), marc if primero else ""))
+                primero = False
+    return res
+
+
 def _manchas_de_color(page, ya_tapado, dpi=100):
     """Sellos, firmas y logotipos en páginas escaneadas: zonas compactas de color vivo
     (tinta azul o morada de un sello, los colores de un escudo) sobre un documento que,
@@ -661,6 +754,7 @@ def _aplicar_pdf(origen, destino, mapa, logos=True, extra=None):
             else:
                 t, q = _tachar_texto(page, mapa, no_localizados)
                 t += previos
+                t += _tachar_lineas(_ocr_imagenes(page, (origen, page.number)), mapa)
             if t:
                 q = [(r, w) for r, w in q if not _toca(r, t)]
                 tachones[page.number], visibles[page.number] = t, q
@@ -688,8 +782,12 @@ def localizar_restos(ruta, restos, dpi=None):
                     grupos = _rects_por_palabras(palabras, frase) or page.buscar(frase)
                     for grupo in grupos:
                         zonas += [(r.ampliar(0.3, 0.3), "") for r in grupo]
+            lineas = None
             if necesita_ocr(page, verificar=True) and ocr.DISPONIBLE:
                 lineas = ocr.leer_pagina(page, None, dpi=dpi)
+            elif texto.strip():
+                lineas = _ocr_imagenes(page, None, dpi=dpi)
+            if lineas:
                 offs, acc = [], 0
                 for l in lineas:
                     offs.append(acc)

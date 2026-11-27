@@ -71,8 +71,14 @@ class Almacen:
 
     def _x(self, sql, args=()):
         c = self._c()
-        cur = c.execute(sql, args)
-        c.commit()
+        try:
+            cur = c.execute(sql, args)
+            c.commit()
+        except Exception:
+            # Sin esto, una escritura fallida (p. ej. un trabajo que escribe en un proyecto recién
+            # borrado) deja la transacción abierta en la conexión de ese hilo y bloquea la base.
+            c.rollback()
+            raise
         return cur.lastrowid
 
     # ------------------------------------------------------------ proyectos
@@ -124,6 +130,13 @@ class Almacen:
         """Sustituye el inventario de una carpeta conservando el estado de los que siguen igual."""
         previos = {r["ruta"]: r for r in self._q("SELECT * FROM archivos WHERE proyecto=? AND carpeta=?", (pid, cid))}
         c = self._c()
+        try:
+            self._inventario(c, pid, cid, filas, previos)
+        except Exception:
+            c.rollback()
+            raise
+
+    def _inventario(self, c, pid, cid, filas, previos):
         vistos = set()
         for f in filas:
             vistos.add(f["ruta"])

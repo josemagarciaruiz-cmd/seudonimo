@@ -371,13 +371,53 @@ function nombreHerramienta(n) {
     seudonimizar: "Plan de seudonimización", estado_trabajos: "Estado de los trabajos", verificar_documento: "Auditoría del documento" }[n] || n;
 }
 
+function nodoTapar(plan, mid, datos) {
+  // Plan «tapar»: datos que el usuario ha visto a la vista en una copia y quiere tapados
+  const d = document.createElement("div");
+  d.className = "plan";
+  const n = plan.datos.length;
+  const titulo = `Tapar ${n === 1 ? "un dato" : n + " datos"} en ${plan.nombres[0]}`;
+  if (plan.estado) {
+    d.classList.add("cerrado");
+    d.innerHTML = `<h4>${esc(titulo)}</h4><p class="resultado">${plan.estado === "confirmado"
+      ? "Confirmado. La copia se está rehaciendo; el avance está en la pestaña Progreso." : "Descartado."}</p>`;
+    return d;
+  }
+  d.innerHTML = `<h4>${esc(titulo)}</h4>
+    <ul class="plan-archivos">${plan.datos.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+    <p class="nota">Se añaden al registro del proyecto y se rehace la copia${plan.pagina ? ` (mencionas la página ${plan.pagina}, pero se tapan en todo el documento)` : ""}, también dentro de las imágenes. El original no se toca.</p>
+    <div class="plan-acciones">
+      <button class="boton boton-principal" data-confirmar>Tapar y rehacer la copia</button>
+      <button class="boton" data-descartar>Descartar</button>
+    </div>`;
+  $("[data-confirmar]", d).onclick = async () => {
+    try {
+      const r = await api("POST", `/api/proyectos/${E.proyecto.id}/tapar`, { archivo: plan.archivos[0], datos: plan.datos, tipo: plan.tipo, perfil: plan.perfil, conversacion: E.conversacion });
+      plan.estado = "confirmado"; plan.trabajo = r.id;
+      await guardarPlanes(mid, datos);
+      d.replaceWith(nodoTapar(plan, mid, datos));
+      E.trabajos[r.id] = r.estado;
+      mostrarPestana("operaciones");
+      await refrescarOperaciones();
+    } catch (e) { alerta(e.message); }
+  };
+  $("[data-descartar]", d).onclick = async () => {
+    plan.estado = "descartado";
+    await guardarPlanes(mid, datos);
+    d.replaceWith(nodoTapar(plan, mid, datos));
+  };
+  return d;
+}
+
 function nodoPlan(plan, mid, datos) {
+  if (plan.accion === "tapar") return nodoTapar(plan, mid, datos);
   const d = document.createElement("div");
   d.className = "plan";
   const n = plan.archivos.length;
   const estado = plan.estado;   // confirmado | descartado | undefined
   const pags = plan.paginas && plan.paginas.length ? plan.paginas : null;
-  const textoPags = pags ? (pags.length === 1 ? "la página " + pags[0] : "las páginas " + pags.join(", ")) : "";
+  const uni = plan.unidad || "página", unis = plan.unidades || "páginas";
+  const textoPags = pags ? (pags.length === 1 ? `la ${uni} ${pags[0]}` : `las ${unis} ${pags.join(", ")}`) : "";
   const titulo = pags ? `${plan.solo_paginas ? "Seudonimizar solo" : "Repasar"} ${textoPags} de ${plan.nombres[0]}`
     : `Seudonimizar ${n} archivo${n === 1 ? "" : "s"}`;
   if (estado) {
@@ -389,8 +429,8 @@ function nodoPlan(plan, mid, datos) {
   const intensivo = plan.perfil === "intensivo";
   d.innerHTML = `<h4>${esc(titulo)}</h4>
     ${pags ? `<fieldset class="plan-perfil plan-alcance">
-        <label class="opcion"><input type="radio" name="alcance-${mid}" value="solo"${plan.solo_paginas ? " checked" : ""}> <span><b>Solo ${esc(textoPags)}.</b> La copia tendrá únicamente ${pags.length === 1 ? "esa página" : "esas páginas"}, seudonimizada${pags.length === 1 ? "" : "s"} y verificada${pags.length === 1 ? "" : "s"}.</span></label>
-        <label class="opcion"><input type="radio" name="alcance-${mid}" value="completo"${plan.solo_paginas ? "" : " checked"}> <span><b>Documento completo.</b> Repasa ${esc(textoPags)} dentro del documento ya seudonimizado; la copia sale con todas las páginas.</span></label>
+        <label class="opcion"><input type="radio" name="alcance-${mid}" value="solo"${plan.solo_paginas ? " checked" : ""}> <span><b>Solo ${esc(textoPags)}.</b> La copia tendrá únicamente ${pags.length === 1 ? "esa " + uni : "esas " + unis}, seudonimizada${pags.length === 1 ? "" : "s"} y verificada${pags.length === 1 ? "" : "s"}.</span></label>
+        <label class="opcion"><input type="radio" name="alcance-${mid}" value="completo"${plan.solo_paginas ? "" : " checked"}> <span><b>Documento completo.</b> Repasa ${esc(textoPags)} dentro del documento ya seudonimizado; la copia sale con todas las ${unis}.</span></label>
       </fieldset>`
       : `<ul class="plan-archivos">${plan.nombres.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`}
     <div class="plan-opciones">
@@ -1069,14 +1109,15 @@ function pintarHoja() {
     const cuerpo = pintarTramo(ini, fin).replace(/\n+$/, "");
     if (cortes.length === 1) { html += `<div class="texto-copia">${cuerpo}</div>`; return; }
     const n = i + 1;
+    const u = d.unidad || "página", U = u.charAt(0).toUpperCase() + u.slice(1);
     html += `<section class="pagina${enRojo(ini, fin) ? " con-restos" : ""}" id="pagina-${n}">
-      <header class="pagina-cab"><span>Página ${n} de ${cortes.length}</span>
-        <label class="opcion repaso"><input type="checkbox" data-repasar-pagina="${n}"${MESA.paginas.has(n) ? " checked" : ""}> <span>Repasar esta página</span></label></header>
-      <div class="texto-copia">${cuerpo || '<span class="nota">Página sin texto legible.</span>'}</div></section>`;
+      <header class="pagina-cab"><span>${U} ${n} de ${cortes.length}</span>
+        <label class="opcion repaso"><input type="checkbox" data-repasar-pagina="${n}"${MESA.paginas.has(n) ? " checked" : ""}> <span>Repasar esta ${u}</span></label></header>
+      <div class="texto-copia">${cuerpo || `<span class="nota">${U} sin texto legible.</span>`}</div></section>`;
   });
   const n = d.escapados.length;
   $("#mesa-texto").innerHTML = (n ? `<p class="aviso-hoja">${n} dato${n === 1 ? "" : "s"} conocido${n === 1 ? "" : "s"} sigue${n === 1 ? "" : "n"} a la vista en esta copia (en rojo). Pulsa «Rehacer esta copia».</p>` : "")
-    + (cortes.length > 1 ? `<p class="nota ayuda-repaso">¿Una página con datos sin tapar? Marca «Repasar esta página» y pulsa «Repasar páginas»: el modelo vuelve a leer solo esas páginas.</p>` : "")
+    + (cortes.length > 1 ? `<p class="nota ayuda-repaso">¿Una ${d.unidad || "página"} con datos sin tapar? Marca «Repasar esta ${d.unidad || "página"}» y pulsa «Repasar páginas»: el modelo vuelve a leer solo ${d.unidades === "hojas" ? "esas hojas" : d.unidades === "diapositivas" ? "esas diapositivas" : "esas páginas"}. Si en una imagen se ve algo sin tapar, pídeselo al asistente en el chat: «en la página 2 se ve "…", tápalo».</p>` : "")
     + (html || '<span class="nota">La copia no tiene texto legible.</span>');
   $$("[data-repasar-pagina]").forEach((c) => (c.onchange = () => {
     const p = +c.dataset.repasarPagina;
