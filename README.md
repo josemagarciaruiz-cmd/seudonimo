@@ -6,6 +6,21 @@ Ningún documento sale del equipo: la lectura, el OCR, el modelo (por defecto Ge
 
 > Estado: **en desarrollo** (versión 0.x). Plan técnico de referencia: correos «Plan técnico detallado» y «Anexo al plan técnico: seudonimización autónoma multipasada» (25/11/2026), resumidos en `docs/`.
 
+## Descargar
+
+| | |
+|---|---|
+| **Windows** | [Descargar Seudónimo para Windows](https://github.com/josemagarciaruiz-cmd/seudonimo/releases/latest/download/Seudonimo-Windows.exe) |
+| **Mac** (chip Apple) | [Descargar Seudónimo para Mac](https://github.com/josemagarciaruiz-cmd/seudonimo/releases/latest/download/Seudonimo-Mac.dmg) |
+
+Los enlaces descargan siempre la última versión. La primera vez, Seudónimo te guía en dos pasos: instalar [Ollama](https://ollama.com/download), el programa que ejecuta el modelo de IA en tu ordenador, y descargar el modelo (unos 8 GB).
+
+**En Windows**, al abrir el instalador puede salir el aviso azul «Windows protegió su PC»: pulsa **«Más información»** y después **«Ejecutar de todas formas»**. Sale porque el instalador aún no está firmado con certificado de Microsoft. Se instala para tu usuario, sin permisos de administrador.
+
+**En Mac**, abre el archivo descargado y arrastra Seudónimo a Aplicaciones. La primera vez macOS la bloquea porque no está certificada por Apple: pulsa «Aceptar» en el aviso, abre **Ajustes del Sistema > Privacidad y seguridad** y pulsa **«Abrir igualmente»**.
+
+Si quieres comprobar que el archivo no se ha alterado, sus huellas SHA-256 están en el archivo `SHA256SUMS` de cada [versión publicada](https://github.com/josemagarciaruiz-cmd/seudonimo/releases).
+
 ## Qué hace
 
 - **Expedientes** (en el código, «proyectos») con carpetas y archivos autorizados por el usuario, **conversaciones** con el asistente, por escrito o dictadas, y una sola **lista de documentos** con «Abrir copia» y «⋯». Expedientes y conversaciones se renombran y se eliminan desde su menú «⋯», y una conversación puede **moverse a otro expediente**.
