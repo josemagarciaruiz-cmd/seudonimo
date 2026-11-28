@@ -520,3 +520,38 @@ def test_vista_office_solo_si_hay_programa():
     assert oficina.programa(".txt") is None
     if oficina.programa(".docx") is None:
         assert oficina.a_pdf("/no/existe.docx") is None
+
+
+def test_equipo_semaforo(monkeypatch):
+    """¿Llega este ordenador? Verde, amarillo y rojo según memoria, espacio, procesador y gráfica."""
+    import equipo
+    import rutas
+
+    def fijar(mac=False, win=False, mem=16.0, cpu_ok=True, graficas=(), libre=100.0, so_ok=True):
+        monkeypatch.setattr(rutas, "ES_MAC", mac)
+        monkeypatch.setattr(rutas, "ES_WINDOWS", win)
+        monkeypatch.setattr(equipo, "espacio_libre_gb", lambda: libre)
+        monkeypatch.setattr(equipo, "_fijos", lambda: {"memoria_gb": mem, "procesador": "X", "procesador_ok": cpu_ok,
+                                                       "sistema": "S", "sistema_ok": so_ok, "graficas": list(graficas)})
+
+    fijar(mac=True, mem=16)
+    assert equipo.comprobar(False, False)["nivel"] == "verde"
+    fijar(mac=True, mem=8)
+    r = equipo.comprobar(False, False)
+    assert r["nivel"] == "rojo" and "8 GB" in r["motivos"][0]
+    fijar(mac=True, mem=12)
+    assert equipo.comprobar()["nivel"] == "amarillo"
+    fijar(mac=True, cpu_ok=False)
+    assert "Intel" in equipo.comprobar()["motivos"][0]
+    fijar(mac=True, libre=10)
+    r = equipo.comprobar(False, False)
+    assert r["nivel"] == "rojo" and r["espacio_necesario_gb"] == 16
+    fijar(mac=True, libre=10)
+    assert equipo.comprobar(True, True)["nivel"] == "verde"       # ya está todo descargado
+    fijar(win=True, mem=16, graficas=[{"nombre": "Intel UHD", "vram_gb": None, "acelera": False}])
+    r = equipo.comprobar()
+    assert r["nivel"] == "amarillo" and "tarjeta gráfica" in r["motivos"][0]
+    fijar(win=True, mem=32, graficas=[{"nombre": "NVIDIA RTX 4060", "vram_gb": 8, "acelera": True}])
+    assert equipo.comprobar()["nivel"] == "verde"
+    fijar(win=True, mem=32, graficas=[{"nombre": "NVIDIA RTX 4060", "vram_gb": 8, "acelera": True}], so_ok=False)
+    assert "Windows Update" in equipo.comprobar()["motivos"][0]

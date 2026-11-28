@@ -534,3 +534,22 @@ body.mesa-ocupada .pag-marco img { opacity: .6; }
 .zona-manual { background: var(--tachon); border: 0; border-radius: 2px; display: flex; align-items: center; justify-content: center; z-index: 3; }
 .zona-manual > span { color: var(--tachon-texto); font: 600 clamp(7px, 1.4cqh, 12px)/1 var(--sans); white-space: nowrap; overflow: hidden; pointer-events: none; }
 .zona-manual:hover { background: var(--tachon); outline: 2px solid var(--oro); }
+
+/* ---------------------------------------------------------------- 0.8.3: ¿llega este ordenador? */
+.aviso-texto { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.aviso-banda .botones { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.equipo-linea { font-size: 13px; }
+.semaforo { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: 0; background: var(--tinta-3, #87919C); }
+.semaforo.verde { background: var(--verde); }
+.semaforo.amarillo { background: var(--ambar); }
+.semaforo.rojo { background: var(--rojo); }
+.equipo-veredicto { margin: 0 0 10px; padding: 10px 12px; border-radius: var(--r-medio); background: var(--verde-claro); }
+.equipo-veredicto.amarillo { background: var(--ambar-claro); }
+.equipo-veredicto.rojo { background: var(--rojo-claro); }
+.equipo-motivos { margin: 0 0 12px; padding-left: 20px; }
+.equipo-motivos li { margin: 4px 0; }
+.equipo-tabla { width: 100%; border-collapse: collapse; margin: 0 0 10px; font-size: 14px; }
+.equipo-tabla th { text-align: left; font-weight: 600; padding: 6px 12px 6px 0; vertical-align: top; white-space: nowrap; width: 1%; }
+.equipo-tabla td { padding: 6px 0; border-bottom: 1px solid var(--linea-suave); }
+.equipo-tabla th { border-bottom: 1px solid var(--linea-suave); }
+.equipo-modelos { margin: 0 0 10px; font-size: 14px; }

@@ -83,6 +83,7 @@ async function iniciar() {
   enlazar();
   await refrescarSalud();
   await refrescarModelos();
+  refrescarEquipo();
   await refrescarProyectos();
   if (E.proyectos.length) await abrirProyecto(E.proyectos[0].id);
   else pintarBienvenida();
@@ -124,19 +125,64 @@ async function refrescarModelos() {
   pintarAviso();
 }
 
+// ------------------------------------------------------------------ ¿llega este ordenador?
+
+async function refrescarEquipo() {
+  try { E.equipo = await api("GET", "/api/equipo"); } catch (e) { E.equipo = null; }
+  pintarAviso();
+  if ($("#dlg-equipo").open) pintarEquipo();
+}
+
+function semaforo(nivel) { return `<i class="semaforo ${esc(nivel || "")}" aria-hidden="true"></i>`; }
+
+function lineaEquipo() {
+  const q = E.equipo;
+  if (!q) return `<span class="equipo-linea nota">Comprobando este ordenador…</span>`;
+  return `<span class="equipo-linea">${semaforo(q.nivel)}<b>${esc(q.titulo)}</b>${q.motivos.length ? " " + esc(q.motivos[0]) : ""}
+    <button type="button" class="boton-texto" data-accion="ver-equipo">Ver detalles</button></span>`;
+}
+
+function pintarEquipo() {
+  const q = E.equipo;
+  const el = $("#equipo-cuerpo");
+  if (!q) { el.innerHTML = `<p class="nota">No he podido comprobar este ordenador.</p>`; return; }
+  const num = (x) => String(x).replace(".", ",");
+  const filas = [
+    ["Sistema", esc(q.sistema)],
+    ["Procesador", esc(q.procesador)],
+    ["Memoria", q.memoria_gb == null ? "Sin datos" : `${Math.round(q.memoria_gb)} GB <span class="nota">(se recomiendan ${q.memoria_recomendada_gb})</span>`],
+    ["Espacio libre", `${num(q.espacio_libre_gb)} GB${q.espacio_necesario_gb ? ` <span class="nota">(hacen falta unos ${q.espacio_necesario_gb})</span>` : ""}`],
+  ];
+  if (q.plataforma === "Windows") {
+    filas.push(["Tarjeta gráfica", q.graficas.length ? q.graficas.map((g) => esc(g.nombre) + (g.acelera ? ' <span class="chip sin_hallazgos">acelera la IA</span>' : "")).join("<br>") : "Sin datos"]);
+  }
+  el.innerHTML = `<p class="equipo-veredicto ${esc(q.nivel)}">${semaforo(q.nivel)}<b>${esc(q.titulo)}</b></p>
+    ${q.motivos.length ? `<ul class="equipo-motivos">${q.motivos.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : `<p>Puedes instalar Ollama y descargar el modelo recomendado sin problema.</p>`}
+    <table class="equipo-tabla">${filas.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("")}</table>
+    <p class="nota">Estos datos se leen de tu ordenador y no salen de él.</p>`;
+}
+
+async function verEquipo() {
+  pintarEquipo();
+  $("#dlg-equipo").showModal();
+  await refrescarEquipo();
+}
+
 function pintarAviso() {
   const b = $("#aviso-banda");
   let html = "";
   const rec = (E.catalogo?.catalogo || []).find((m) => m.recomendado) || (E.catalogo?.catalogo || [])[0];
   const bajando = Object.values(E.catalogo?.descargas || {}).find((d) => d.fase === "trabajando");
+  const rojo = E.equipo?.nivel === "rojo";
+  const principal = rojo ? "boton-texto" : "boton boton-principal";
   if (E.salud && !E.salud.instalado && !E.salud.ollama) {
-    html = `<span><b>Preparar este ordenador · paso 1 de 2.</b> Instala Ollama, el programa gratuito que ejecuta el modelo de IA dentro de este ordenador. Es una sola vez.</span><button class="boton boton-principal" data-accion="instalar-ollama">Instalar Ollama</button>`;
+    html = `<span class="aviso-texto">${lineaEquipo()}<span><b>Preparar este ordenador · paso 1 de 2.</b> Instala Ollama, el programa gratuito que ejecuta el modelo de IA dentro de este ordenador. Es una sola vez.</span></span><button class="${principal}" data-accion="instalar-ollama">${rojo ? "Instalar de todas formas" : "Instalar Ollama"}</button>`;
   } else if (E.salud && !E.salud.ollama) {
     html = `<span>Ollama está instalado pero detenido. Ábrelo (está en Aplicaciones) y Seudónimo lo detectará solo.</span>`;
   } else if (E.salud && E.salud.ollama && !E.modelos.length) {
     html = bajando ? `<span><b>Preparar este ordenador · paso 2 de 2.</b> Descargando el modelo… ${Math.round((bajando.progreso || 0) * 100)} %. Puedes ir creando el expediente mientras tanto.</span>`
-      : `<span><b>Preparar este ordenador · paso 2 de 2.</b> Descarga el modelo de IA${rec ? ` recomendado (${esc(rec.nombre)}, unos ${rec.memoria} GB de memoria)` : ""}. Después funciona sin conexión.</span>
-        ${rec ? `<button class="boton boton-principal" data-descargar="${esc(rec.nombre)}">Descargar el modelo</button>` : ""}<button class="boton-texto" data-accion="abrir-modelos">Elegir otro</button>`;
+      : `<span class="aviso-texto">${lineaEquipo()}<span><b>Preparar este ordenador · paso 2 de 2.</b> Descarga el modelo de IA${rec ? ` recomendado (${esc(rec.nombre)}, unos ${rec.memoria} GB de memoria)` : ""}. Después funciona sin conexión.</span></span>
+        <span class="botones">${rec ? `<button class="${principal}" data-descargar="${esc(rec.nombre)}">${rojo ? "Descargar de todas formas" : "Descargar el modelo"}</button>` : ""}<button class="boton-texto" data-accion="abrir-modelos">Elegir otro</button></span>`;
     if (bajando) setTimeout(async () => { await refrescarModelos(); }, 2000);
   } else if (E.proyecto && E.modelos.length && !E.modelos.some((m) => m.nombre === modeloActual())) {
     html = `<span>El modelo de este expediente (${esc(E.proyecto.modelo)}) no está descargado.</span><button class="boton" data-accion="abrir-modelos">Gestionar modelos</button>`;
@@ -934,6 +980,7 @@ function menuConversaciones(boton) {
 function menuAjustes(boton) {
   abrirMenu(boton, [
     { texto: "Modelos y dictado", accion: abrirModelos },
+    { texto: "Comprobar este ordenador", accion: verEquipo },
     { texto: "Listas del despacho (nunca / siempre tapar)", accion: abrirListas },
     ...(E.proyecto ? [{ texto: "Ajustes de este expediente", accion: () => abrirDialogoProyecto(true) }] : []),
     { texto: "Buscar actualizaciones", accion: acercaDe },
@@ -1116,7 +1163,9 @@ function capacidades(caps) {
 function pintarModelos() {
   const c = E.catalogo || {};
   const gb = (b) => (b / 1e9).toLocaleString("es-ES", { maximumFractionDigits: 1 }) + " GB";
-  $("#ollama-estado").innerHTML = c.error ? `<p class="aviso-campo" style="margin:0 0 10px">${esc(c.error)}</p>` : `<p class="nota">Espacio libre: ${String(c.espacio_libre_gb ?? "?").replace(".", ",")} GB.</p>`;
+  const q = E.equipo;
+  const tuyo = q ? `<p class="equipo-modelos">${semaforo(q.nivel)}Tu ordenador: ${q.memoria_gb == null ? "" : `${Math.round(q.memoria_gb)} GB de memoria · `}${String(q.espacio_libre_gb).replace(".", ",")} GB libres · ${esc(q.procesador)}. <button type="button" class="boton-texto" data-accion="ver-equipo">Ver detalles</button></p>` : "";
+  $("#ollama-estado").innerHTML = (c.error ? `<p class="aviso-campo" style="margin:0 0 10px">${esc(c.error)}</p>` : "") + (tuyo || (c.error ? "" : `<p class="nota">Espacio libre: ${String(c.espacio_libre_gb ?? "?").replace(".", ",")} GB.</p>`));
   $("#modelos-instalados").innerHTML = E.modelos.length ? E.modelos.map((m) => `<div class="modelo">
       <span><b>${esc(m.nombre)}</b>${m.nombre === E.modeloDefecto ? ' <span class="chip sin_hallazgos">por defecto</span>' : ""} <span class="nota">${gb(m.tamano)} · ${esc(m.parametros || "")} · ${esc(m.cuantizacion || "")}</span></span>
       <span class="botones">
@@ -2120,6 +2169,8 @@ function enlazar() {
 async function accion(a) {
   if (a === "nuevo-proyecto") abrirDialogoProyecto(false);
   else if (a === "abrir-modelos") abrirModelos();
+  else if (a === "ver-equipo") await verEquipo();
+  else if (a === "recomprobar-equipo") await refrescarEquipo();
   else if (a === "adjuntar-carpeta") anadirRutas(await elegir("carpeta"));
   else if (a === "adjuntar-archivos") anadirRutas(await elegir("archivos"));
   else if (a === "actualizar-carpetas") { await api("POST", `/api/proyectos/${E.proyecto.id}/carpetas/actualizar`); E.proyecto = await api("GET", `/api/proyectos/${E.proyecto.id}`); pintarArchivos(); }
@@ -2129,7 +2180,7 @@ async function accion(a) {
     const seguir = async () => {
       const s = await api("GET", "/api/instalacion");
       b.innerHTML = `<span>${esc(s.error || s.mensaje || "Instalando Ollama…")}</span>`;
-      if (s.fase === "trabajando") setTimeout(seguir, 1500); else { await refrescarSalud(); await refrescarModelos(); }
+      if (s.fase === "trabajando") setTimeout(seguir, 1500); else { await refrescarSalud(); await refrescarModelos(); refrescarEquipo(); }
     };
     seguir();
   }

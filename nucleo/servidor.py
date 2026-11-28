@@ -38,6 +38,7 @@ import almacen as almacen_mod  # noqa: E402
 import asistente  # noqa: E402
 import cifrado  # noqa: E402
 import contexto  # noqa: E402
+import equipo  # noqa: E402
 import formatos  # noqa: E402
 import herramientas  # noqa: E402
 import instalacion  # noqa: E402
@@ -137,6 +138,18 @@ def salud():
                    sistema="Windows" if rutas.ES_WINDOWS else ("Mac" if rutas.ES_MAC else "Linux"),
                    salidas=rutas.SALIDAS, modelo_defecto=ALM.ajuste("modelo_defecto", motor.MODELO),
                    perfiles=multipasada.PERFILES)
+
+
+@app.get("/api/equipo")
+def equipo_api():
+    """¿Llega este ordenador? Semáforo de requisitos para la primera puesta en marcha."""
+    prov = proveedores.actual()
+    try:
+        con_modelo = bool(prov.disponible() and prov.listar())
+    except Exception:  # noqa: BLE001
+        con_modelo = False
+    return jsonify(equipo.comprobar(ollama_instalado=instalacion.instalado() or prov.disponible(),
+                                    modelo_instalado=con_modelo))
 
 
 @app.get("/api/modelos")
@@ -1287,6 +1300,7 @@ def main():
         PUERTO = int(os.environ["SEUDONIMO_PUERTO"])     # lo elige la ventana de escritorio
     else:
         PUERTO = _puerto_libre(a.puerto) if a.puerto else _puerto_libre(0)
+    equipo.precalentar()
     threading.Thread(target=_al_arrancar, daemon=True).start()
     threading.Thread(target=_vigilancia, daemon=True, name="vigilancia").start()
     print("SEUDONIMO_LISTO %d" % PUERTO, flush=True)

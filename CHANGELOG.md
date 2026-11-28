@@ -1,5 +1,10 @@
 # Cambios
 
+## 0.8.3 · 28 de noviembre de 2026
+
+- **¿Llega este ordenador?** Antes de instalar Ollama y de descargar el modelo, Seudónimo comprueba el ordenador y lo dice con un semáforo: verde (cumple), amarillo (funciona, con matices) o rojo (no llega), con el motivo en una frase. Mira la memoria (se recomiendan 16 GB; con 8 o menos no funciona), el espacio libre (unos 16 GB para Ollama y el modelo), el procesador (en Mac, chip Apple; en Windows, 64 bits), la tarjeta gráfica en Windows (sin una que acelere la IA, funciona pero más despacio) y si Windows está al día. «Ver detalles» enseña cada dato; también en «Ajustes › Comprobar este ordenador» y en «Modelos y dictado». Si sale rojo, los botones pasan a «… de todas formas», para que nadie se baje 8 GB sin saberlo. Nada de esto sale del ordenador.
+- Descarga: la página del proyecto tiene arriba una sección «Descargar» con enlaces que dan siempre la última versión (`releases/latest/download/Seudonimo-Windows.exe` y `Seudonimo-Mac.dmg`).
+
 ## 0.8.2 · 27 de noviembre de 2026
 
 - **Seleccionar varias palabras, una frase o un párrafo y tapar de una vez.** Al arrastrar sobre la página era fácil empezar o acabar a mitad de una palabra, y entonces no se tapaba nada (solo funcionaba palabra a palabra con el doble clic). Ahora la selección se ajusta siempre a palabras enteras y se ve resaltado exactamente lo que se va a tapar. Unas pocas palabras (un nombre, una frase corta) se tapan como dato, en esta copia y en las demás del expediente; un párrafo o más de dos líneas de un PDF se tapan línea a línea con un recuadro en esa copia, con un solo «Tapar» y un solo «Deshacer». En Word y PowerPoint, una frase larga se apunta línea a línea para que se encuentre en su párrafo.
