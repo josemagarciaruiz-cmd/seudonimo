@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.8.4 · 28 de noviembre de 2026
+
+- **Revisión de la copia a lo ancho.** En un expediente con un solo documento, la lista de documentos de la izquierda se oculta y la página se quedaba en una columna estrecha; con «Datos tapados» abierto, la lista de datos acababa en una tira de unos 50 píxeles con su propia barra de desplazamiento, y a su derecha quedaba un hueco vacío. Ahora cada pieza tiene su columna fija: la página ocupa todo el centro y «Datos tapados», su columna de la derecha.
+
 ## 0.8.3 · 28 de noviembre de 2026
 
 - **¿Llega este ordenador?** Antes de instalar Ollama y de descargar el modelo, Seudónimo comprueba el ordenador y lo dice con un semáforo: verde (cumple), amarillo (funciona, con matices) o rojo (no llega), con el motivo en una frase. Mira la memoria (se recomiendan 16 GB; con 8 o menos no funciona), el espacio libre (unos 16 GB para Ollama y el modelo), el procesador (en Mac, chip Apple; en Windows, 64 bits), la tarjeta gráfica en Windows (sin una que acelere la IA, funciona pero más despacio) y si Windows está al día. «Ver detalles» enseña cada dato; también en «Ajustes › Comprobar este ordenador» y en «Modelos y dictado». Si sale rojo, los botones pasan a «… de todas formas», para que nadie se baje 8 GB sin saberlo. Nada de esto sale del ordenador.

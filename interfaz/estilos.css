@@ -553,3 +553,12 @@ body.mesa-ocupada .pag-marco img { opacity: .6; }
 .equipo-tabla td { padding: 6px 0; border-bottom: 1px solid var(--linea-suave); }
 .equipo-tabla th { border-bottom: 1px solid var(--linea-suave); }
 .equipo-modelos { margin: 0 0 10px; font-size: 14px; }
+
+/* ---------------------------------------------------------------- 0.8.4: revisión siempre a lo ancho */
+/* Cada pieza en su columna aunque la lista de documentos esté oculta (expediente de un solo documento). */
+.mesa-docs { grid-column: 1; grid-row: 1; }
+.mesa-hoja { grid-column: 2; grid-row: 1; min-width: 0; overflow-x: hidden; }
+.mesa-datos { grid-column: 3; grid-row: 1; }
+/* La capa de texto no puede salirse de la página (creaba una franja estrecha con barras de desplazamiento). */
+.pag-marco { overflow: hidden; }
+.texto-capa { overflow: hidden; }
